@@ -1,0 +1,125 @@
+{
+  "info": {
+    "name": "Organization Structure API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Departments",
+      "item": [
+        {
+          "name": "Create Department",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/organization-structure/departments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SALES\",\n  \"name\": \"Sales Department\",\n  \"description\": \"Handles sales operations\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Get All Departments",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/departments"
+          }
+        },
+        {
+          "name": "Get Department Hierarchy",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/departments/hierarchy/all"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Positions",
+      "item": [
+        {
+          "name": "Create Position",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/organization-structure/positions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SALES-MGR-001\",\n  \"title\": \"Sales Manager\",\n  \"description\": \"Manages sales team\",\n  \"departmentId\": \"{{departmentId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Get All Positions",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/positions"
+          }
+        },
+        {
+          "name": "Get Positions by Department",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/positions?departmentId={{departmentId}}"
+          }
+        },
+        {
+          "name": "Get Position Hierarchy",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/positions/{{positionId}}/hierarchy"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Position Assignments",
+      "item": [
+        {
+          "name": "Create Assignment",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/organization-structure/assignments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeProfileId\": \"{{employeeId}}\",\n  \"positionId\": \"{{positionId}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"startDate\": \"2025-01-01\",\n  \"reason\": \"New hire\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Get Employee Assignments",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/assignments/employee/{{employeeId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Change Requests",
+      "item": [
+        {
+          "name": "Create Change Request",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/organization-structure/change-requests",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedByEmployeeId\": \"{{employeeId}}\",\n  \"requestType\": \"UPDATE_POSITION\",\n  \"targetPositionId\": \"{{positionId}}\",\n  \"details\": \"Update position title\",\n  \"reason\": \"Restructuring\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Get All Change Requests",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/organization-structure/change-requests"
+          }
+        }
+      ]
+    }
+  ]
+}

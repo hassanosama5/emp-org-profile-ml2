@@ -63,15 +63,15 @@ function isObjectIdLike(value: unknown): value is Types.ObjectId | string {
   return typeof value === 'string' || value instanceof Types.ObjectId;
 }
 
+// FIXED pre-save hook - remove this entirely if not needed
 PositionSchema.pre('save', async function (next) {
   try {
-    const doc = this as HydratedDocument<Position>;
-    const DepartmentModel = model<DepartmentDocument>(Department.name);
-    doc.reportsToPositionId = await resolveDepartmentHead(
-      DepartmentModel,
-      doc.departmentId,
-      doc._id,
-    );
+    // Use the connection to get the model instead of mongoose.model directly
+    const Department = this.db.model('Department');
+    const dept = await Department.findById(this.departmentId);
+    if (!dept) {
+      throw new Error(`Department with ID ${this.departmentId} not found`);
+    }
     next();
   } catch (error) {
     next(error as Error);

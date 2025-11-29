@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { OrganizationStructureController } from './organization-structure.controller';
 import { OrganizationStructureService } from './organization-structure.service';
@@ -20,12 +20,20 @@ import {
   StructureChangeRequest,
   StructureChangeRequestSchema,
 } from './models/structure-change-request.schema';
+import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
 
 @Module({
   imports: [
+    // Register Department FIRST to ensure it's available for Position hooks
     MongooseModule.forFeature([
       { name: Department.name, schema: DepartmentSchema },
+    ]),
+    // Then register Position which depends on Department
+    MongooseModule.forFeature([
       { name: Position.name, schema: PositionSchema },
+    ]),
+    // Register other models
+    MongooseModule.forFeature([
       { name: PositionAssignment.name, schema: PositionAssignmentSchema },
       { name: StructureApproval.name, schema: StructureApprovalSchema },
       { name: StructureChangeLog.name, schema: StructureChangeLogSchema },
@@ -34,8 +42,10 @@ import {
         schema: StructureChangeRequestSchema,
       },
     ]),
+    forwardRef(() => EmployeeProfileModule),
   ],
   controllers: [OrganizationStructureController],
   providers: [OrganizationStructureService],
+  exports: [OrganizationStructureService, MongooseModule],
 })
 export class OrganizationStructureModule {}

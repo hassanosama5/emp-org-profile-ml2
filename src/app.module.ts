@@ -15,17 +15,26 @@ import { PayrollExecutionModule } from './payroll-execution/payroll-execution.mo
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 
-
-
-
 @Module({
-  imports: [ 
-     ConfigModule.forRoot({
-      isGlobal: true,   // makes env available everywhere
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true, // makes env available everywhere
     }),
-     MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb+srv://TeamUser:TeamUser@cluster0.mfclf62.mongodb.net/'),
+    MongooseModule.forRoot(
+      process.env.MONGODB_URI ||
+        'mongodb+srv://TeamUser:TeamUser@cluster0.mfclf62.mongodb.net/hr_system',
+    ),
 
-    TimeManagementModule, RecruitmentModule, LeavesModule, PayrollExecutionModule, PayrollConfigurationModule, PayrollTrackingModule, EmployeeProfileModule, OrganizationStructureModule, PerformanceModule],
+    TimeManagementModule,
+    RecruitmentModule,
+    LeavesModule,
+    PayrollExecutionModule,
+    PayrollConfigurationModule,
+    PayrollTrackingModule,
+    EmployeeProfileModule,
+    OrganizationStructureModule,
+    PerformanceModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
