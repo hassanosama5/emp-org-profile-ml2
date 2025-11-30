@@ -1,140 +1,85 @@
 // src/performance/performance.service.ts
+
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose'; // ⬅️ add Types here
+import { Model, Types } from 'mongoose';
 
+// --------- MODELS ---------
 import {
   AppraisalTemplate,
   AppraisalTemplateDocument,
 } from './models/appraisal-template.schema';
+
 import {
   AppraisalCycle,
   AppraisalCycleDocument,
 } from './models/appraisal-cycle.schema';
+
 import {
   AppraisalAssignment,
   AppraisalAssignmentDocument,
 } from './models/appraisal-assignment.schema';
+
 import {
   AppraisalRecord,
   AppraisalRecordDocument,
-  RatingEntry,
 } from './models/appraisal-record.schema';
+
 import {
   AppraisalDispute,
   AppraisalDisputeDocument,
 } from './models/appraisal-dispute.schema';
 
+// --------- ENUMS ---------
 import {
   AppraisalAssignmentStatus,
   AppraisalCycleStatus,
   AppraisalRecordStatus,
   AppraisalDisputeStatus,
-  AppraisalTemplateType,
 } from './enums/performance.enums';
 
-// ====== DTOs ======
+// --------- DTOs ---------
 
-export class CreateAppraisalTemplateDto {
-  name: string;
-  description?: string;
-  templateType: AppraisalTemplateType;
-  ratingScale: {
-    type: string;
-    min: number;
-    max: number;
-    step?: number;
-    labels?: string[];
-  };
-  criteria: {
-    key: string;
-    title: string;
-    details?: string;
-    weight?: number;
-    maxScore?: number;
-    required?: boolean;
-  }[];
-  instructions?: string;
-  applicableDepartmentIds?: string[];
-  applicablePositionIds?: string[];
-}
+// Templates
+import { CreateAppraisalTemplateDto } from './dto/create-appraisal-template.dto';
+import { UpdateAppraisalTemplateDto } from './dto/update-appraisal-template.dto';
 
-export class UpdateAppraisalTemplateDto {
-  description?: string;
-  ratingScale?: CreateAppraisalTemplateDto['ratingScale'];
-  criteria?: CreateAppraisalTemplateDto['criteria'];
-  instructions?: string;
-  applicableDepartmentIds?: string[];
-  applicablePositionIds?: string[];
-  isActive?: boolean;
-}
+// Cycles
+import { CreateAppraisalCycleDto } from './dto/create-appraisal-cycle.dto';
 
-export class CycleTemplateAssignmentDto {
-  templateId: string;
-  departmentIds: string[];
-}
+// Records
+import { UpsertAppraisalRecordDto } from './dto/upsert-appraisal-record.dto';
 
-export class CreateAppraisalCycleDto {
-  name: string;
-  description?: string;
-  cycleType: AppraisalTemplateType;
-  startDate: Date;
-  endDate: Date;
-  managerDueDate?: Date;
-  employeeAcknowledgementDueDate?: Date;
-  templateAssignments: CycleTemplateAssignmentDto[];
-
-  assignments: {
-    employeeProfileId: string;
-    managerProfileId: string;
-    departmentId: string;
-    positionId?: string;
-    templateId: string;
-    dueDate?: Date;
-  }[];
-}
-
-export class UpsertAppraisalRecordDto {
-  ratings: RatingEntry[];
-  totalScore?: number;
-  overallRatingLabel?: string;
-  managerSummary?: string;
-  strengths?: string;
-  improvementAreas?: string;
-}
-
-export class SubmitDisputeDto {
-  reason: string;
-  details?: string;
-}
-
-export class ResolveDisputeDto {
-  status: AppraisalDisputeStatus;
-  resolutionSummary?: string;
-}
-
-// =============================================================
+// Disputes
+import { SubmitDisputeDto } from './dto/submit-dispute.dto';
+import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 
 @Injectable()
 export class PerformanceService {
   constructor(
     @InjectModel(AppraisalTemplate.name)
     private readonly templateModel: Model<AppraisalTemplateDocument>,
+
     @InjectModel(AppraisalCycle.name)
     private readonly cycleModel: Model<AppraisalCycleDocument>,
+
     @InjectModel(AppraisalAssignment.name)
     private readonly assignmentModel: Model<AppraisalAssignmentDocument>,
+
     @InjectModel(AppraisalRecord.name)
     private readonly recordModel: Model<AppraisalRecordDocument>,
+
     @InjectModel(AppraisalDispute.name)
     private readonly disputeModel: Model<AppraisalDisputeDocument>,
   ) {}
 
-  // ------------------- TEMPLATE LOGIC ------------------------
+  // =============================================================
+  //                     TEMPLATE LOGIC
+  // =============================================================
 
   async createTemplate(
     dto: CreateAppraisalTemplateDto,
@@ -187,17 +132,14 @@ export class PerformanceService {
 
   async deleteTemplate(id: string): Promise<void> {
     const res = await this.templateModel.findByIdAndDelete(id).exec();
-    if (!res) {
-      throw new NotFoundException('Appraisal template not found');
-    }
+    if (!res) throw new NotFoundException('Appraisal template not found');
   }
 
-  // ------------------- CYCLE & ASSIGNMENTS -------------------
+  // =============================================================
+  //             CYCLES & ASSIGNMENT CREATION LOGIC
+  // =============================================================
 
-  async createCycle(dto: CreateAppraisalCycleDto): Promise<{
-    cycle: AppraisalCycleDocument;
-    assignments: AppraisalAssignmentDocument[];
-  }> {
+  async createCycle(dto: CreateAppraisalCycleDto) {
     if (new Date(dto.startDate) >= new Date(dto.endDate)) {
       throw new BadRequestException('startDate must be before endDate');
     }
@@ -209,7 +151,8 @@ export class PerformanceService {
       startDate: dto.startDate,
       endDate: dto.endDate,
       managerDueDate: dto.managerDueDate,
-      employeeAcknowledgementDueDate: dto.employeeAcknowledgementDueDate,
+      employeeAcknowledgementDueDate:
+        dto.employeeAcknowledgementDueDate,
       templateAssignments: dto.templateAssignments || [],
       status: AppraisalCycleStatus.PLANNED,
     }).save();
@@ -221,7 +164,9 @@ export class PerformanceService {
         employeeProfileId: new Types.ObjectId(a.employeeProfileId),
         managerProfileId: new Types.ObjectId(a.managerProfileId),
         departmentId: new Types.ObjectId(a.departmentId),
-        positionId: a.positionId ? new Types.ObjectId(a.positionId) : undefined,
+        positionId: a.positionId
+          ? new Types.ObjectId(a.positionId)
+          : undefined,
         status: AppraisalAssignmentStatus.NOT_STARTED,
         dueDate: a.dueDate ?? dto.managerDueDate ?? dto.endDate,
         assignedAt: new Date(),
@@ -237,9 +182,7 @@ export class PerformanceService {
 
   async findCycleById(id: string): Promise<AppraisalCycle> {
     const cycle = await this.cycleModel.findById(id).lean().exec();
-    if (!cycle) {
-      throw new NotFoundException('Appraisal cycle not found');
-    }
+    if (!cycle) throw new NotFoundException('Appraisal cycle not found');
     return cycle;
   }
 
@@ -262,7 +205,10 @@ export class PerformanceService {
     if (!cycle) throw new NotFoundException('Appraisal cycle not found');
 
     await this.recordModel.updateMany(
-      { cycleId: cycle._id, status: AppraisalRecordStatus.MANAGER_SUBMITTED },
+      {
+        cycleId: cycle._id,
+        status: AppraisalRecordStatus.MANAGER_SUBMITTED,
+      },
       {
         $set: {
           status: AppraisalRecordStatus.HR_PUBLISHED,
@@ -319,7 +265,9 @@ export class PerformanceService {
     return cycle;
   }
 
-  // ------------------- ASSIGNMENT QUERIES -------------------
+  // =============================================================
+  //                 ASSIGNMENT QUERY LOGIC
+  // =============================================================
 
   async getAssignmentsForManager(managerProfileId: string, cycleId?: string) {
     const filter: any = { managerProfileId };
@@ -343,7 +291,9 @@ export class PerformanceService {
       .exec();
   }
 
-  // ------------------- APPRAISAL RECORDS ---------------------
+  // =============================================================
+  //                 APPRAISAL RECORD LOGIC
+  // =============================================================
 
   async upsertAppraisalRecord(
     assignmentId: string,
@@ -355,9 +305,7 @@ export class PerformanceService {
       throw new NotFoundException('Appraisal assignment not found');
 
     if (assignment.managerProfileId.toString() !== managerProfileId) {
-      throw new BadRequestException(
-        'Manager is not authorized for this assignment',
-      );
+      throw new BadRequestException('Manager not authorized');
     }
 
     let record: AppraisalRecordDocument | null = null;
@@ -433,7 +381,9 @@ export class PerformanceService {
       .exec();
   }
 
-  // ------------------- DISPUTES ------------------------------
+  // =============================================================
+  //                          DISPUTES
+  // =============================================================
 
   async submitDispute(
     appraisalId: string,
@@ -452,9 +402,8 @@ export class PerformanceService {
     const assignment = await this.assignmentModel
       .findById(record.assignmentId)
       .exec();
-    if (!assignment) {
-      throw new NotFoundException('Assignment not found for appraisal');
-    }
+    if (!assignment)
+      throw new NotFoundException('Assignment not found');
 
     const dispute = new this.disputeModel({
       appraisalId: record._id,
