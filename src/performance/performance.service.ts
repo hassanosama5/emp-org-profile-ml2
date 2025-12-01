@@ -43,18 +43,10 @@ import {
 } from './enums/performance.enums';
 
 // --------- DTOs ---------
-
-// Templates
 import { CreateAppraisalTemplateDto } from './dto/create-appraisal-template.dto';
 import { UpdateAppraisalTemplateDto } from './dto/update-appraisal-template.dto';
-
-// Cycles
 import { CreateAppraisalCycleDto } from './dto/create-appraisal-cycle.dto';
-
-// Records
 import { UpsertAppraisalRecordDto } from './dto/upsert-appraisal-record.dto';
-
-// Disputes
 import { SubmitDisputeDto } from './dto/submit-dispute.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 
@@ -151,8 +143,7 @@ export class PerformanceService {
       startDate: dto.startDate,
       endDate: dto.endDate,
       managerDueDate: dto.managerDueDate,
-      employeeAcknowledgementDueDate:
-        dto.employeeAcknowledgementDueDate,
+      employeeAcknowledgementDueDate: dto.employeeAcknowledgementDueDate,
       templateAssignments: dto.templateAssignments || [],
       status: AppraisalCycleStatus.PLANNED,
     }).save();
@@ -164,9 +155,7 @@ export class PerformanceService {
         employeeProfileId: new Types.ObjectId(a.employeeProfileId),
         managerProfileId: new Types.ObjectId(a.managerProfileId),
         departmentId: new Types.ObjectId(a.departmentId),
-        positionId: a.positionId
-          ? new Types.ObjectId(a.positionId)
-          : undefined,
+        positionId: a.positionId ? new Types.ObjectId(a.positionId) : undefined,
         status: AppraisalAssignmentStatus.NOT_STARTED,
         dueDate: a.dueDate ?? dto.managerDueDate ?? dto.endDate,
         assignedAt: new Date(),
@@ -402,10 +391,11 @@ export class PerformanceService {
     const assignment = await this.assignmentModel
       .findById(record.assignmentId)
       .exec();
-    if (!assignment)
-      throw new NotFoundException('Assignment not found');
+    if (!assignment) throw new NotFoundException('Assignment not found');
 
+    // ✅ FIX: Add _id manually because your schema defines _id manually
     const dispute = new this.disputeModel({
+      _id: new Types.ObjectId(),
       appraisalId: record._id,
       assignmentId: assignment._id,
       cycleId: record.cycleId,

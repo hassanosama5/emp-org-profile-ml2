@@ -15,6 +15,7 @@ This guide explains how to test and debug all employee-profile routes and ensure
 ### Unit Tests
 
 Run unit tests for the controller:
+
 ```bash
 npm test -- employee-profile.controller.spec
 ```
@@ -22,11 +23,13 @@ npm test -- employee-profile.controller.spec
 ### E2E Tests
 
 Run end-to-end tests for employee-profile routes:
+
 ```bash
 npm run test:e2e:employee
 ```
 
 Or run all E2E tests:
+
 ```bash
 npm run test:e2e
 ```
@@ -34,6 +37,7 @@ npm run test:e2e
 ### Test Coverage
 
 Generate coverage report:
+
 ```bash
 npm run test:cov
 ```
@@ -41,6 +45,7 @@ npm run test:cov
 ## ✅ Route Validation
 
 The route validation script checks consistency between:
+
 - Controller routes and their DTOs
 - DTOs and Mongoose schemas
 - Route wrameters and service methods
@@ -166,6 +171,7 @@ The E2E test suite (`test/employee-profile.e2e-spec.ts`) covers:
 ### Running E2E Tests
 
 Before running E2E tests, ensure:
+
 1. MongoDB is running and accessible
 2. Environment variables are set (`.env` file)
 3. Test database is configured
@@ -185,7 +191,8 @@ npm run test:e2e:employee
 
 **Problem**: DTO validation not working as expected.
 
-**Solution**: 
+**Solution**:
+
 - Ensure `ValidationPipe` is configured globally in `main.ts`
 - Check that DTOs have proper decorators (`@IsString()`, `@IsEmail()`, etc.)
 - Verify `whitelist: true` and `forbidNonWhitelisted: true` are set
@@ -195,6 +202,7 @@ npm run test:e2e:employee
 **Problem**: Route returns 404 even though it's defined.
 
 **Solution**:
+
 - Check route path matches exactly (case-sensitive)
 - Verify global prefix is set correctly (`/api/v1`)
 - Ensure controller is registered in module
@@ -205,6 +213,7 @@ npm run test:e2e:employee
 **Problem**: Routes return 401 Unauthorized.
 
 **Solution**:
+
 - Verify JWT token is valid and not expired
 - Check token format: `Bearer <token>`
 - Ensure `JWT_SECRET` matches between token creation and validation
@@ -215,6 +224,7 @@ npm run test:e2e:employee
 **Problem**: Routes return 403 Forbidden even with valid token.
 
 **Solution**:
+
 - Check user roles in JWT token payload
 - Verify `RolesGuard` is working correctly
 - Ensure role enum values match exactly (case-sensitive)
@@ -225,6 +235,7 @@ npm run test:e2e:employee
 **Problem**: Fields in DTO don't match schema.
 
 **Solution**:
+
 - Run validation script: `npm run validate:routes`
 - Check that DTO fields match schema fields
 - Verify field types are consistent
@@ -235,6 +246,7 @@ npm run test:e2e:employee
 **Problem**: Enum values not accepted.
 
 **Solution**:
+
 - Verify enum values match exactly (case-sensitive)
 - Check enum is properly exported and imported
 - Ensure `@IsEnum()` decorator is used in DTO
@@ -242,33 +254,36 @@ npm run test:e2e:employee
 
 ## 📊 Route Summary
 
-| Method | Path | DTO | Required Roles | Description |
-|--------|------|-----|----------------|-------------|
-| POST | `/api/v1/employee-profile` | CreateEmployeeDto | SYSTEM_ADMIN, HR_MANAGER, HR_EMPLOYEE | Create new employee |
-| GET | `/api/v1/employee-profile` | QueryEmployeeDto | SYSTEM_ADMIN, HR_MANAGER, HR_EMPLOYEE, DEPARTMENT_HEAD | List employees |
-| GET | `/api/v1/employee-profile/me` | - | Authenticated | Get own profile |
-| PATCH | `/api/v1/employee-profile/me` | UpdateEmployeeSelfServiceDto | Authenticated | Update own profile |
-| GET | `/api/v1/employee-profile/stats` | - | SYSTEM_ADMIN, HR_MANAGER | Get statistics |
-| GET | `/api/v1/employee-profile/department/:departmentId` | - | SYSTEM_ADMIN, HR_MANAGER, DEPARTMENT_HEAD | Get by department |
-| GET | `/api/v1/employee-profile/:id` | - | Authenticated | Get employee by ID |
-| PATCH | `/api/v1/employee-profile/:id` | UpdateEmployeeDto | SYSTEM_ADMIN, HR_MANAGER, HR_EMPLOYEE | Update employee |
-| DELETE | `/api/v1/employee-profile/:id` | - | SYSTEM_ADMIN, HR_MANAGER | Delete employee |
-| POST | `/api/v1/employee-profile/assign-roles` | AssignSystemRoleDto | SYSTEM_ADMIN | Assign roles |
-| GET | `/api/v1/employee-profile/:id/roles` | - | SYSTEM_ADMIN, HR_MANAGER | Get employee roles |
+| Method | Path                                                | DTO                          | Required Roles                                         | Description         |
+| ------ | --------------------------------------------------- | ---------------------------- | ------------------------------------------------------ | ------------------- |
+| POST   | `/api/v1/employee-profile`                          | CreateEmployeeDto            | SYSTEM_ADMIN, HR_MANAGER, HR_EMPLOYEE                  | Create new employee |
+| GET    | `/api/v1/employee-profile`                          | QueryEmployeeDto             | SYSTEM_ADMIN, HR_MANAGER, HR_EMPLOYEE, DEPARTMENT_HEAD | List employees      |
+| GET    | `/api/v1/employee-profile/me`                       | -                            | Authenticated                                          | Get own profile     |
+| PATCH  | `/api/v1/employee-profile/me`                       | UpdateEmployeeSelfServiceDto | Authenticated                                          | Update own profile  |
+| GET    | `/api/v1/employee-profile/stats`                    | -                            | SYSTEM_ADMIN, HR_MANAGER                               | Get statistics      |
+| GET    | `/api/v1/employee-profile/department/:departmentId` | -                            | SYSTEM_ADMIN, HR_MANAGER, DEPARTMENT_HEAD              | Get by department   |
+| GET    | `/api/v1/employee-profile/:id`                      | -                            | Authenticated                                          | Get employee by ID  |
+| PATCH  | `/api/v1/employee-profile/:id`                      | UpdateEmployeeDto            | SYSTEM_ADMIN, HR_MANAGER, HR_EMPLOYEE                  | Update employee     |
+| DELETE | `/api/v1/employee-profile/:id`                      | -                            | SYSTEM_ADMIN, HR_MANAGER                               | Delete employee     |
+| POST   | `/api/v1/employee-profile/assign-roles`             | AssignSystemRoleDto          | SYSTEM_ADMIN                                           | Assign roles        |
+| GET    | `/api/v1/employee-profile/:id/roles`                | -                            | SYSTEM_ADMIN, HR_MANAGER                               | Get employee roles  |
 
 ## 🚀 Quick Start
 
 1. **Validate routes and schemas:**
+
    ```bash
    npm run validate:routes
    ```
 
 2. **Debug route information:**
+
    ```bash
    npm run debug:routes
    ```
 
 3. **Run unit tests:**
+
    ```bash
    npm test -- employee-profile.controller.spec
    ```
@@ -285,4 +300,3 @@ npm run test:e2e:employee
 - DTOs use class-validator decorators for validation
 - Schemas use Mongoose decorators for database structure
 - Enums should be used consistently across DTOs, schemas, and controllers
-

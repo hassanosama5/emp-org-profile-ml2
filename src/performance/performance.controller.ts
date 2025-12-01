@@ -171,10 +171,6 @@ export class PerformanceController {
     @Query('resolverEmployeeId') resolverEmployeeId: string,
     @Body() dto: ResolveDisputeDto,
   ) {
-    return this.performanceService.resolveDispute(
-      id,
-      resolverEmployeeId,
-      dto,
-    );
+    return this.performanceService.resolveDispute(id, resolverEmployeeId, dto);
   }
 }
