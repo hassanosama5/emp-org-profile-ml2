@@ -33,6 +33,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SystemRole, CandidateStatus } from './enums/employee-profile.enums';
+// Add this import at the top
+import { RegisterCandidateDto } from './dto/register-candidate.dto';
 
 @Controller('employee-profile')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -779,6 +781,21 @@ export class EmployeeProfileController {
     return {
       message: 'Team statistics retrieved successfully',
       data: stats,
+    };
+  }
+
+  // Add this method to the CANDIDATE ROUTES section (at the beginning of the section)
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async registerCandidate(@Body() registerDto: RegisterCandidateDto) {
+    const candidate =
+      await this.employeeProfileService.registerCandidate(registerDto);
+
+    const { password, ...candidateWithoutPassword } = candidate;
+
+    return {
+      message: 'Candidate registered successfully',
+      data: candidateWithoutPassword,
     };
   }
 }

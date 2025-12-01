@@ -9,8 +9,9 @@ export type insuranceBracketsDocument = HydratedDocument<insuranceBrackets>;
 export class insuranceBrackets {
   @Prop({ required: true, unique: true })
   name: string; // insurance name like: social, health insurance
+
   // @Prop({ required: true, min: 0 })
-  // amount: number;
+  // amount: number; //since amount is not fixed and need to calculated at execution time
   @Prop({
     required: true,
     type: String,
