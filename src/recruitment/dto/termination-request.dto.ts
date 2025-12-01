@@ -1,16 +1,11 @@
 // src/recruitment/dto/termination-request.dto.ts
-import {
-  IsString,
-  IsDateString,
-  IsOptional,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsDateString, IsOptional, IsEnum } from 'class-validator';
 import { TerminationStatus } from '../enums/termination-status.enum';
 import { TerminationInitiation } from '../enums/termination-initiation.enum';
 
 export class CreateTerminationRequestDto {
   @IsString()
-  employeeId: string;               // employeeNumber, e.g. "EMP-001"
+  employeeId: string; // employeeNumber, e.g. "EMP-001"
 
   @IsEnum(TerminationInitiation)
   initiator: TerminationInitiation; // 'employee' | 'hr' | 'manager'

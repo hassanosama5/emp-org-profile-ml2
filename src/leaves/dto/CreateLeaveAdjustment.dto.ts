@@ -1,19 +1,19 @@
 import { IsString, IsNumber, IsEnum } from 'class-validator';
-import { AdjustmentType } from '../enums/adjustment-type.enum';  
+import { AdjustmentType } from '../enums/adjustment-type.enum';
 
 export class CreateLeaveAdjustmentDto {
   @IsString()
-  employeeId: string;  
+  employeeId: string;
 
   @IsString()
-  leaveTypeId: string;  
+  leaveTypeId: string;
   @IsEnum(AdjustmentType)
-  adjustmentType: AdjustmentType;  
+  adjustmentType: AdjustmentType;
   @IsNumber()
-  amount: number;  
+  amount: number;
 
   @IsString()
-  reason: string;  
+  reason: string;
   @IsString()
-  hrUserId: string;  
+  hrUserId: string;
 }

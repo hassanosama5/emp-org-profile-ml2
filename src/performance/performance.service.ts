@@ -151,8 +151,7 @@ export class PerformanceService {
       startDate: dto.startDate,
       endDate: dto.endDate,
       managerDueDate: dto.managerDueDate,
-      employeeAcknowledgementDueDate:
-        dto.employeeAcknowledgementDueDate,
+      employeeAcknowledgementDueDate: dto.employeeAcknowledgementDueDate,
       templateAssignments: dto.templateAssignments || [],
       status: AppraisalCycleStatus.PLANNED,
     }).save();
@@ -164,9 +163,7 @@ export class PerformanceService {
         employeeProfileId: new Types.ObjectId(a.employeeProfileId),
         managerProfileId: new Types.ObjectId(a.managerProfileId),
         departmentId: new Types.ObjectId(a.departmentId),
-        positionId: a.positionId
-          ? new Types.ObjectId(a.positionId)
-          : undefined,
+        positionId: a.positionId ? new Types.ObjectId(a.positionId) : undefined,
         status: AppraisalAssignmentStatus.NOT_STARTED,
         dueDate: a.dueDate ?? dto.managerDueDate ?? dto.endDate,
         assignedAt: new Date(),
@@ -402,8 +399,7 @@ export class PerformanceService {
     const assignment = await this.assignmentModel
       .findById(record.assignmentId)
       .exec();
-    if (!assignment)
-      throw new NotFoundException('Assignment not found');
+    if (!assignment) throw new NotFoundException('Assignment not found');
 
     const dispute = new this.disputeModel({
       appraisalId: record._id,

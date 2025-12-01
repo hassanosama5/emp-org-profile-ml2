@@ -4,8 +4,8 @@ import { LeaveStatus } from '../enums/leave-status.enum';
 
 export class ApproveLeaveRequestDto {
   @IsString()
-  leaveRequestId: string;  // Leave Request ID
+  leaveRequestId: string; // Leave Request ID
 
   @IsEnum(LeaveStatus)
-  status: LeaveStatus;  // APPROVED or REJECTED
+  status: LeaveStatus; // APPROVED or REJECTED
 }

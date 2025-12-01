@@ -73,9 +73,7 @@ export class LeavesService {
   ): Types.ObjectId | undefined {
     if (!id) return undefined;
     try {
-      return id instanceof Types.ObjectId
-        ? id
-        : new Types.ObjectId(id as string);
+      return id instanceof Types.ObjectId ? id : new Types.ObjectId(id);
     } catch (err) {
       throw new Error(`Invalid id provided: ${id}`);
     }
@@ -411,8 +409,8 @@ export class LeavesService {
     }
 
     // Convert employeeId and leaveTypeId to ObjectId using the helper
-    const employeeObjectId = this.toObjectId(employeeId) as Types.ObjectId;
-    const leaveTypeObjectId = this.toObjectId(leaveTypeId) as Types.ObjectId;
+    const employeeObjectId = this.toObjectId(employeeId);
+    const leaveTypeObjectId = this.toObjectId(leaveTypeId);
 
     // Fetch leave type using ObjectId
     const leaveTypeDoc = await this.leaveTypeModel
@@ -823,12 +821,8 @@ export class LeavesService {
   ): Promise<LeaveEntitlementDocument> {
     // Ensure ids are ObjectId when creating entitlement
     const doc: any = { ...createLeaveEntitlementDto };
-    doc.employeeId = this.toObjectId(
-      createLeaveEntitlementDto.employeeId,
-    ) as Types.ObjectId;
-    doc.leaveTypeId = this.toObjectId(
-      createLeaveEntitlementDto.leaveTypeId,
-    ) as Types.ObjectId;
+    doc.employeeId = this.toObjectId(createLeaveEntitlementDto.employeeId);
+    doc.leaveTypeId = this.toObjectId(createLeaveEntitlementDto.leaveTypeId);
     const newLeaveEntitlement = new this.leaveEntitlementModel(doc);
     return await newLeaveEntitlement.save();
   }
@@ -1593,7 +1587,7 @@ export class LeavesService {
         query.status = filters.status;
       }
 
-      let sortObj: any = {};
+      const sortObj: any = {};
       if (filters.sortByDate) {
         sortObj['dates.from'] = filters.sortByDate === 'asc' ? 1 : -1;
       }
@@ -1650,7 +1644,7 @@ export class LeavesService {
             .populate('leaveTypeId')
             .exec();
 
-          let upcomingQuery: any = {
+          const upcomingQuery: any = {
             employeeId: new Types.ObjectId(member._id),
             status: { $in: [LeaveStatus.APPROVED, LeaveStatus.PENDING] },
           };
@@ -1731,7 +1725,7 @@ export class LeavesService {
         query.status = filters.status;
       }
 
-      let sortObj: any = {};
+      const sortObj: any = {};
       if (filters.sortByDate) {
         sortObj['dates.from'] = filters.sortByDate === 'asc' ? 1 : -1;
       }

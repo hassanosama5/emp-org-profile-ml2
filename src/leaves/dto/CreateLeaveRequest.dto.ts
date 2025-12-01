@@ -1,4 +1,11 @@
-import { IsString,IsNumber, IsArray, IsOptional, IsDate, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsArray,
+  IsOptional,
+  IsDate,
+  IsObject,
+} from 'class-validator';
 
 export class CreateLeaveRequestDto {
   @IsString()
@@ -23,10 +30,14 @@ export class CreateLeaveRequestDto {
 
   @IsOptional()
   @IsArray()
-  approvalFlow?: { role: string; status: string; decidedBy?: string; decidedAt?: Date }[];
+  approvalFlow?: {
+    role: string;
+    status: string;
+    decidedBy?: string;
+    decidedAt?: Date;
+  }[];
 
-//@IsOptional()
+  //@IsOptional()
   //@IsString()
-  //status?: string;  //hashoof mawdoo3 el status da b3dein 
-
+  //status?: string;  //hashoof mawdoo3 el status da b3dein
 }

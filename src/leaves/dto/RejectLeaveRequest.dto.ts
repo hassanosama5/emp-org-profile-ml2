@@ -7,5 +7,5 @@ export class RejectLeaveRequestDto {
   leaveRequestId: string; // Leave Request ID
 
   @IsEnum(LeaveStatus)
-  status: LeaveStatus;  // REJECTED
+  status: LeaveStatus; // REJECTED
 }

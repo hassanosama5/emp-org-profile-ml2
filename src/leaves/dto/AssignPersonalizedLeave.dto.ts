@@ -2,11 +2,11 @@ import { IsString, IsNumber } from 'class-validator';
 
 export class AssignPersonalizedLeaveDto {
   @IsString()
-  employeeId: string;  
+  employeeId: string;
 
   @IsString()
-  leaveTypeId!: string;  
+  leaveTypeId!: string;
 
   @IsNumber()
-  personalizedEntitlement!: number;  
+  personalizedEntitlement!: number;
 }

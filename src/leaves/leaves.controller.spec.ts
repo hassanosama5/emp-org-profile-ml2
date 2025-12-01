@@ -16,5 +16,3 @@ describe('LeavesController', () => {
     expect(controller).toBeDefined();
   });
 });
-
-  

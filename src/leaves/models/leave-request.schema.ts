@@ -6,7 +6,6 @@ export type LeaveRequestDocument = HydratedDocument<LeaveRequest>;
 
 @Schema({ timestamps: true })
 export class LeaveRequest {
-
   // EMPLOYEE REQUESTING THE LEAVE
   @Prop({ type: Types.ObjectId, ref: 'EmployeeProfile', required: true })
   employeeId: Types.ObjectId;
@@ -68,5 +67,4 @@ export class LeaveRequest {
   irregularPatternFlag: boolean;
 }
 
-export const LeaveRequestSchema =
-  SchemaFactory.createForClass(LeaveRequest);
+export const LeaveRequestSchema = SchemaFactory.createForClass(LeaveRequest);

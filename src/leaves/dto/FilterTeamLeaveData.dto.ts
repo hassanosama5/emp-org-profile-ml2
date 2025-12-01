@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEnum, IsDate, IsIn, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsDate,
+  IsIn,
+  IsNumber,
+} from 'class-validator';
 import { LeaveStatus } from '../enums/leave-status.enum';
 
 export class FilterTeamLeaveDataDto {

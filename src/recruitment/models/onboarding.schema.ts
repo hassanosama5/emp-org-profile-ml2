@@ -4,7 +4,6 @@ import { OnboardingTaskStatus } from '../enums/onboarding-task-status.enum';
 
 @Schema({ timestamps: true })
 export class Onboarding {
-
   @Prop({ type: Types.ObjectId, ref: 'EmployeeProfile', required: true })
   employeeId: Types.ObjectId;
 
@@ -24,7 +23,7 @@ export class Onboarding {
       completedAt: Date,
       documentId: { type: Types.ObjectId, ref: 'Document' },
       notes: String,
-    }
+    },
   ])
   tasks: any[];
 

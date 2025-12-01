@@ -1,5 +1,15 @@
-import { IsString, IsArray, IsNumber, IsOptional, IsEnum, Validate } from 'class-validator';
-import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsEnum,
+  Validate,
+} from 'class-validator';
+import {
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
 import { OfferResponseStatus } from '../enums/offer-response-status.enum';
 import { OfferFinalStatus } from '../enums/offer-final-status.enum';
 
@@ -18,8 +28,8 @@ export class IsValidISODateConstraint implements ValidatorConstraintInterface {
 }
 
 export class CreateOfferDto {
-  @IsString() applicationId: string;  // ObjectId as string
-  @IsString() candidateId: string;  // ObjectId as string
+  @IsString() applicationId: string; // ObjectId as string
+  @IsString() candidateId: string; // ObjectId as string
   @IsNumber() grossSalary: number;
   @IsOptional() @IsNumber() signingBonus?: number;
   @IsOptional() @IsArray() benefits?: string[];
@@ -27,13 +37,13 @@ export class CreateOfferDto {
   @IsOptional() @IsString() insurances?: string;
   @IsOptional() @IsString() content?: string;
   @IsOptional() @IsString() role?: string;
-  @Validate(IsValidISODateConstraint) deadline: string;  // ISO 8601 date string
+  @Validate(IsValidISODateConstraint) deadline: string; // ISO 8601 date string
 }
 
 export class RespondToOfferDto {
-  @IsEnum(OfferResponseStatus) applicantResponse: OfferResponseStatus;  // Must be one of: accepted, rejected, pending
+  @IsEnum(OfferResponseStatus) applicantResponse: OfferResponseStatus; // Must be one of: accepted, rejected, pending
 }
 
 export class FinalizeOfferDto {
-  @IsEnum(OfferFinalStatus) finalStatus: OfferFinalStatus;  // Must be one of: approved, rejected, pending
+  @IsEnum(OfferFinalStatus) finalStatus: OfferFinalStatus; // Must be one of: approved, rejected, pending
 }

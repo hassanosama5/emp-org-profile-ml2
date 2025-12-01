@@ -5,7 +5,6 @@ import { ApplicationStatus } from '../enums/application-status.enum';
 
 @Schema({ timestamps: true })
 export class Application {
-
   @Prop({ type: Types.ObjectId, ref: 'Candidate', required: true })
   candidateId: Types.ObjectId;
 
@@ -17,13 +16,13 @@ export class Application {
 
   @Prop({
     enum: ApplicationStage,
-    default: ApplicationStage.SCREENING
+    default: ApplicationStage.SCREENING,
   })
   currentStage: ApplicationStage;
 
   @Prop({
     enum: ApplicationStatus,
-    default: ApplicationStatus.SUBMITTED
+    default: ApplicationStatus.SUBMITTED,
   })
   status: ApplicationStatus;
 }

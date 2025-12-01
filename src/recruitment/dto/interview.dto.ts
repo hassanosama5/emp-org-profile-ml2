@@ -1,5 +1,14 @@
-import { IsString, IsArray, IsOptional, IsEnum, Validate } from 'class-validator';
-import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  IsOptional,
+  IsEnum,
+  Validate,
+} from 'class-validator';
+import {
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
 import { ApplicationStage } from '../enums/application-stage.enum';
 import { InterviewMethod } from '../enums/interview-method.enum';
 import { InterviewStatus } from '../enums/interview-status.enum';
@@ -19,14 +28,14 @@ export class IsValidISODateConstraint implements ValidatorConstraintInterface {
 }
 
 export class ScheduleInterviewDto {
-  @IsString() applicationId: string;  // ObjectId as string
-  @IsEnum(ApplicationStage) stage: ApplicationStage;  // Must be one of: screening, department_interview, hr_interview, offer
-  @Validate(IsValidISODateConstraint) scheduledDate: string;  // ISO 8601 date string
-  @IsOptional() @IsEnum(InterviewMethod) method?: InterviewMethod;  // onsite, video, phone
-  @IsOptional() @IsArray() panel?: string[];  // Array of ObjectIds as strings
+  @IsString() applicationId: string; // ObjectId as string
+  @IsEnum(ApplicationStage) stage: ApplicationStage; // Must be one of: screening, department_interview, hr_interview, offer
+  @Validate(IsValidISODateConstraint) scheduledDate: string; // ISO 8601 date string
+  @IsOptional() @IsEnum(InterviewMethod) method?: InterviewMethod; // onsite, video, phone
+  @IsOptional() @IsArray() panel?: string[]; // Array of ObjectIds as strings
   @IsOptional() @IsString() videoLink?: string;
 }
 
 export class UpdateInterviewStatusDto {
-  @IsEnum(InterviewStatus) status: InterviewStatus;  // Must be one of: scheduled, completed, cancelled
+  @IsEnum(InterviewStatus) status: InterviewStatus; // Must be one of: scheduled, completed, cancelled
 }

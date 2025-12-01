@@ -9,16 +9,17 @@ import { PayrollConfigurationModule } from '../payroll-configuration/payroll-con
 import { PayrollExecutionModule } from '../payroll-execution/payroll-execution.module';
 
 @Module({
-  
   imports: [
-    PayrollConfigurationModule,forwardRef(()=> PayrollExecutionModule),
+    PayrollConfigurationModule,
+    forwardRef(() => PayrollExecutionModule),
     MongooseModule.forFeature([
       { name: refunds.name, schema: refundsSchema },
       { name: claims.name, schema: claimsSchema },
       { name: disputes.name, schema: disputesSchema },
-    ])],
+    ]),
+  ],
   controllers: [PayrollTrackingController],
   providers: [PayrollTrackingService],
-  exports:[PayrollTrackingService]
+  exports: [PayrollTrackingService],
 })
-export class PayrollTrackingModule { }
+export class PayrollTrackingModule {}

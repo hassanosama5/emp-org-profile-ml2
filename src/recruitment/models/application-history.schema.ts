@@ -3,7 +3,6 @@ import { HydratedDocument, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class ApplicationStatusHistory {
-
   @Prop({ type: Types.ObjectId, ref: 'Application', required: true })
   applicationId: Types.ObjectId;
 
@@ -25,5 +24,6 @@ export class ApplicationStatusHistory {
 
 export type ApplicationStatusHistoryDocument =
   HydratedDocument<ApplicationStatusHistory>;
-export const ApplicationStatusHistorySchema =
-  SchemaFactory.createForClass(ApplicationStatusHistory);
+export const ApplicationStatusHistorySchema = SchemaFactory.createForClass(
+  ApplicationStatusHistory,
+);

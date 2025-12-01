@@ -3,7 +3,6 @@ import { HydratedDocument, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class AssessmentResult {
-
   @Prop({ type: Types.ObjectId, ref: 'Interview', required: true })
   interviewId: Types.ObjectId;
 

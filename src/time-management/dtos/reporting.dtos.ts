@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsDate, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsDate,
+  IsEnum,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // DTO for generating an overtime report
@@ -76,4 +82,3 @@ export class ExportReportDto {
   @Type(() => Date)
   endDate?: Date; // Optional: End date for the export
 }
-

@@ -1,33 +1,33 @@
 import { IsString, IsBoolean, IsOptional, IsEnum } from 'class-validator';
-import { AttachmentType } from '../enums/attachment-type.enum';  
+import { AttachmentType } from '../enums/attachment-type.enum';
 
 export class CreateLeaveTypeDto {
   @IsString()
-  code: string;  
+  code: string;
 
   @IsString()
-  name: string;  
+  name: string;
 
   @IsString()
-  categoryId: string;  
+  categoryId: string;
 
   @IsOptional()
   @IsString()
-  description?: string;  
+  description?: string;
 
   @IsOptional()
   @IsBoolean()
-  paid: boolean;  
+  paid: boolean;
 
   @IsOptional()
   @IsBoolean()
-  deductible: boolean;  
+  deductible: boolean;
 
   @IsOptional()
   @IsBoolean()
-  requiresAttachment: boolean;  
+  requiresAttachment: boolean;
 
   @IsOptional()
   @IsEnum(AttachmentType)
-  attachmentType?: AttachmentType;   
+  attachmentType?: AttachmentType;
 }

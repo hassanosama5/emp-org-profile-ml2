@@ -1,7 +1,12 @@
-import { IsString, IsNumber, IsOptional, IsDate, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsDate,
+  IsEnum,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { AccrualMethod } from '../enums/accrual-method.enum';
-
 
 export class CalculateAccrualDto {
   @IsString()

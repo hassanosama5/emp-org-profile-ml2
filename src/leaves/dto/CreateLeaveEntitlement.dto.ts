@@ -3,37 +3,37 @@ import { Types } from 'mongoose';
 
 export class CreateLeaveEntitlementDto {
   @IsString()
-  employeeId: string;  
+  employeeId: string;
 
   @IsString()
-  leaveTypeId: string;  
+  leaveTypeId: string;
 
   @IsNumber()
-  yearlyEntitlement: number;  
+  yearlyEntitlement: number;
 
   @IsNumber()
-  accruedActual: number;  
+  accruedActual: number;
 
   @IsNumber()
-  accruedRounded: number;  
+  accruedRounded: number;
 
   @IsNumber()
-  carryForward: number;  
+  carryForward: number;
 
   @IsNumber()
-  taken: number;  
+  taken: number;
 
   @IsNumber()
-  pending: number;  
+  pending: number;
 
   @IsNumber()
-  remaining: number; 
+  remaining: number;
 
   @IsOptional()
   @IsDate()
-  lastAccrualDate?: Date;  
+  lastAccrualDate?: Date;
 
   @IsOptional()
   @IsDate()
-  nextResetDate?: Date;  
+  nextResetDate?: Date;
 }

@@ -566,7 +566,7 @@ export class RecruitmentService {
     requisitionId?: string,
     prioritizeReferrals: boolean = true,
   ) {
-    let query: any = {};
+    const query: any = {};
     if (requisitionId) {
       if (!Types.ObjectId.isValid(requisitionId)) {
         throw new BadRequestException('Invalid requisition ID format');
@@ -1536,7 +1536,7 @@ Due: ${context.dueDate}`
     }
 
     try {
-      let transporter = nodemailer.createTransport({
+      const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: process.env.EMAIL_USER, // Use environment variable
@@ -1598,7 +1598,7 @@ Due: ${context.dueDate}`
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
       // Auto-generate standard tasks if not provided (ONB-001: Customizable checklists)
-      let tasks = createOnboardingDto.tasks || [];
+      const tasks = createOnboardingDto.tasks || [];
 
       // If no tasks provided, auto-generate based on business rules
       if (tasks.length === 0) {
@@ -1913,18 +1913,18 @@ Due: ${context.dueDate}`
       Object.assign(onboarding.tasks[taskIndex], updateTaskDto);
       // Only set completedAt if status is actually COMPLETED
       if (updateTaskDto.status === OnboardingTaskStatus.COMPLETED) {
-        (onboarding.tasks[taskIndex] as any).completedAt = new Date();
+        onboarding.tasks[taskIndex].completedAt = new Date();
       } else if (
         updateTaskDto.status &&
-        (onboarding.tasks[taskIndex] as any).completedAt
+        onboarding.tasks[taskIndex].completedAt
       ) {
         // Clear completedAt if status changed from COMPLETED to something else
-        (onboarding.tasks[taskIndex] as any).completedAt = undefined;
+        onboarding.tasks[taskIndex].completedAt = undefined;
       }
       const allCompleted =
         onboarding.tasks.length > 0 &&
         onboarding.tasks.every(
-          (task) => (task as any).status === OnboardingTaskStatus.COMPLETED,
+          (task) => task.status === OnboardingTaskStatus.COMPLETED,
         );
       if (allCompleted) {
         onboarding.completed = true;
@@ -2029,8 +2029,8 @@ Due: ${context.dueDate}`
 
       // Check if task is completed - warn but allow removal
       const task = onboarding.tasks[taskIndex];
-      if ((task as any).status === OnboardingTaskStatus.COMPLETED) {
-        console.warn(`Removing completed task: ${(task as any).name}`);
+      if (task.status === OnboardingTaskStatus.COMPLETED) {
+        console.warn(`Removing completed task: ${task.name}`);
       }
 
       onboarding.tasks.splice(taskIndex, 1);
@@ -3140,12 +3140,12 @@ Due: ${context.dueDate}`
       }
 
       const task = onboarding.tasks[taskIndex];
-      if ((task as any).department !== 'IT') {
+      if (task.department !== 'IT') {
         throw new BadRequestException('This method is only for IT tasks');
       }
 
       // Mark task as in progress
-      (task as any).status = OnboardingTaskStatus.IN_PROGRESS;
+      task.status = OnboardingTaskStatus.IN_PROGRESS;
       await onboarding.save();
 
       // ============= INTEGRATION: IT System & Time Management Service =============
@@ -3199,14 +3199,14 @@ Due: ${context.dueDate}`
 
       // For now, we simulate the process
       console.log(
-        `Provisioning system access for employee ${employeeId}: ${(task as any).name}`,
+        `Provisioning system access for employee ${employeeId}: ${task.name}`,
       );
 
       // Mark as completed after provisioning
-      (task as any).status = OnboardingTaskStatus.COMPLETED;
-      (task as any).completedAt = new Date();
-      (task as any).notes =
-        ((task as any).notes || '') +
+      task.status = OnboardingTaskStatus.COMPLETED;
+      task.completedAt = new Date();
+      task.notes =
+        (task.notes || '') +
         `\n[${new Date().toISOString()}] System access provisioned automatically.`;
 
       await onboarding.save();
@@ -3309,9 +3309,9 @@ Due: ${context.dueDate}`
       }
 
       const taskIndex = onboarding.tasks.indexOf(targetTask);
-      (targetTask as any).status = OnboardingTaskStatus.IN_PROGRESS;
-      (targetTask as any).notes =
-        ((targetTask as any).notes || '') +
+      targetTask.status = OnboardingTaskStatus.IN_PROGRESS;
+      targetTask.notes =
+        (targetTask.notes || '') +
         `\n[${new Date().toISOString()}] Reserved: ${JSON.stringify(equipmentDetails)}`;
 
       await onboarding.save();
@@ -3419,7 +3419,7 @@ Due: ${context.dueDate}`
       // 4. Store scheduling information in onboarding tasks
       // Update IT tasks with scheduled dates
       const itTasks = onboarding.tasks.filter(
-        (task: any) => (task as any).department === 'IT',
+        (task: any) => task.department === 'IT',
       );
       if (itTasks.length === 0) {
         throw new BadRequestException(
@@ -3427,15 +3427,14 @@ Due: ${context.dueDate}`
         );
       }
       for (const task of itTasks) {
-        const taskDeadline = (task as any).deadline;
+        const taskDeadline = task.deadline;
         if (!taskDeadline || new Date(taskDeadline) > startDateObj) {
-          (task as any).deadline = startDateObj;
-          (task as any).notes =
-            ((task as any).notes || '') +
+          task.deadline = startDateObj;
+          task.notes =
+            (task.notes || '') +
             `\n[${new Date().toISOString()}] Scheduled for automatic provisioning on ${startDateObj.toISOString()}`;
           if (endDate) {
-            (task as any).notes +=
-              `\n[${new Date().toISOString()}] Scheduled for automatic revocation on ${new Date(endDate).toISOString()}`;
+            task.notes += `\n[${new Date().toISOString()}] Scheduled for automatic revocation on ${new Date(endDate).toISOString()}`;
           }
         }
       }
@@ -3549,10 +3548,10 @@ Due: ${context.dueDate}`
       // });
 
       // For now, we mark the task and log the action
-      (payrollTask as any).status = OnboardingTaskStatus.COMPLETED;
-      (payrollTask as any).completedAt = new Date();
-      (payrollTask as any).notes =
-        ((payrollTask as any).notes || '') +
+      payrollTask.status = OnboardingTaskStatus.COMPLETED;
+      payrollTask.completedAt = new Date();
+      payrollTask.notes =
+        (payrollTask.notes || '') +
         `\n[${new Date().toISOString()}] Payroll initiated automatically. ` +
         `Contract signed: ${contractSigningDate.toISOString()}, Gross Salary: ${grossSalary}`;
       // Add integration result to notes when ready:
@@ -3671,10 +3670,10 @@ Due: ${context.dueDate}`
       // });
 
       // For now, we mark the task and log the action
-      (bonusTask as any).status = OnboardingTaskStatus.COMPLETED;
-      (bonusTask as any).completedAt = new Date();
-      (bonusTask as any).notes =
-        ((bonusTask as any).notes || '') +
+      bonusTask.status = OnboardingTaskStatus.COMPLETED;
+      bonusTask.completedAt = new Date();
+      bonusTask.notes =
+        (bonusTask.notes || '') +
         `\n[${new Date().toISOString()}] Signing bonus processed automatically. ` +
         `Amount: ${signingBonus}, Contract signed: ${contractSigningDate.toISOString()}`;
       // Add integration result to notes when ready:
@@ -3739,14 +3738,14 @@ Due: ${context.dueDate}`
 
       // Mark all pending tasks as cancelled
       for (const task of onboarding.tasks) {
-        const taskStatus = (task as any).status;
+        const taskStatus = task.status;
         if (
           taskStatus === OnboardingTaskStatus.PENDING ||
           taskStatus === OnboardingTaskStatus.IN_PROGRESS
         ) {
-          (task as any).status = OnboardingTaskStatus.PENDING; // Keep as pending but mark onboarding as cancelled
-          (task as any).notes =
-            ((task as any).notes || '') +
+          task.status = OnboardingTaskStatus.PENDING; // Keep as pending but mark onboarding as cancelled
+          task.notes =
+            (task.notes || '') +
             `\n[${new Date().toISOString()}] CANCELLED: ${reason}`;
         }
       }
@@ -3754,8 +3753,8 @@ Due: ${context.dueDate}`
       // Mark onboarding as cancelled (we can't change schema, so we'll use a note or status field if available)
       // Since we can't modify schema, we'll add a cancellation note to the first task
       if (onboarding.tasks.length > 0) {
-        (onboarding.tasks[0] as any).notes =
-          ((onboarding.tasks[0] as any).notes || '') +
+        onboarding.tasks[0].notes =
+          (onboarding.tasks[0].notes || '') +
           `\n[${new Date().toISOString()}] ONBOARDING CANCELLED: ${reason}`;
       }
 
@@ -4291,12 +4290,12 @@ Due: ${context.dueDate}`
     if (!onboarding || !Array.isArray(onboarding.tasks)) return [];
     const found: any[] = [];
     for (const task of onboarding.tasks) {
-      if ((task as any).department !== 'Admin') continue;
-      const notes = (task as any).notes || '';
+      if (task.department !== 'Admin') continue;
+      const notes = task.notes || '';
       // capture 'Reserved: {...}' or 'Reserved: [{...}]'
       const matches = Array.from(
         notes.matchAll(/Reserved:\s*(\{.*?\}|\[.*?\])/g),
-      ) as RegExpMatchArray[];
+      );
       for (const m of matches) {
         try {
           const parsed = JSON.parse(m[1]);

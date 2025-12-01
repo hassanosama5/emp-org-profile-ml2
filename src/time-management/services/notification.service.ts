@@ -312,7 +312,7 @@ export class NotificationService {
 
     // Calculate overtime hours from attendance records
     const overtimeData = overtimeExceptions.map((exception: any) => {
-      const record = exception.attendanceRecordId as any;
+      const record = exception.attendanceRecordId;
       const standardMinutes = 480; // 8 hours
       const overtimeMinutes =
         record && record.totalWorkMinutes

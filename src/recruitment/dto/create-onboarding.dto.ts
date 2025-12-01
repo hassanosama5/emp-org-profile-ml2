@@ -1,4 +1,13 @@
-import { IsNotEmpty, IsArray, ValidateNested, IsOptional, IsEnum, IsMongoId, IsString, IsDate } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsArray,
+  ValidateNested,
+  IsOptional,
+  IsEnum,
+  IsMongoId,
+  IsString,
+  IsDate,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { Types } from 'mongoose';
 import { OnboardingTaskStatus } from '../enums/onboarding-task-status.enum';

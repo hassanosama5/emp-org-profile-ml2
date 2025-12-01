@@ -1,5 +1,8 @@
 import { IsMongoId, IsOptional, IsString, IsEnum } from 'class-validator';
-import { ContractType, WorkType } from '../../employee-profile/enums/employee-profile.enums';
+import {
+  ContractType,
+  WorkType,
+} from '../../employee-profile/enums/employee-profile.enums';
 
 /**
  * DTO for creating an employee profile from an accepted offer and signed contract

@@ -7,4 +7,3 @@ export class FinalizeLeaveRequestDto {
   @IsString()
   hrUserId: string;
 }
-
