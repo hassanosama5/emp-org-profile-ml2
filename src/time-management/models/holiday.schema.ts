@@ -23,3 +23,4 @@ export class Holiday {
 }
 
 export const HolidaySchema = SchemaFactory.createForClass(Holiday);
+

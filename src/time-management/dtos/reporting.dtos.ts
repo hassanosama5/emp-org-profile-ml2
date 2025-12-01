@@ -4,8 +4,29 @@ import {
   IsOptional,
   IsDate,
   IsEnum,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+// Custom validator to ensure endDate >= startDate
+@ValidatorConstraint({ name: 'isEndDateAfterStartDate', async: false })
+export class IsEndDateAfterStartDateConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(endDate: any, args: ValidationArguments) {
+    const obj = args.object as any;
+    const startDate = obj.startDate;
+    if (!startDate || !endDate) return true; // Let @IsOptional handle missing dates
+    return new Date(endDate).getTime() >= new Date(startDate).getTime();
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'endDate must be greater than or equal to startDate';
+  }
+}
 
 // DTO for generating an overtime report
 export class GenerateOvertimeReportDto {
@@ -21,6 +42,7 @@ export class GenerateOvertimeReportDto {
   @IsOptional()
   @IsDate()
   @Type(() => Date)
+  @Validate(IsEndDateAfterStartDateConstraint)
   endDate?: Date; // Optional: End date for the report
 }
 
@@ -38,6 +60,7 @@ export class GenerateLatenessReportDto {
   @IsOptional()
   @IsDate()
   @Type(() => Date)
+  @Validate(IsEndDateAfterStartDateConstraint)
   endDate?: Date; // Optional: End date for the report
 }
 
@@ -55,6 +78,7 @@ export class GenerateExceptionReportDto {
   @IsOptional()
   @IsDate()
   @Type(() => Date)
+  @Validate(IsEndDateAfterStartDateConstraint)
   endDate?: Date; // Optional: End date for the report
 }
 
@@ -80,5 +104,7 @@ export class ExportReportDto {
   @IsOptional()
   @IsDate()
   @Type(() => Date)
+  @Validate(IsEndDateAfterStartDateConstraint)
   endDate?: Date; // Optional: End date for the export
 }
+
