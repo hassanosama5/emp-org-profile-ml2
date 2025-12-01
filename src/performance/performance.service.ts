@@ -43,18 +43,10 @@ import {
 } from './enums/performance.enums';
 
 // --------- DTOs ---------
-
-// Templates
 import { CreateAppraisalTemplateDto } from './dto/create-appraisal-template.dto';
 import { UpdateAppraisalTemplateDto } from './dto/update-appraisal-template.dto';
-
-// Cycles
 import { CreateAppraisalCycleDto } from './dto/create-appraisal-cycle.dto';
-
-// Records
 import { UpsertAppraisalRecordDto } from './dto/upsert-appraisal-record.dto';
-
-// Disputes
 import { SubmitDisputeDto } from './dto/submit-dispute.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 
@@ -401,7 +393,9 @@ export class PerformanceService {
       .exec();
     if (!assignment) throw new NotFoundException('Assignment not found');
 
+    // ✅ FIX: Add _id manually because your schema defines _id manually
     const dispute = new this.disputeModel({
+      _id: new Types.ObjectId(),
       appraisalId: record._id,
       assignmentId: assignment._id,
       cycleId: record.cycleId,

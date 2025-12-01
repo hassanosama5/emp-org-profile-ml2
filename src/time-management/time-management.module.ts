@@ -79,5 +79,6 @@ import { PolicyConfigService } from './services/policy-config.service';
     NotificationService,
     PolicyConfigService,
   ],
+  exports: [TimeManagementService],
 })
 export class TimeManagementModule {}

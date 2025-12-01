@@ -22,7 +22,7 @@ import {
 import {
   EmployeeTerminationResignation,
   EmployeeTerminationResignationSchema,
-} from './models/EmployeeTerminationResignation.schema'; // Add this import
+} from './models/EmployeeTerminationResignation.schema';
 import { payrollRuns, payrollRunsSchema } from './models/payrollRuns.schema';
 import { paySlip, paySlipSchema } from './models/payslip.schema';
 import { PayrollTrackingModule } from '../payroll-tracking/payroll-tracking.module';
@@ -49,7 +49,7 @@ import { RecruitmentModule } from '../recruitment/recruitment.module';
       },
       { name: employeeSigningBonus.name, schema: employeeSigningBonusSchema },
       {
-        name: EmployeeTerminationResignation.name, // Add this
+        name: EmployeeTerminationResignation.name,
         schema: EmployeeTerminationResignationSchema,
       },
       {
