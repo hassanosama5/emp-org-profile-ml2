@@ -13,16 +13,19 @@ This error means your request is missing a valid JWT token. Follow these steps:
 **You MUST login before accessing any payroll-configuration endpoints.**
 
 1. **Request:**
+
    ```
    POST http://localhost:5000/api/v1/auth/login
    ```
 
 2. **Headers:**
+
    ```
    Content-Type: application/json
    ```
 
 3. **Body:**
+
    ```json
    {
      "employeeNumber": "YOUR_EMPLOYEE_NUMBER",
@@ -75,11 +78,13 @@ Copy the `access_token` value from the login response.
 ### Step 4: Verify Token Format
 
 The Authorization header should look exactly like this:
+
 ```
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyYjViODhjM2Q5YjNjM2IxYWIiLCJ1c2VybmFtZSI6IkVNUDAwMSIsImlhdCI6MTY3MjU2NzIwMCwiZXhwIjoxNjcyNTcwODAwfQ...
 ```
 
 **Important:**
+
 - Must start with `Bearer ` (with a space after Bearer)
 - No quotes around the token
 - No extra spaces
@@ -94,6 +99,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyY
 **Symptom:** Getting 401 error
 
 **Solution:**
+
 - Check if you've added the Authorization header
 - Verify the environment variable is set correctly
 - Make sure the environment is selected
@@ -103,6 +109,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyY
 **Symptom:** Token was working before, now getting 401
 
 **Solution:**
+
 - Tokens expire after a certain time (usually 1 hour)
 - Login again to get a new token
 - Update your Postman environment variable with the new token
@@ -112,6 +119,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyY
 **Symptom:** Token is set but still getting 401
 
 **Check:**
+
 - ❌ `Authorization: {{token}}` (missing "Bearer ")
 - ❌ `Authorization: Bearer{{token}}` (missing space)
 - ❌ `Authorization: "Bearer {{token}}"` (quotes not needed)
@@ -122,6 +130,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyY
 **Symptom:** `{{token}}` is not being replaced
 
 **Solution:**
+
 1. Check environment is selected (top right dropdown in Postman)
 2. Verify variable name is exactly `token` (case-sensitive)
 3. Try typing `{{token}}` manually (don't copy-paste)
@@ -132,6 +141,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyY
 **Symptom:** Can't even login
 
 **Solution:**
+
 1. Make sure your server is running:
    ```bash
    npm run start:dev
@@ -156,6 +166,7 @@ Content-Type: application/json
 ```
 
 **If this fails:**
+
 - Check server is running
 - Verify employee number and password are correct
 - Check database connection
@@ -170,6 +181,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
 ```
 
 **If this fails:**
+
 - Copy token directly from login response
 - Paste it manually in the Authorization header
 - Make sure "Bearer " prefix is included
@@ -191,16 +203,19 @@ Authorization: Bearer YOUR_TOKEN_HERE
 ### 1. Login Request
 
 **Request:**
+
 ```
 POST http://localhost:5000/api/v1/auth/login
 ```
 
 **Headers:**
+
 ```
 Content-Type: application/json
 ```
 
 **Body:**
+
 ```json
 {
   "employeeNumber": "EMP001",
@@ -209,6 +224,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Login successful",
@@ -226,11 +242,13 @@ Content-Type: application/json
 ### 2. Use Token in Next Request
 
 **Request:**
+
 ```
 GET http://localhost:5000/api/v1/payroll-configuration/pay-grades
 ```
 
 **Headers:**
+
 ```
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyYjViODhjM2Q5YjNjM2IxYWIiLCJ1c2VybmFtZSI6IkVNUDAwMSIsImlhdCI6MTY3MjU2NzIwMCwiZXhwIjoxNjcyNTcwODAwfQ.example_signature
 ```
@@ -261,9 +279,10 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjVmMWMyY
    - Environment: "System Admin"
 
 2. **Auto-Update Token:** Use Postman scripts to automatically extract and save token:
+
    ```javascript
    // In Tests tab of login request:
-   pm.environment.set("token", pm.response.json().access_token);
+   pm.environment.set('token', pm.response.json().access_token);
    ```
 
 3. **Check Token Expiry:** If token expires frequently, check JWT configuration in your auth service
@@ -285,4 +304,3 @@ If you've tried everything above and still getting 401:
 ---
 
 **Need more help?** Check the server console for detailed error messages!
-

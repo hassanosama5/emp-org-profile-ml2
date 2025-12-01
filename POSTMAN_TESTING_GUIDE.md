@@ -3,16 +3,19 @@
 ## 🚀 Quick Start
 
 ### Base URL
+
 ```
 http://localhost:5000/api/v1
 ```
 
 ### Authentication
+
 All endpoints require JWT authentication. You'll need to login first to get an access token.
 
 ---
 
 ## 📋 Table of Contents
+
 1. [Setup & Authentication](#1-setup--authentication)
 2. [Pay Grades](#2-pay-grades)
 3. [Allowances](#3-allowances)
@@ -32,6 +35,7 @@ All endpoints require JWT authentication. You'll need to login first to get an a
 ### Step 1: Login to Get Access Token
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/auth/login`
 - **Headers:**
@@ -47,6 +51,7 @@ All endpoints require JWT authentication. You'll need to login first to get an a
   ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "message": "Login successful",
@@ -78,26 +83,27 @@ All endpoints require JWT authentication. You'll need to login first to get an a
 
 ### 📊 Role Requirements Quick Reference
 
-| Operation | Required Role | Endpoints |
-|-----------|--------------|-----------|
-| **View/List** | Any authenticated user | All GET endpoints |
-| **Create** | `PAYROLL_SPECIALIST` | POST pay-grades, allowances, pay-types, signing-bonuses, termination-benefits, policies, insurance-brackets |
-| **Create Tax Rules** | `LEGAL_POLICY_ADMIN` | POST tax-rules |
-| **Update** | `PAYROLL_SPECIALIST` | PUT pay-grades, allowances, pay-types, signing-bonuses, termination-benefits, policies, insurance-brackets |
-| **Update Tax Rules** | `LEGAL_POLICY_ADMIN` | PUT tax-rules |
-| **Approve** | `PAYROLL_MANAGER` | POST approve (all except insurance-brackets) |
-| **Approve Insurance** | `HR_MANAGER` | POST insurance-brackets/:id/approve |
-| **Reject** | `PAYROLL_MANAGER` | POST reject (all except insurance-brackets) |
-| **Reject Insurance** | `HR_MANAGER` | POST insurance-brackets/:id/reject |
-| **Delete** | `PAYROLL_MANAGER` | DELETE (all except insurance-brackets) |
-| **Delete Insurance** | `HR_MANAGER` | DELETE insurance-brackets |
-| **Company Settings** | `SYSTEM_ADMIN` | POST/PUT company-settings |
-| **Dashboard Stats** | `PAYROLL_MANAGER` | GET stats, pending-approvals |
-| **Debug** | `SYSTEM_ADMIN` | GET debug/db |
+| Operation             | Required Role          | Endpoints                                                                                                   |
+| --------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **View/List**         | Any authenticated user | All GET endpoints                                                                                           |
+| **Create**            | `PAYROLL_SPECIALIST`   | POST pay-grades, allowances, pay-types, signing-bonuses, termination-benefits, policies, insurance-brackets |
+| **Create Tax Rules**  | `LEGAL_POLICY_ADMIN`   | POST tax-rules                                                                                              |
+| **Update**            | `PAYROLL_SPECIALIST`   | PUT pay-grades, allowances, pay-types, signing-bonuses, termination-benefits, policies, insurance-brackets  |
+| **Update Tax Rules**  | `LEGAL_POLICY_ADMIN`   | PUT tax-rules                                                                                               |
+| **Approve**           | `PAYROLL_MANAGER`      | POST approve (all except insurance-brackets)                                                                |
+| **Approve Insurance** | `HR_MANAGER`           | POST insurance-brackets/:id/approve                                                                         |
+| **Reject**            | `PAYROLL_MANAGER`      | POST reject (all except insurance-brackets)                                                                 |
+| **Reject Insurance**  | `HR_MANAGER`           | POST insurance-brackets/:id/reject                                                                          |
+| **Delete**            | `PAYROLL_MANAGER`      | DELETE (all except insurance-brackets)                                                                      |
+| **Delete Insurance**  | `HR_MANAGER`           | DELETE insurance-brackets                                                                                   |
+| **Company Settings**  | `SYSTEM_ADMIN`         | POST/PUT company-settings                                                                                   |
+| **Dashboard Stats**   | `PAYROLL_MANAGER`      | GET stats, pending-approvals                                                                                |
+| **Debug**             | `SYSTEM_ADMIN`         | GET debug/db                                                                                                |
 
 **💡 TIP:** Create separate Postman environment variables for each role's token:
+
 - `token_specialist` - For PAYROLL_SPECIALIST operations
-- `token_manager` - For PAYROLL_MANAGER operations  
+- `token_manager` - For PAYROLL_MANAGER operations
 - `token_hr_manager` - For HR_MANAGER operations (insurance brackets)
 - `token_admin` - For SYSTEM_ADMIN operations
 - `token_legal` - For LEGAL_POLICY_ADMIN operations (tax rules)
@@ -113,6 +119,7 @@ All endpoints require JWT authentication. You'll need to login first to get an a
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades`
 - **Headers:**
@@ -126,11 +133,13 @@ All endpoints require JWT authentication. You'll need to login first to get an a
   - `limit` - Items per page (default: 10)
 
 **Example:**
+
 ```
 GET /payroll-configuration/pay-grades?status=DRAFT&page=1&limit=10
 ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "data": [
@@ -163,6 +172,7 @@ GET /payroll-configuration/pay-grades?status=DRAFT&page=1&limit=10
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades/:id`
 - **Headers:**
@@ -171,6 +181,7 @@ GET /payroll-configuration/pay-grades?status=DRAFT&page=1&limit=10
   ```
 
 **Example:**
+
 ```
 GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 ```
@@ -182,6 +193,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades`
 - **Headers:**
@@ -199,11 +211,13 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
   ```
 
 **Validation Rules:**
+
 - `baseSalary` must be ≥ 6000
 - `grossSalary` must be ≥ 6000
 - `grossSalary` must be ≥ `baseSalary`
 
 **Expected Response (201 Created):**
+
 ```json
 {
   "_id": "665f1c2b5b88c3d9b3c3b1aa",
@@ -223,6 +237,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `PUT`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades/:id`
 - **Headers:**
@@ -248,6 +263,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades/:id/approve`
 - **Headers:**
@@ -263,6 +279,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
   ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "_id": "665f1c2b5b88c3d9b3c3b1aa",
@@ -282,6 +299,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades/:id/reject`
 - **Headers:**
@@ -303,6 +321,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `DELETE`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-grades/:id`
 - **Headers:**
@@ -321,6 +340,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances`
 - **Headers:**
@@ -334,6 +354,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances/:id`
 - **Headers:**
@@ -348,6 +369,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances`
 - **Headers:**
@@ -364,6 +386,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
   ```
 
 **Validation Rules:**
+
 - `amount` must be ≥ 0
 
 ### 3.4 Update Allowance (DRAFT only)
@@ -373,6 +396,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `PUT`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances/:id`
 - **Headers:**
@@ -395,6 +419,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances/:id/approve`
 - **Headers:**
@@ -416,6 +441,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances/:id/reject`
 - **Headers:**
@@ -437,6 +463,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `DELETE`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/allowances/:id`
 - **Headers:**
@@ -453,6 +480,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-types`
 - **Headers:**
@@ -467,6 +495,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pay-types`
 - **Headers:**
@@ -483,6 +512,7 @@ GET /payroll-configuration/pay-grades/665f1c2b5b88c3d9b3c3b1aa
   ```
 
 **Validation Rules:**
+
 - `amount` must be ≥ 6000
 
 ### 4.3 Approve/Reject/Delete Pay Type
@@ -502,6 +532,7 @@ Same pattern as Pay Grades and Allowances.
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/tax-rules`
 - **Headers:**
@@ -516,6 +547,7 @@ Same pattern as Pay Grades and Allowances.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `LEGAL_POLICY_ADMIN` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/tax-rules`
 - **Headers:**
@@ -533,6 +565,7 @@ Same pattern as Pay Grades and Allowances.
   ```
 
 **Validation Rules:**
+
 - `rate` must be ≥ 0
 
 ### 5.3 Approve/Reject/Delete Tax Rule
@@ -552,6 +585,7 @@ Same pattern as above.
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/insurance-brackets`
 - **Headers:**
@@ -566,6 +600,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/insurance-brackets`
 - **Headers:**
@@ -585,6 +620,7 @@ Same pattern as above.
   ```
 
 **Validation Rules:**
+
 - `minSalary` must be < `maxSalary`
 - `employeeRate` must be between 0 and 100
 - `employerRate` must be between 0 and 100
@@ -606,6 +642,7 @@ Same pattern as above.
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/signing-bonuses`
 - **Headers:**
@@ -620,6 +657,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/signing-bonuses`
 - **Headers:**
@@ -636,6 +674,7 @@ Same pattern as above.
   ```
 
 **Validation Rules:**
+
 - `amount` must be ≥ 0
 
 ---
@@ -647,6 +686,7 @@ Same pattern as above.
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/termination-benefits`
 - **Headers:**
@@ -661,6 +701,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/termination-benefits`
 - **Headers:**
@@ -678,6 +719,7 @@ Same pattern as above.
   ```
 
 **Validation Rules:**
+
 - `amount` must be ≥ 0
 - `terms` is optional
 
@@ -690,6 +732,7 @@ Same pattern as above.
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/policies`
 - **Headers:**
@@ -704,6 +747,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_SPECIALIST` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/policies`
 - **Headers:**
@@ -728,6 +772,7 @@ Same pattern as above.
   ```
 
 **Validation Rules:**
+
 - `percentage` must be between 0 and 100
 - `fixedAmount` must be ≥ 0
 - `thresholdAmount` must be ≥ 1
@@ -741,6 +786,7 @@ Same pattern as above.
 **🔑 REQUIRED ROLE:** Any authenticated user (no specific role required)
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/company-settings`
 - **Headers:**
@@ -749,6 +795,7 @@ Same pattern as above.
   ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "_id": "665f1c2b5b88c3d9b3c3b1aa",
@@ -766,6 +813,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `SYSTEM_ADMIN` role.
 
 **Request:**
+
 - **Method:** `POST`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/company-settings`
 - **Headers:**
@@ -783,6 +831,7 @@ Same pattern as above.
   ```
 
 **Validation Rules:**
+
 - `currency` must be "EGP" (only allowed value)
 - Only one company settings record can exist
 
@@ -793,6 +842,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `SYSTEM_ADMIN` role.
 
 **Request:**
+
 - **Method:** `PUT`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/company-settings`
 - **Headers:**
@@ -819,6 +869,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/stats`
 - **Headers:**
@@ -827,6 +878,7 @@ Same pattern as above.
   ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "payGrades": {
@@ -857,6 +909,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `PAYROLL_MANAGER` role.
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/pending-approvals`
 - **Headers:**
@@ -867,6 +920,7 @@ Same pattern as above.
   - `userId` - Filter by creator user ID
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "payGrades": [...],
@@ -888,6 +942,7 @@ Same pattern as above.
 **⚠️ IMPORTANT:** Before testing this endpoint, login with a user that has the `SYSTEM_ADMIN` role.
 
 **Request:**
+
 - **Method:** `GET`
 - **URL:** `http://localhost:5000/api/v1/payroll-configuration/debug/db`
 - **Headers:**
@@ -896,6 +951,7 @@ Same pattern as above.
   ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "database": "hr_system",
@@ -915,6 +971,7 @@ Same pattern as above.
 ### Complete Workflow: Create → Update → Approve
 
 **🔑 ROLE SWITCHING GUIDE:**
+
 - You'll need to login with different users for different operations
 - Keep track of tokens for different roles in Postman environment variables:
   - `token_specialist` - For PAYROLL_SPECIALIST operations
@@ -922,44 +979,55 @@ Same pattern as above.
   - `token_admin` - For SYSTEM_ADMIN operations
 
 1. **Login as PAYROLL_SPECIALIST** (Get token)
+
    ```
    POST /api/v1/auth/login
    Body: { "employeeNumber": "EMP_SPECIALIST", "password": "password" }
    ```
+
    - Save token as `token_specialist` in Postman environment
 
 2. **Create Pay Grade** (as PAYROLL_SPECIALIST)
+
    ```
    POST /api/v1/payroll-configuration/pay-grades
    Headers: Authorization: Bearer {{token_specialist}}
    ```
+
    - Save the `_id` from response
 
 3. **Get Created Pay Grade** (Any authenticated user)
+
    ```
    GET /api/v1/payroll-configuration/pay-grades/{id}
    Headers: Authorization: Bearer {{token_specialist}}
    ```
+
    - Verify status is "DRAFT"
 
 4. **Update Pay Grade** (as PAYROLL_SPECIALIST)
+
    ```
    PUT /api/v1/payroll-configuration/pay-grades/{id}
    Headers: Authorization: Bearer {{token_specialist}}
    ```
 
 5. **Login as PAYROLL_MANAGER** (Switch user)
+
    ```
    POST /api/v1/auth/login
    Body: { "employeeNumber": "EMP_MANAGER", "password": "password" }
    ```
+
    - Save token as `token_manager` in Postman environment
 
 6. **Approve Pay Grade** (as PAYROLL_MANAGER)
+
    ```
    POST /api/v1/payroll-configuration/pay-grades/{id}/approve
    Headers: Authorization: Bearer {{token_manager}}
    ```
+
    - Verify status changed to "APPROVED"
 
 7. **Get All Pay Grades** (verify approval - Any authenticated user)
@@ -973,22 +1041,27 @@ Same pattern as above.
 ## ⚠️ Common Errors & Solutions
 
 ### 401 Unauthorized
+
 - **Cause:** Missing or invalid token
 - **Solution:** Login again and update the `{{token}}` variable
 
 ### 403 Forbidden
+
 - **Cause:** User doesn't have required role
 - **Solution:** Login with a user that has the correct role (PAYROLL_SPECIALIST, PAYROLL_MANAGER, etc.)
 
 ### 400 Bad Request
+
 - **Cause:** Validation error (e.g., salary < 6000, grossSalary < baseSalary)
 - **Solution:** Check validation rules and fix request body
 
 ### 404 Not Found
+
 - **Cause:** Resource doesn't exist or invalid ObjectId
 - **Solution:** Verify the ID is correct and resource exists
 
 ### 409 Conflict
+
 - **Cause:** Trying to create company settings when they already exist
 - **Solution:** Use PUT to update instead of POST
 
@@ -1028,4 +1101,3 @@ Same pattern as above.
 ---
 
 **Happy Testing! 🚀**
-

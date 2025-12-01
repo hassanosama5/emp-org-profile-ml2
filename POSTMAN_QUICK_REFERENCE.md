@@ -1,16 +1,19 @@
 # 🚀 Postman Quick Reference - Payroll Configuration
 
 ## Base URL
+
 ```
 http://localhost:5000/api/v1
 ```
 
 ## Authentication Header
+
 ```
 Authorization: Bearer {{token}}
 ```
 
 ## Get Token (Login)
+
 ```
 POST /auth/login
 Body: { "employeeNumber": "EMP001", "password": "password" }
@@ -21,6 +24,7 @@ Body: { "employeeNumber": "EMP001", "password": "password" }
 ## 📋 All Endpoints
 
 ### Pay Grades
+
 ```
 GET    /payroll-configuration/pay-grades
 GET    /payroll-configuration/pay-grades/:id
@@ -32,6 +36,7 @@ POST   /payroll-configuration/pay-grades/:id/reject         [PAYROLL_MANAGER]
 ```
 
 ### Allowances
+
 ```
 GET    /payroll-configuration/allowances
 GET    /payroll-configuration/allowances/:id
@@ -43,6 +48,7 @@ POST   /payroll-configuration/allowances/:id/reject         [PAYROLL_MANAGER]
 ```
 
 ### Pay Types
+
 ```
 GET    /payroll-configuration/pay-types
 GET    /payroll-configuration/pay-types/:id
@@ -54,6 +60,7 @@ POST   /payroll-configuration/pay-types/:id/reject         [PAYROLL_MANAGER]
 ```
 
 ### Tax Rules
+
 ```
 GET    /payroll-configuration/tax-rules
 GET    /payroll-configuration/tax-rules/:id
@@ -65,6 +72,7 @@ POST   /payroll-configuration/tax-rules/:id/reject         [PAYROLL_MANAGER]
 ```
 
 ### Insurance Brackets
+
 ```
 GET    /payroll-configuration/insurance-brackets
 GET    /payroll-configuration/insurance-brackets/:id
@@ -76,6 +84,7 @@ POST   /payroll-configuration/insurance-brackets/:id/reject  [HR_MANAGER]
 ```
 
 ### Signing Bonuses
+
 ```
 GET    /payroll-configuration/signing-bonuses
 GET    /payroll-configuration/signing-bonuses/:id
@@ -87,6 +96,7 @@ POST   /payroll-configuration/signing-bonuses/:id/reject  [PAYROLL_MANAGER]
 ```
 
 ### Termination Benefits
+
 ```
 GET    /payroll-configuration/termination-benefits
 GET    /payroll-configuration/termination-benefits/:id
@@ -98,6 +108,7 @@ POST   /payroll-configuration/termination-benefits/:id/reject  [PAYROLL_MANAGER]
 ```
 
 ### Payroll Policies
+
 ```
 GET    /payroll-configuration/policies
 GET    /payroll-configuration/policies/:id
@@ -109,6 +120,7 @@ POST   /payroll-configuration/policies/:id/reject         [PAYROLL_MANAGER]
 ```
 
 ### Company Settings
+
 ```
 GET    /payroll-configuration/company-settings
 POST   /payroll-configuration/company-settings             [SYSTEM_ADMIN]
@@ -116,6 +128,7 @@ PUT    /payroll-configuration/company-settings              [SYSTEM_ADMIN]
 ```
 
 ### Dashboard & Utilities
+
 ```
 GET    /payroll-configuration/stats                        [PAYROLL_MANAGER]
 GET    /payroll-configuration/pending-approvals            [PAYROLL_MANAGER]
@@ -127,6 +140,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ## 📝 Sample Request Bodies
 
 ### Create Pay Grade
+
 ```json
 {
   "grade": "A",
@@ -136,6 +150,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ```
 
 ### Create Allowance
+
 ```json
 {
   "name": "Housing Allowance",
@@ -144,6 +159,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ```
 
 ### Create Tax Rule
+
 ```json
 {
   "name": "Income Tax",
@@ -153,6 +169,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ```
 
 ### Create Insurance Bracket
+
 ```json
 {
   "name": "Bracket 1",
@@ -164,6 +181,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ```
 
 ### Create Payroll Policy
+
 ```json
 {
   "policyName": "Overtime Policy",
@@ -180,6 +198,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ```
 
 ### Create Company Settings
+
 ```json
 {
   "payDate": "2024-01-15T00:00:00.000Z",
@@ -189,6 +208,7 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ```
 
 ### Approve/Reject
+
 ```json
 {
   "comment": "Approved after review"
@@ -210,25 +230,31 @@ GET    /payroll-configuration/debug/db                     [SYSTEM_ADMIN]
 ## ⚠️ Validation Rules
 
 ### Pay Grade
+
 - `baseSalary` ≥ 6000
 - `grossSalary` ≥ 6000
 - `grossSalary` ≥ `baseSalary`
 
 ### Allowance
+
 - `amount` ≥ 0
 
 ### Pay Type
+
 - `amount` ≥ 6000
 
 ### Tax Rule
+
 - `rate` ≥ 0
 
 ### Insurance Bracket
+
 - `minSalary` < `maxSalary`
 - `employeeRate` between 0-100
 - `employerRate` between 0-100
 
 ### Company Settings
+
 - `currency` must be "EGP"
 
 ---
@@ -241,6 +267,7 @@ DRAFT → REJECTED (via reject endpoint)
 ```
 
 **Note:** Only DRAFT items can be:
+
 - Updated (PUT)
 - Approved
 - Rejected
@@ -251,11 +278,13 @@ DRAFT → REJECTED (via reject endpoint)
 ## 📊 Query Parameters
 
 ### Pagination & Filtering
+
 ```
 ?page=1&limit=10&status=DRAFT&createdBy=USER_ID
 ```
 
 **Available statuses:**
+
 - `DRAFT`
 - `APPROVED`
 - `REJECTED`
@@ -274,4 +303,3 @@ DRAFT → REJECTED (via reject endpoint)
 ---
 
 **For detailed examples, see `POSTMAN_TESTING_GUIDE.md`**
-
