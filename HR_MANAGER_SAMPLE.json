@@ -1,0 +1,30 @@
+{
+  "firstName": "Sarah",
+  "lastName": "Hassan",
+  "middleName": "Ahmed",
+  "nationalId": "98765432109876",
+  "password": "password123",
+  "gender": "FEMALE",
+  "maritalStatus": "MARRIED",
+  "dateOfBirth": "1990-03-15T00:00:00.000Z",
+  "personalEmail": "sara.hassan@example.com",
+  "workEmail": "sara.hassan@company.com",
+  "mobilePhone": "01234567890",
+  "homePhone": "02345678901",
+  "address": {
+    "city": "Cairo",
+    "streetAddress": "456 HR Street",
+    "country": "Egypt"
+  },
+  "dateOfHire": "2023-06-01T00:00:00.000Z",
+  "contractStartDate": "2023-06-01T00:00:00.000Z",
+  "contractEndDate": "2025-05-31T00:00:00.000Z",
+  "contractType": "FULL_TIME_CONTRACT",
+  "workType": "FULL_TIME",
+  "status": "ACTIVE",
+  "biography": "Experienced HR Manager with 8 years in human resources, talent acquisition, and employee relations.",
+  "profilePictureUrl": "https://example.com/profile/sara.jpg",
+  "primaryPositionId": "691a10776aead875cebf65b3",
+  "primaryDepartmentId": "691a10776aead875cebf65a3"
+}
+
