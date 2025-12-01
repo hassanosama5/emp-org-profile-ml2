@@ -6,13 +6,29 @@ import {
   IsNumber,
   Min,
   ValidateNested,
-  IsDateString,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   PolicyType,
   Applicability,
 } from '../enums/payroll-configuration-enums';
+
+@ValidatorConstraint({ name: 'isValidISODate', async: false })
+export class IsValidISODateConstraint implements ValidatorConstraintInterface {
+  validate(value: any) {
+    if (typeof value !== 'string') return false;
+    // Check if it's a valid ISO 8601 date that can be parsed
+    const date = new Date(value);
+    return !isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(value);
+  }
+
+  defaultMessage() {
+    return 'effectiveDate must be a valid ISO 8601 date string';
+  }
+}
 
 class RuleDefinitionDto {
   @ApiProperty({ description: 'Percentage value', minimum: 0 })
@@ -45,8 +61,8 @@ export class CreatePayrollPolicyDto {
   description: string;
 
   @ApiProperty({ description: 'Effective date (ISO string)' })
-  @IsDateString()
-  effectiveDate: Date;
+  @Validate(IsValidISODateConstraint)
+  effectiveDate: string;
 
   @ApiProperty({ description: 'Rule definition' })
   @ValidateNested()
@@ -80,8 +96,8 @@ export class UpdatePayrollPolicyDto {
 
   @ApiProperty({ required: false, description: 'Effective date (ISO string)' })
   @IsOptional()
-  @IsString()
-  effectiveDate?: Date;
+  @Validate(IsValidISODateConstraint)
+  effectiveDate?: string;
 
   @ApiProperty({ required: false, description: 'Rule definition' })
   @IsOptional()

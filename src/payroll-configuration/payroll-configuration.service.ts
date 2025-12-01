@@ -116,7 +116,7 @@ interface CreatePayrollPolicyDto {
   policyName: string;
   policyType: string;
   description: string;
-  effectiveDate: Date;
+  effectiveDate: string;
   ruleDefinition: {
     percentage: number;
     fixedAmount: number;
@@ -129,7 +129,7 @@ interface UpdatePayrollPolicyDto {
   policyName?: string;
   policyType?: string;
   description?: string;
-  effectiveDate?: Date;
+  effectiveDate?: string;
   ruleDefinition?: {
     percentage?: number;
     fixedAmount?: number;
@@ -139,13 +139,13 @@ interface UpdatePayrollPolicyDto {
 }
 
 interface CreateCompanySettingsDto {
-  payDate: Date;
+  payDate: string;
   timeZone: string;
   currency: string;
 }
 
 interface UpdateCompanySettingsDto {
-  payDate?: Date;
+  payDate?: string;
   timeZone?: string;
   currency?: string;
 }
@@ -1361,6 +1361,7 @@ export class PayrollConfigurationService {
 
     const policy = new this.payrollPoliciesModel({
       ...createDto,
+      effectiveDate: new Date(createDto.effectiveDate),
       status: ConfigStatus.DRAFT,
       createdBy: new Types.ObjectId(userId),
     });
@@ -1403,7 +1404,13 @@ export class PayrollConfigurationService {
       }
     }
 
-    Object.assign(policy, updateDto);
+    // Convert effectiveDate string to Date if provided
+    const updateData: any = { ...updateDto };
+    if (updateData.effectiveDate) {
+      updateData.effectiveDate = new Date(updateData.effectiveDate);
+    }
+    
+    Object.assign(policy, updateData);
     return await policy.save();
   }
 
@@ -1542,6 +1549,7 @@ export class PayrollConfigurationService {
 
     const settings = new this.companySettingsModel({
       ...createDto,
+      payDate: new Date(createDto.payDate),
       createdBy: new Types.ObjectId(userId),
     });
     return await settings.save();
@@ -1564,8 +1572,14 @@ export class PayrollConfigurationService {
       throw new BadRequestException('Only EGP currency is allowed');
     }
 
+    // Convert payDate string to Date if provided
+    const updateData: any = { ...updateDto };
+    if (updateData.payDate) {
+      updateData.payDate = new Date(updateData.payDate);
+    }
+    
     Object.assign(settings, {
-      ...updateDto,
+      ...updateData,
       updatedBy: new Types.ObjectId(userId),
       updatedAt: new Date(),
     });
