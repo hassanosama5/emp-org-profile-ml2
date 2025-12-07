@@ -58,6 +58,7 @@ export class TimeManagementController {
   @Post('clock-in/:employeeId')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.FINANCE_STAFF,
     SystemRole.HR_MANAGER,
@@ -81,6 +82,7 @@ export class TimeManagementController {
   @Post('clock-out/:employeeId')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.FINANCE_STAFF,
     SystemRole.HR_MANAGER,
@@ -105,6 +107,7 @@ export class TimeManagementController {
   @Post('clock-in/:employeeId/metadata')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_ADMIN,
   )
@@ -134,6 +137,7 @@ export class TimeManagementController {
   @Post('clock-out/:employeeId/metadata')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_ADMIN,
   )
@@ -199,12 +203,7 @@ export class TimeManagementController {
   }
 
   @Post('attendance')
-  @Roles(
-    SystemRole.DEPARTMENT_HEAD,
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-  )
+  @Roles(SystemRole.DEPARTMENT_HEAD)
   async createAttendanceRecord(
     @Body() createAttendanceRecordDto: CreateAttendanceRecordDto,
     @CurrentUser() user: any,
@@ -216,12 +215,7 @@ export class TimeManagementController {
   }
 
   @Put('attendance/:id')
-  @Roles(
-    SystemRole.DEPARTMENT_HEAD,
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-  )
+  @Roles(SystemRole.DEPARTMENT_HEAD)
   async updateAttendanceRecord(
     @Param('id') id: string,
     @Body() updateAttendanceRecordDto: UpdateAttendanceRecordDto,
@@ -461,8 +455,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async getPendingCorrectionRequestsForManager(
     @Query('managerId') managerId?: string,
@@ -488,8 +480,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async markCorrectionRequestInReview(
     @Param('requestId') requestId: string,
@@ -509,8 +499,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async approveCorrectionRequest(
     @Param('requestId') requestId: string,
@@ -534,8 +522,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async rejectCorrectionRequest(
     @Param('requestId') requestId: string,
@@ -559,8 +545,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async escalateCorrectionRequest(
     @Param('requestId') requestId: string,
@@ -702,7 +686,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async approveTimeException(
     @Body() approveTimeExceptionDto: ApproveTimeExceptionDto,
@@ -718,7 +701,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async rejectTimeException(
     @Body() rejectTimeExceptionDto: RejectTimeExceptionDto,
@@ -734,8 +716,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async escalateTimeException(
     @Body() escalateTimeExceptionDto: EscalateTimeExceptionDto,
@@ -754,9 +734,8 @@ export class TimeManagementController {
   // Get all time exceptions with filters
   @Get('time-exceptions')
   @Roles(
-    SystemRole.HR_MANAGER,
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async getAllTimeExceptions(
     @Query('status') status?: string,
@@ -855,9 +834,8 @@ export class TimeManagementController {
   // BR-TM-09: Bulk operations for efficiency
   @Post('time-exceptions/bulk-approve')
   @Roles(
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async bulkApproveTimeExceptions(
     @Body() body: { exceptionIds: string[] },
@@ -872,9 +850,8 @@ export class TimeManagementController {
   // Bulk reject time exceptions
   @Post('time-exceptions/bulk-reject')
   @Roles(
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async bulkRejectTimeExceptions(
     @Body() body: { exceptionIds: string[]; reason: string },
@@ -919,9 +896,8 @@ export class TimeManagementController {
    */
   @Post('time-exceptions/auto-escalate-overdue')
   @Roles(
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async autoEscalateOverdueExceptions(
     @Body() body: {
@@ -1139,7 +1115,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
   )
   async escalateUnresolvedRequestsBeforePayroll(
     @Body() body: { payrollCutOffDate: Date },
@@ -1219,8 +1194,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.DEPARTMENT_HEAD,
   )
   async flagEmployeeForRepeatedLateness(
     @Body()
@@ -1366,7 +1339,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async getRepeatedLatenessOffenders(
     @Query('threshold') threshold: number,
@@ -1500,8 +1472,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async approveOvertimeRequest(
     @Param('id') id: string,
@@ -1520,8 +1490,6 @@ export class TimeManagementController {
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async rejectOvertimeRequest(
     @Param('id') id: string,
@@ -1581,9 +1549,8 @@ export class TimeManagementController {
   // Bulk process overtime requests
   @Post('overtime/bulk-process')
   @Roles(
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
   )
   async bulkProcessOvertimeRequests(
     @Body() body: { action: 'approve' | 'reject'; requestIds: string[]; notes: string },

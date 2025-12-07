@@ -15,6 +15,10 @@ import {
   SyncLeaveWithPayrollDto,
   SynchronizeAttendanceAndPayrollDto,
 } from '../dtos/notification-and-sync.dtos';
+import { LeavesService } from '../../leaves/leaves.service';
+import { PayrollExecutionService } from '../../payroll-execution/payroll-execution.service';
+import { Inject, forwardRef } from '@nestjs/common';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class NotificationService {
@@ -32,6 +36,10 @@ export class NotificationService {
     private attendanceRecordModel: Model<AttendanceRecord>,
     @InjectModel(TimeException.name)
     private timeExceptionModel: Model<TimeException>,
+    @Inject(forwardRef(() => LeavesService))
+    private leavesService: LeavesService,
+    @Inject(forwardRef(() => PayrollExecutionService))
+    private payrollExecutionService: PayrollExecutionService,
   ) {}
 
   // ===== NOTIFICATIONS =====
@@ -1939,14 +1947,57 @@ export class NotificationService {
     const now = new Date();
     const daysUntilCutoff = Math.ceil((cutoffDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Get pending time exceptions
+    // Validate and normalize departmentId - treat empty strings as undefined
+    const departmentId = params.departmentId && params.departmentId.trim() !== '' 
+      ? params.departmentId.trim() 
+      : undefined;
+
+    // Get pending time exceptions - filter out any with invalid employeeId references
+    // First, get all pending exceptions
+    const allPendingExceptions = await this.timeExceptionModel
+      .find({
+        status: { $in: ['OPEN', 'PENDING'] },
+      })
+      .exec();
+    
+    // Filter out exceptions with invalid employeeId (empty strings, null, or invalid ObjectIds)
+    const exceptionsWithValidEmployeeId = allPendingExceptions.filter((exc: any) => {
+      if (!exc.employeeId) return false;
+      const employeeIdStr = exc.employeeId.toString();
+      return employeeIdStr && employeeIdStr.trim() !== '' && Types.ObjectId.isValid(employeeIdStr);
+    });
+    
+    // Extract valid employeeIds for populate
+    const validEmployeeIds = exceptionsWithValidEmployeeId
+      .map((exc: any) => {
+        try {
+          return new Types.ObjectId(exc.employeeId);
+        } catch {
+          return null;
+        }
+      })
+      .filter((id): id is Types.ObjectId => id !== null);
+    
+    // Now query with valid employeeIds and populate
     const pendingExceptions = await this.timeExceptionModel
       .find({
         status: { $in: ['OPEN', 'PENDING'] },
+        employeeId: { $in: validEmployeeIds },
       })
       .populate('employeeId', 'firstName lastName email employeeNumber departmentId')
       .populate('assignedTo', 'firstName lastName email')
       .exec();
+    
+    // Filter out any exceptions where populate failed (employeeId is null after populate)
+    const validExceptions = pendingExceptions.filter((exc: any) => exc.employeeId != null);
+
+    // Filter by department if specified
+    let filteredExceptions = validExceptions;
+    if (departmentId) {
+      filteredExceptions = validExceptions.filter((exc: any) => 
+        exc.employeeId?.departmentId?.toString() === departmentId
+      );
+    }
 
     // Categorize by urgency
     const categorized = {
@@ -1955,7 +2006,7 @@ export class NotificationService {
       medium: [] as any[],   // Can wait but should be done before cutoff
     };
 
-    pendingExceptions.forEach((exc: any) => {
+    filteredExceptions.forEach((exc: any) => {
       const createdAt = new Date(exc.createdAt);
       const ageInDays = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
       
@@ -1990,8 +2041,9 @@ export class NotificationService {
       {
         cutoffDate,
         daysUntilCutoff,
-        totalPending: pendingExceptions.length,
+        totalPending: filteredExceptions.length,
         critical: categorized.critical.length,
+        departmentId,
       },
       currentUserId,
     );
@@ -2003,7 +2055,7 @@ export class NotificationService {
         status: daysUntilCutoff <= 2 ? 'CRITICAL' : daysUntilCutoff <= 5 ? 'WARNING' : 'NORMAL',
       },
       summary: {
-        totalPending: pendingExceptions.length,
+        totalPending: filteredExceptions.length,
         critical: categorized.critical.length,
         high: categorized.high.length,
         medium: categorized.medium.length,

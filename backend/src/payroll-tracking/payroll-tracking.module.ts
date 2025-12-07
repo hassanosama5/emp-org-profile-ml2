@@ -44,7 +44,7 @@ import {
     PayrollConfigurationModule, // For pay grade and payroll configuration data
     EmployeeProfileModule, // Import to access EmployeeProfile model and service for validation
     LeavesModule, // For leave encashment and unpaid leave data (REQ-PY-5, REQ-PY-11)
-    TimeManagementModule, // For attendance records and time exceptions (REQ-PY-10)
+    forwardRef(() => TimeManagementModule), // For attendance records and time exceptions (REQ-PY-10)
     OrganizationStructureModule, // For department reports (REQ-PY-38)
     // Circular dependency with PayrollExecutionModule (both reference each other)
     forwardRef(() => PayrollExecutionModule),

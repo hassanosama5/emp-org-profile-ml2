@@ -516,7 +516,7 @@ export class PolicyConfigController {
 
   // ===== HOLIDAYS =====
   @Post('holiday')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async createHoliday(
     @Body() createHolidayDto: CreateHolidayDto,
     @CurrentUser() user: any,

@@ -37,7 +37,7 @@ import { EmployeeSystemRole, EmployeeSystemRoleSchema } from '../employee-profil
   imports: [
     forwardRef(() => PayrollTrackingModule),
     PayrollConfigurationModule,
-    TimeManagementModule,
+    forwardRef(() => TimeManagementModule),
     EmployeeProfileModule,
     LeavesModule,
     RecruitmentModule,

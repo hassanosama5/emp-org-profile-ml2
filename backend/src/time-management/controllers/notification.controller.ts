@@ -734,10 +734,8 @@ export class NotificationAndSyncController {
    */
   @Get('payroll-cutoff/config')
   @Roles(
-    SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
   )
   async getPayrollCutoffConfig(@CurrentUser() user: any) {
     return this.notificationService.getPayrollCutoffConfig(user.userId);
@@ -747,25 +745,25 @@ export class NotificationAndSyncController {
    * US18: Get pending requests before payroll cutoff
    * BR-TM-20: Identify all unreviewed requests before cutoff
    */
-  @Post('payroll-cutoff/pending')
+  @Get('payroll-cutoff/pending')
   @Roles(
-    SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
-    SystemRole.DEPARTMENT_HEAD,
   )
   async getPendingRequestsBeforePayrollCutoff(
-    @Body() body: {
-      payrollCutoffDate?: Date;
-      departmentId?: string;
-    },
-    @CurrentUser() user: any,
+    @Query('payrollCutoffDate') payrollCutoffDate?: string,
+    @Query('departmentId') departmentId?: string,
+    @CurrentUser() user?: any,
   ) {
+    // Validate departmentId - treat empty strings as undefined
+    const validDepartmentId = departmentId && departmentId.trim() !== '' 
+      ? departmentId.trim() 
+      : undefined;
+    
     return this.notificationService.getPendingRequestsBeforePayrollCutoff(
       {
-        payrollCutoffDate: body.payrollCutoffDate ? new Date(body.payrollCutoffDate) : undefined,
-        departmentId: body.departmentId,
+        payrollCutoffDate: payrollCutoffDate ? new Date(payrollCutoffDate) : undefined,
+        departmentId: validDepartmentId,
       },
       user.userId,
     );
@@ -777,7 +775,6 @@ export class NotificationAndSyncController {
    */
   @Post('payroll-cutoff/auto-escalate')
   @Roles(
-    SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
   )
@@ -805,10 +802,8 @@ export class NotificationAndSyncController {
    */
   @Post('payroll-cutoff/readiness')
   @Roles(
-    SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
   )
   async checkPayrollReadinessStatus(
     @Body() body: {
@@ -832,7 +827,6 @@ export class NotificationAndSyncController {
    */
   @Post('payroll-cutoff/escalation-history')
   @Roles(
-    SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
   )
@@ -860,7 +854,6 @@ export class NotificationAndSyncController {
    */
   @Post('payroll-cutoff/send-reminders')
   @Roles(
-    SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
   )
@@ -889,8 +882,6 @@ export class NotificationAndSyncController {
   @Get('cross-module/status')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async getCrossModuleSyncStatus(
     @Query('startDate') startDate?: string,
@@ -913,8 +904,6 @@ export class NotificationAndSyncController {
   @Post('cross-module/sync-leaves')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async syncWithLeavesModule(
     @Body() body: {
@@ -941,8 +930,6 @@ export class NotificationAndSyncController {
   @Post('cross-module/sync-benefits')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async syncWithBenefitsModule(
     @Body() body: {
@@ -968,8 +955,7 @@ export class NotificationAndSyncController {
    */
   @Post('cross-module/sync-all')
   @Roles(
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_MANAGER,
   )
   async runFullCrossModuleSync(
     @Body() body: {
@@ -994,8 +980,6 @@ export class NotificationAndSyncController {
   @Post('cross-module/consistency-check')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
   )
   async checkCrossModuleDataConsistency(
     @Body() body: {
@@ -1022,9 +1006,6 @@ export class NotificationAndSyncController {
   @Post('cross-module/data-packages')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
   )
   async getDataForDownstreamModules(
     @Body() body: {

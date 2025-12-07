@@ -23,6 +23,7 @@ import {
 import { Calendar, CalendarSchema } from './models/calendar.schema';
 import { Attachment, AttachmentSchema } from './models/attachment.schema';
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
+import { forwardRef } from '@nestjs/common';
 import { TimeManagementModule } from '../time-management/time-management.module';
 import {
   EmployeeProfile,
@@ -47,7 +48,7 @@ import {
       // {name:Position.name, schema:PositionSchema}
     ]),
     EmployeeProfileModule,
-    TimeManagementModule,
+    forwardRef(() => TimeManagementModule),
   ],
   controllers: [LeaveController],
   providers: [LeavesService],
