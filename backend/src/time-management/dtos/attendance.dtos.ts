@@ -145,9 +145,9 @@ export class SubmitCorrectionRequestDto {
   @IsString()
   reason: string;  // Reason for the correction request (required)
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsEnum(CorrectionRequestStatus)
-  status: CorrectionRequestStatus;  // Correction request status (required)
+  status?: CorrectionRequestStatus;  // Correction request status (optional - defaults to SUBMITTED)
 }
 
 // DTO for getting all attendance correction requests by employee
@@ -230,6 +230,10 @@ export class ApproveTimeExceptionDto {
   @IsNotEmpty()
   @IsString()
   timeExceptionId: string;  // Time exception ID to approve
+
+  @IsOptional()
+  @IsString()
+  approvalNotes?: string;  // Optional approval notes
 }
 
 // DTO for rejecting a time exception
@@ -237,6 +241,10 @@ export class RejectTimeExceptionDto {
   @IsNotEmpty()
   @IsString()
   timeExceptionId: string;  // Time exception ID to reject
+
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string;  // Optional rejection reason
 }
 
 // DTO for escalating a time exception

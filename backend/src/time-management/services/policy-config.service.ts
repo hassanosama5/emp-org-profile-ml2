@@ -18,6 +18,8 @@ import {
   CheckHolidayDto,
   ValidateAttendanceHolidayDto,
 } from '../DTOs/policy-config.dtos';
+import { LeavesService } from '../../leaves/leaves.service';
+import { Inject, forwardRef } from '@nestjs/common';
 
 @Injectable()
 export class PolicyConfigService {
@@ -27,6 +29,8 @@ export class PolicyConfigService {
     @InjectModel(LatenessRule.name)
     private latenessRuleModel: Model<LatenessRule>,
     @InjectModel(Holiday.name) private holidayModel: Model<Holiday>,
+    @Inject(forwardRef(() => LeavesService))
+    private leavesService: LeavesService,
   ) {}
 
   // ===== OVERTIME RULE METHODS =====

@@ -27,6 +27,8 @@ import {
   GenerateExceptionReportDto,
   ExportReportDto,
 } from '../DTOs/reporting.dtos';
+import { LeavesService } from '../../leaves/leaves.service';
+import { Inject, forwardRef } from '@nestjs/common';
 
 @Injectable()
 export class TimeManagementService {
@@ -46,6 +48,8 @@ export class TimeManagementService {
     private timeExceptionModel: Model<TimeException>,
     @InjectModel(ShiftAssignment.name)
     private shiftAssignmentModel: Model<ShiftAssignment>,
+    @Inject(forwardRef(() => LeavesService))
+    private leavesService: LeavesService,
   ) {}
 
   // ===== US5: CLOCK-IN/OUT ATTENDANCE SERVICE METHODS =====
@@ -333,6 +337,7 @@ export class TimeManagementService {
   /**
    * Validate clock-in against assigned shift and rest days
    * US5 Flow: Clocks in/out using ID validating against assigned shifts and rest days
+   * Now includes holiday and vacation checks using LeavesService
    */
   async validateClockInAgainstShift(
     employeeId: string,
@@ -340,6 +345,12 @@ export class TimeManagementService {
   ) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Check if today is a holiday or rest day using LeavesService
+    const holidayCheck = await this.checkIfHolidayOrRestDay(today);
+    
+    // Check if employee is on vacation using LeavesService
+    const vacationCheck = await this.checkIfEmployeeOnVacation(employeeId, today);
     
     // Find active shift assignments for this employee
     const shiftAssignments = await this.shiftAssignmentModel
@@ -361,6 +372,12 @@ export class TimeManagementService {
         message: 'No active shift assignment found for today',
         allowClockIn: true, // Still allow, but flag it
         warning: 'Employee has no assigned shift for today',
+        holidayInfo: holidayCheck,
+        vacationInfo: vacationCheck ? {
+          isOnVacation: true,
+          leaveType: vacationCheck.leaveTypeId,
+          dates: vacationCheck.dates,
+        } : { isOnVacation: false },
       };
     }
 
@@ -373,6 +390,12 @@ export class TimeManagementService {
         message: 'Shift details not found',
         allowClockIn: true,
         warning: 'Shift information is missing',
+        holidayInfo: holidayCheck,
+        vacationInfo: vacationCheck ? {
+          isOnVacation: true,
+          leaveType: vacationCheck.leaveTypeId,
+          dates: vacationCheck.dates,
+        } : { isOnVacation: false },
       };
     }
 
@@ -391,6 +414,9 @@ export class TimeManagementService {
 
     const isLate = currentMinutes > (shiftStartMinutes + graceIn);
 
+    // If it's a holiday or rest day, suppress penalties
+    const shouldSuppressPenalty = holidayCheck.isHoliday || holidayCheck.isRestDay;
+
     return {
       isValid: true,
       shiftName: shift.name,
@@ -406,6 +432,21 @@ export class TimeManagementService {
       message: isLate 
         ? `Late clock-in. You are ${currentMinutes - shiftStartMinutes - graceIn} minutes late.`
         : 'Clock-in validated successfully',
+      // Holiday and rest day information from LeavesService
+      holidayInfo: holidayCheck,
+      // Vacation information from LeavesService
+      vacationInfo: vacationCheck ? {
+        isOnVacation: true,
+        leaveType: vacationCheck.leaveTypeId,
+        dates: vacationCheck.dates,
+      } : { isOnVacation: false },
+      // Penalty suppression based on holiday/rest day
+      penaltySuppression: {
+        suppress: shouldSuppressPenalty,
+        reason: shouldSuppressPenalty 
+          ? (holidayCheck.isHoliday ? `Holiday: ${holidayCheck.holidayName}` : `Rest day: ${holidayCheck.dayName}`)
+          : 'Standard attendance rules apply',
+      },
     };
   }
 
@@ -1018,13 +1059,28 @@ export class TimeManagementService {
     approveTimeExceptionDto: any,
     currentUserId: string,
   ) {
-    const { timeExceptionId } = approveTimeExceptionDto;
+    const { timeExceptionId, approvalNotes } = approveTimeExceptionDto;
+    const timeException = await this.timeExceptionModel.findById(timeExceptionId);
+    
+    if (!timeException) {
+      throw new Error('Time exception not found');
+    }
+
+    const updateData: any = {
+      status: 'APPROVED',
+      updatedBy: currentUserId,
+    };
+
+    if (approvalNotes) {
+      const existingReason = timeException.reason || '';
+      updateData.reason = existingReason 
+        ? `${existingReason} | Approved: ${approvalNotes}`
+        : `Approved: ${approvalNotes}`;
+    }
+
     return this.timeExceptionModel.findByIdAndUpdate(
       timeExceptionId,
-      {
-        status: 'APPROVED',
-        updatedBy: currentUserId,
-      },
+      updateData,
       { new: true },
     );
   }
@@ -1034,13 +1090,28 @@ export class TimeManagementService {
     rejectTimeExceptionDto: any,
     currentUserId: string,
   ) {
-    const { timeExceptionId } = rejectTimeExceptionDto;
+    const { timeExceptionId, rejectionReason } = rejectTimeExceptionDto;
+    const timeException = await this.timeExceptionModel.findById(timeExceptionId);
+    
+    if (!timeException) {
+      throw new Error('Time exception not found');
+    }
+
+    const updateData: any = {
+      status: 'REJECTED',
+      updatedBy: currentUserId,
+    };
+
+    if (rejectionReason) {
+      const existingReason = timeException.reason || '';
+      updateData.reason = existingReason 
+        ? `${existingReason} | Rejected: ${rejectionReason}`
+        : `Rejected: ${rejectionReason}`;
+    }
+
     return this.timeExceptionModel.findByIdAndUpdate(
       timeExceptionId,
-      {
-        status: 'REJECTED',
-        updatedBy: currentUserId,
-      },
+      updateData,
       { new: true },
     );
   }
@@ -2431,11 +2502,12 @@ export class TimeManagementService {
     
     // Create a time exception record to track the disciplinary flag
     // Using reason field since notes doesn't exist in schema
+    // Using LATE type since DISCIPLINARY_FLAG is not in enum - this is for repeated lateness tracking
     const disciplinaryFlag = new this.timeExceptionModel({
       employeeId,
-      type: 'DISCIPLINARY_FLAG' as any,
+      type: TimeExceptionType.LATE,
       status: 'PENDING',
-      reason: notes || `Repeated lateness: ${occurrenceCount} occurrences in ${periodDays} days. Severity: ${severity}`,
+      reason: notes || `Repeated lateness disciplinary flag: ${occurrenceCount} occurrences in ${periodDays} days. Severity: ${severity}`,
       attendanceRecordId: employeeId, // Using employeeId as placeholder
       assignedTo: currentUserId,
     });
@@ -2521,8 +2593,11 @@ export class TimeManagementService {
     },
     currentUserId: string,
   ) {
+    // Query for disciplinary flags - using LATE type with reason filter to identify disciplinary flags
+    // Note: DISCIPLINARY_FLAG is not in enum, so we use LATE type and filter by reason containing "disciplinary flag"
     const query: any = {
-      type: 'DISCIPLINARY_FLAG' as any,
+      type: TimeExceptionType.LATE,
+      reason: { $regex: /disciplinary flag/i }, // Filter to find disciplinary flags by reason text
     };
     
     if (params.status) {
@@ -4867,5 +4942,194 @@ export class TimeManagementService {
     lines.push('='.repeat(60));
     
     return lines.join('\n');
+  }
+
+  // ===== LEAVES MODULE INTEGRATION =====
+  // Helper methods to use LeavesService functions
+
+  /**
+   * Get holidays and rest days for a specific year
+   * Uses: LeavesService.getCalendarByYear()
+   * @param year - The year to get calendar for
+   * @returns Calendar with holidays populated
+   */
+  async getHolidaysAndRestDays(year: number) {
+    return await this.leavesService.getCalendarByYear(year);
+  }
+
+  /**
+   * Check if a date is a holiday or rest day
+   * Uses: LeavesService.getCalendarByYear()
+   * @param date - Date to check
+   * @returns Object with holiday/rest day information
+   */
+  async checkIfHolidayOrRestDay(date: Date): Promise<{
+    isHoliday: boolean;
+    isRestDay: boolean;
+    holidayName?: string;
+    holidayType?: string;
+    dayOfWeek: number;
+    dayName: string;
+  }> {
+    const year = date.getFullYear();
+    const calendar = await this.leavesService.getCalendarByYear(year);
+    
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const isRestDay = dayOfWeek === 0 || dayOfWeek === 6; // Weekend
+    
+    let isHoliday = false;
+    let holidayName: string | undefined;
+    let holidayType: string | undefined;
+    
+    if (calendar && calendar.holidays) {
+      const dateString = date.toISOString().split('T')[0];
+      
+      // Check if date falls within any holiday period
+      for (const holidayId of calendar.holidays) {
+        try {
+          const HolidayModel = this.attendanceRecordModel.db.model('Holiday');
+          const holiday = await HolidayModel.findById(holidayId).exec();
+          
+          if (holiday) {
+            const holidayStart = new Date(holiday.startDate);
+            const holidayEnd = holiday.endDate ? new Date(holiday.endDate) : holidayStart;
+            
+            if (date >= holidayStart && date <= holidayEnd) {
+              isHoliday = true;
+              holidayName = holiday.name;
+              holidayType = holiday.type;
+              break;
+            }
+          }
+        } catch (err) {
+          // Skip if holiday not found
+        }
+      }
+    }
+    
+    return {
+      isHoliday,
+      isRestDay,
+      holidayName,
+      holidayType,
+      dayOfWeek,
+      dayName: dayNames[dayOfWeek],
+    };
+  }
+
+  /**
+   * Get employee vacation packages (leave requests) for a date range
+   * Uses: LeavesService.getPastLeaveRequests()
+   * @param employeeId - Employee ID
+   * @param startDate - Start date for filtering
+   * @param endDate - End date for filtering
+   * @returns Array of leave requests
+   */
+  async getEmployeeVacationPackages(
+    employeeId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const filters: any = {};
+    if (startDate) filters.fromDate = startDate;
+    if (endDate) filters.toDate = endDate;
+    
+    return await this.leavesService.getPastLeaveRequests(employeeId, filters);
+  }
+
+  /**
+   * Check if employee is on vacation (approved leave) for a specific date
+   * Uses: LeavesService.getPastLeaveRequests()
+   * @param employeeId - Employee ID
+   * @param date - Date to check
+   * @returns Leave request if employee is on vacation, null otherwise
+   */
+  async checkIfEmployeeOnVacation(
+    employeeId: string,
+    date: Date,
+  ): Promise<any | null> {
+    const leaveRequests = await this.leavesService.getPastLeaveRequests(employeeId, {
+      fromDate: date,
+      toDate: date,
+      status: 'APPROVED', // Only check approved leaves
+    });
+    
+    // Check if date falls within any approved leave request
+    for (const request of leaveRequests) {
+      const leaveStart = new Date(request.dates.from);
+      const leaveEnd = new Date(request.dates.to);
+      
+      if (date >= leaveStart && date <= leaveEnd) {
+        return request;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get all holidays and rest days for attendance validation
+   * Combines holiday calendar with rest days
+   * @param year - Year to get calendar for
+   * @param restDays - Array of day numbers (0-6) that are rest days (default: [0, 6] for weekends)
+   * @returns Object with all non-working days
+   */
+  async getAllNonWorkingDays(
+    year: number,
+    restDays: number[] = [0, 6], // Sunday and Saturday by default
+  ) {
+    const calendar = await this.leavesService.getCalendarByYear(year);
+    
+    const holidays: Array<{ date: Date; name?: string; type?: string }> = [];
+    const restDayDates: Date[] = [];
+    
+    // Get holidays
+    if (calendar && calendar.holidays) {
+      for (const holidayId of calendar.holidays) {
+        try {
+          const HolidayModel = this.attendanceRecordModel.db.model('Holiday');
+          const holiday = await HolidayModel.findById(holidayId).exec();
+          
+          if (holiday && holiday.active) {
+            const startDate = new Date(holiday.startDate);
+            const endDate = holiday.endDate ? new Date(holiday.endDate) : startDate;
+            
+            // Add all dates in the holiday range
+            const currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+              holidays.push({
+                date: new Date(currentDate),
+                name: holiday.name,
+                type: holiday.type,
+              });
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          }
+        } catch (err) {
+          // Skip if holiday not found
+        }
+      }
+    }
+    
+    // Calculate rest days for the year
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31);
+    const currentDate = new Date(startOfYear);
+    
+    while (currentDate <= endOfYear) {
+      const dayOfWeek = currentDate.getDay();
+      if (restDays.includes(dayOfWeek)) {
+        restDayDates.push(new Date(currentDate));
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return {
+      year,
+      holidays,
+      restDays: restDayDates,
+      totalNonWorkingDays: holidays.length + restDayDates.length,
+    };
   }
 }

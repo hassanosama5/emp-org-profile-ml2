@@ -152,7 +152,7 @@ export class ShiftAndScheduleController {
 
   // ===== NEW: Assign Shift to Department =====
   @Post('shift/assign/department')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
   async assignShiftToDepartment(
     @Body() dto: AssignShiftToDepartmentDto,
     @CurrentUser() user: any,
@@ -162,7 +162,7 @@ export class ShiftAndScheduleController {
 
   // ===== NEW: Assign Shift to Position =====
   @Post('shift/assign/position')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
   async assignShiftToPosition(
     @Body() dto: AssignShiftToPositionDto,
     @CurrentUser() user: any,
@@ -253,7 +253,7 @@ export class ShiftAndScheduleController {
 
   // ===== NEW: Cancel Shift Assignment =====
   @Post('shift/assignment/cancel')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
   async cancelShiftAssignment(
     @Body() dto: CancelShiftAssignmentDto,
     @CurrentUser() user: any,
@@ -285,7 +285,7 @@ export class ShiftAndScheduleController {
   // BR-TM-05: Assignable by Department, Position, or Individual
 
   @Post('schedule')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async createScheduleRule(
     @Body() createScheduleRuleDto: CreateScheduleRuleDto,
     @CurrentUser() user: any,
@@ -310,7 +310,7 @@ export class ShiftAndScheduleController {
   }
 
   @Put('schedule/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async updateScheduleRule(
     @Param('id') id: string,
     @Body() updateScheduleRuleDto: CreateScheduleRuleDto,
@@ -320,13 +320,13 @@ export class ShiftAndScheduleController {
   }
 
   @Delete('schedule/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async deleteScheduleRule(@Param('id') id: string) {
     return this.shiftScheduleService.deleteScheduleRule(id);
   }
 
   @Post('schedule/flexible')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async defineFlexibleSchedulingRules(
     @Body() defineFlexibleSchedulingRulesDto: DefineFlexibleSchedulingRulesDto,
     @CurrentUser() user: any,
