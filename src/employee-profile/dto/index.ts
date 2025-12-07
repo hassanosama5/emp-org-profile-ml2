@@ -7,3 +7,4 @@ export * from './create-candidate.dto';
 export * from './create-profile-change-request.dto';
 export * from './query-employee.dto';
 export * from './assign-system-role.dto';
+export * from './register-candidate.dto'; // Add this line

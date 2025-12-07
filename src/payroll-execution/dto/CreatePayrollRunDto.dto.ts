@@ -1,5 +1,4 @@
 import {
-  IsArray,
   IsEnum,
   IsISO8601,
   IsMongoId,
@@ -26,8 +25,8 @@ export class CreatePayrollRunDto {
   employees: number;
 
   @IsOptional()
-  @IsArray()
-  exceptions?: { code: string; message: string }[];
+  @IsNumber()
+  exceptions?: number; // Count of exceptions/issues in the payroll run
 
   @IsNumber()
   totalnetpay: number;

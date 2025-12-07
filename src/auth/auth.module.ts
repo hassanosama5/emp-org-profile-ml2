@@ -15,6 +15,10 @@ import {
   EmployeeSystemRole,
   EmployeeSystemRoleSchema,
 } from '../employee-profile/models/employee-system-role.schema';
+import {
+  Candidate,
+  CandidateSchema,
+} from '../employee-profile/models/candidate.schema'; // Add this import
 
 @Module({
   imports: [
@@ -37,11 +41,12 @@ import {
     //   signOptions: {
     //     expiresIn: process.env.JWT_EXPIRATION || '24h',
     //   },
-    // }),
+    // }),k
 
     MongooseModule.forFeature([
       { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
       { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
+      { name: Candidate.name, schema: CandidateSchema }, // Add this line
     ]),
   ],
   controllers: [AuthController],

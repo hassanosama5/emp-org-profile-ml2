@@ -696,7 +696,14 @@ export class PayrollConfigurationService {
       throw new NotFoundException(`Tax rule with ID ${id} not found`);
     }
 
-    if (this.normalizeStatus(taxRule.status) !== this.normalizeStatus(ConfigStatus.DRAFT)) {
+    // Special case: Tax rules can be edited even when APPROVED (for legal updates)
+    // When edited, approved tax rules should go back to DRAFT for re-approval
+    const wasApproved = this.normalizeStatus(taxRule.status) === this.normalizeStatus(ConfigStatus.APPROVED);
+    
+    if (
+      this.normalizeStatus(taxRule.status) !== this.normalizeStatus(ConfigStatus.DRAFT) &&
+      !wasApproved
+    ) {
       throw new BadRequestException(
         `Cannot update tax rule with status ${taxRule.status}. Only DRAFT items can be edited.`,
       );
@@ -704,6 +711,14 @@ export class PayrollConfigurationService {
 
     if (updateDto.rate !== undefined && updateDto.rate < 0) {
       throw new BadRequestException('Tax rate must be non-negative');
+    }
+
+    // If tax rule was approved, change status back to DRAFT for re-approval after legal update
+    if (wasApproved) {
+      taxRule.status = ConfigStatus.DRAFT;
+      // Clear approval information since it needs to be re-approved
+      taxRule.approvedBy = undefined;
+      taxRule.approvedAt = undefined;
     }
 
     Object.assign(taxRule, updateDto);

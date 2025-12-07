@@ -31,6 +31,7 @@ import { Department, DepartmentDocument } from '../organization-structure/models
 import { Position, PositionDocument } from '../organization-structure/models/position.schema';
 import { PositionAssignment, PositionAssignmentDocument } from '../organization-structure/models/position-assignment.schema';
 import { LeaveStatus } from '../leaves/enums/leave-status.enum';
+import { PaySlipPaymentStatus } from '../payroll-execution/enums/payroll-execution-enum';
 import { CreateClaimDTO } from './dto/CreateClaimDTO.dto';
 import { UpdateClaimDTO } from './dto/UpdateClaimDTO.dto';
 import { CreateDisputeDTO } from './dto/CreateDisputeDTO.dto';
@@ -897,19 +898,45 @@ export class PayrollTrackingService {
         throw new BadRequestException('Dispute ID is required');
       }
 
-      const dispute = await this.disputeModel
-        .findOne({ disputeId })
-      .populate('employeeId', 'firstName lastName employeeNumber')
-        .populate('payrollSpecialistId', 'firstName lastName')
-        .populate('payrollManagerId', 'firstName lastName')
-      .populate('financeStaffId', 'firstName lastName')
-      .populate('payslipId')
-      .exec();
+      // Try to find dispute by either MongoDB _id or disputeId string
+      let dispute;
+      if (Types.ObjectId.isValid(disputeId)) {
+        // If it's a valid MongoDB ObjectId, try finding by _id first
+        dispute = await this.disputeModel
+          .findById(disputeId)
+          .populate('employeeId', 'firstName lastName employeeNumber')
+          .populate('payrollSpecialistId', 'firstName lastName')
+          .populate('payrollManagerId', 'firstName lastName')
+          .populate('financeStaffId', 'firstName lastName')
+          .populate('payslipId')
+          .exec();
+        if (!dispute) {
+          // If not found by _id, try by disputeId string
+          dispute = await this.disputeModel
+            .findOne({ disputeId })
+            .populate('employeeId', 'firstName lastName employeeNumber')
+            .populate('payrollSpecialistId', 'firstName lastName')
+            .populate('payrollManagerId', 'firstName lastName')
+            .populate('financeStaffId', 'firstName lastName')
+            .populate('payslipId')
+            .exec();
+        }
+      } else {
+        // If it's not a valid ObjectId, search by disputeId string
+        dispute = await this.disputeModel
+          .findOne({ disputeId })
+          .populate('employeeId', 'firstName lastName employeeNumber')
+          .populate('payrollSpecialistId', 'firstName lastName')
+          .populate('payrollManagerId', 'firstName lastName')
+          .populate('financeStaffId', 'firstName lastName')
+          .populate('payslipId')
+          .exec();
+      }
 
-    if (!dispute) {
-      throw new NotFoundException(`Dispute with ID ${disputeId} not found`);
-    }
-    return dispute;
+      if (!dispute) {
+        throw new NotFoundException(`Dispute with ID ${disputeId} not found`);
+      }
+      return dispute;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -930,10 +957,30 @@ export class PayrollTrackingService {
         throw new BadRequestException('Dispute ID is required');
       }
 
-    const dispute = await this.disputeModel.findOne({ disputeId });
-    if (!dispute) {
-      throw new NotFoundException(`Dispute with ID ${disputeId} not found`);
-    }
+      // Try to find dispute by either MongoDB _id or disputeId string
+      let dispute;
+      if (Types.ObjectId.isValid(disputeId)) {
+        // If it's a valid MongoDB ObjectId, try finding by _id first
+        dispute = await this.disputeModel.findById(disputeId);
+        if (!dispute) {
+          // If not found by _id, try by disputeId string
+          dispute = await this.disputeModel.findOne({ disputeId });
+        }
+      } else {
+        // If it's not a valid ObjectId, search by disputeId string
+        dispute = await this.disputeModel.findOne({ disputeId });
+      }
+
+      if (!dispute) {
+        throw new NotFoundException(`Dispute with ID ${disputeId} not found`);
+      }
+
+      // Only allow updates if dispute is still under review (employees can only update before resolution)
+      if (dispute.status !== DisputeStatus.UNDER_REVIEW) {
+        throw new BadRequestException(
+          `Cannot update dispute. Dispute status is ${dispute.status}. Only disputes under review can be updated.`,
+        );
+      }
 
       // Validate update data
       if (updateDisputeDTO.description !== undefined) {
@@ -953,18 +1000,42 @@ export class PayrollTrackingService {
         throw new BadRequestException('Rejection reason cannot be empty');
       }
 
-    const updateData: any = { ...updateDisputeDTO };
-    if (updateDisputeDTO.financeStaffId) {
+      // Build update object with only defined fields (remove undefined values)
+      const updateData: any = {};
+      
+      if (updateDisputeDTO.description !== undefined) {
+        updateData.description = updateDisputeDTO.description.trim();
+      }
+      
+      if (updateDisputeDTO.resolutionComment !== undefined) {
+        updateData.resolutionComment = updateDisputeDTO.resolutionComment.trim();
+      }
+      
+      if (updateDisputeDTO.rejectionReason !== undefined) {
+        updateData.rejectionReason = updateDisputeDTO.rejectionReason.trim();
+      }
+      
+      if (updateDisputeDTO.financeStaffId !== undefined) {
         // Validate finance staff exists (don't check active status)
         updateData.financeStaffId = await this.validateEmployeeExists(
           updateDisputeDTO.financeStaffId,
           false,
         );
       }
+      
+      if (updateDisputeDTO.status !== undefined) {
+        updateData.status = updateDisputeDTO.status;
+      }
+
+      // Always update the updatedBy field
       updateData.updatedBy = new Types.ObjectId(currentUserId);
 
+      // Use $set operator to ensure all fields are properly updated
+      const updateQuery = { $set: updateData };
+
+      // Use the dispute's _id for the update query to ensure we update the correct document
       const updatedDispute = await this.disputeModel
-        .findOneAndUpdate({ disputeId }, updateData, {
+        .findByIdAndUpdate(dispute._id, updateQuery, {
           new: true,
           runValidators: true,
         })
@@ -981,7 +1052,7 @@ export class PayrollTrackingService {
         );
       }
 
-    return updatedDispute;
+      return updatedDispute;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -2400,15 +2471,52 @@ export class PayrollTrackingService {
   // ==================== EMPLOYEE SELF-SERVICE METHODS (REQ-PY-1 to REQ-PY-15) ====================
 
   // REQ-PY-1: Employees view and download their payslips online
+  // REQ-PY-2: Employees view status and details of their payslips (paid, disputed)
   async getPayslipsByEmployeeId(employeeId: string) {
     try {
       const validEmployeeId = await this.validateEmployeeExists(employeeId, false);
-      return await this.payslipModel
+      const payslips = await this.payslipModel
         .find({ employeeId: validEmployeeId })
         .populate('employeeId', 'firstName lastName employeeNumber')
         .populate('payrollRunId', 'runId payrollPeriod status entity')
         .sort({ createdAt: -1 })
         .exec();
+
+      // Enhance each payslip with dispute status
+      const enhancedPayslips = await Promise.all(
+        payslips.map(async (payslip) => {
+          const payslipId = payslip._id;
+          const disputes = await this.disputeModel
+            .find({ payslipId })
+            .select('disputeId status description createdAt')
+            .sort({ createdAt: -1 })
+            .exec();
+
+          const isDisputed = disputes.length > 0;
+          const hasActiveDispute = disputes.some(
+            (d) => d.status !== DisputeStatus.REJECTED,
+          );
+
+          const payslipData = payslip.toObject ? payslip.toObject() : payslip;
+          return {
+            ...payslipData,
+            paymentStatus: payslip.paymentStatus,
+            isDisputed,
+            hasActiveDispute,
+            disputeCount: disputes.length,
+            // Overall status for display: "paid", "pending", "disputed", "paid-disputed"
+            status: hasActiveDispute
+              ? payslip.paymentStatus === PaySlipPaymentStatus.PAID
+                ? 'paid-disputed'
+                : 'disputed'
+              : payslip.paymentStatus === PaySlipPaymentStatus.PAID
+                ? 'paid'
+                : 'pending',
+          };
+        }),
+      );
+
+      return enhancedPayslips;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -2423,7 +2531,7 @@ export class PayrollTrackingService {
   }
 
   // REQ-PY-1: Employees download a specific payslip
-  // REQ-PY-2: Employees view status and details of a specific payslip
+  // REQ-PY-2: Employees view status and details of a specific payslip (paid, disputed)
   async getPayslipById(payslipId: string, employeeId: string) {
     try {
       const validPayslipId = this.validateObjectId(payslipId, 'payslipId');
@@ -2441,7 +2549,47 @@ export class PayrollTrackingService {
         );
       }
 
-      return payslip;
+      // Check if this payslip has any disputes (to show "disputed" status)
+      const disputes = await this.disputeModel
+        .find({ payslipId: validPayslipId })
+        .select('disputeId status description createdAt')
+        .sort({ createdAt: -1 })
+        .exec();
+
+      // Determine if payslip is disputed
+      const isDisputed = disputes.length > 0;
+      const hasActiveDispute = disputes.some(
+        (d) => d.status !== DisputeStatus.REJECTED,
+      );
+      const latestDispute = disputes.length > 0 ? disputes[0] : null;
+
+      // Return payslip with enhanced status information
+      const payslipData = payslip.toObject ? payslip.toObject() : payslip;
+      return {
+        ...payslipData,
+        // Payment status from payslip (PENDING or PAID)
+        paymentStatus: payslip.paymentStatus,
+        // Disputed status information
+        isDisputed,
+        hasActiveDispute,
+        disputeCount: disputes.length,
+        latestDispute: latestDispute
+          ? {
+              disputeId: latestDispute.disputeId,
+              status: latestDispute.status,
+              description: latestDispute.description,
+              createdAt: (latestDispute as any)?.createdAt,
+            }
+          : null,
+        // Overall status for display: "paid", "pending", "disputed", "paid-disputed"
+        status: hasActiveDispute
+          ? payslip.paymentStatus === PaySlipPaymentStatus.PAID
+            ? 'paid-disputed'
+            : 'disputed'
+          : payslip.paymentStatus === PaySlipPaymentStatus.PAID
+            ? 'paid'
+            : 'pending',
+      };
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -2461,41 +2609,71 @@ export class PayrollTrackingService {
       // Use EmployeeProfileService for proper validation and populated data
       const employee = await this.employeeProfileService.findOne(employeeId);
 
+      // Extract payGradeId - handle both populated and non-populated cases
+      let payGradeIdValue: string | null = null;
+      if (employee.payGradeId) {
+        payGradeIdValue = (employee.payGradeId as any)?._id?.toString() || 
+                         (employee.payGradeId as any)?.toString() || 
+                         null;
+      }
+
       // Enrich pay grade details using PayrollConfigurationService
       let payGradeDetails: any = null;
-      if (employee.payGradeId) {
+      let baseSalary: number | null = null;
+      let grossSalary: number | null = null;
+
+      if (payGradeIdValue) {
         try {
-          const payGradeId = (employee.payGradeId as any)?._id?.toString() || (employee.payGradeId as any)?.toString();
-          if (payGradeId) {
-            const payGrade = await this.payrollConfigurationService.findOnePayGrade(payGradeId);
-            // Only include approved pay grades
-            if (payGrade && payGrade.status === ConfigStatus.APPROVED) {
-              payGradeDetails = {
-                grade: payGrade.grade,
-                baseSalary: payGrade.baseSalary,
-                grossSalary: payGrade.grossSalary,
-                status: payGrade.status,
-              };
-            }
+          const payGrade = await this.payrollConfigurationService.findOnePayGrade(payGradeIdValue);
+          if (payGrade) {
+            // Extract base salary and gross salary regardless of status
+            baseSalary = payGrade.baseSalary || null;
+            grossSalary = payGrade.grossSalary || null;
+
+            // Include full pay grade details
+            payGradeDetails = {
+              _id: (payGrade as any)._id?.toString(),
+              grade: payGrade.grade,
+              baseSalary: payGrade.baseSalary,
+              grossSalary: payGrade.grossSalary,
+              status: payGrade.status,
+              // Include status warning if not approved
+              ...(payGrade.status !== ConfigStatus.APPROVED && {
+                statusWarning: `Pay grade status is ${payGrade.status}. Base salary may not be active.`,
+              }),
+            };
           }
         } catch (error: any) {
-          // If pay grade not found, continue without it
+          // If pay grade not found, log warning but continue
           console.warn(`Pay grade not found for employee ${employeeId}: ${error?.message}`);
         }
       }
 
-      return {
+      // Build response with base salary at root level
+      const response: any = {
         employeeId: (employee as any)._id?.toString() || (employee as any).id?.toString() || employeeId,
         employeeNumber: employee.employeeNumber,
         firstName: employee.firstName,
         lastName: employee.lastName,
         contractType: employee.contractType,
         workType: employee.workType,
-        payGrade: employee.payGradeId,
+        payGradeId: payGradeIdValue,
         payGradeDetails: payGradeDetails,
+        // Base salary at root level for easy access
+        baseSalary: baseSalary,
+        grossSalary: grossSalary,
         contractStartDate: employee.contractStartDate,
         contractEndDate: employee.contractEndDate,
       };
+
+      // Add warning if no pay grade is assigned
+      if (!payGradeIdValue) {
+        response.warning = 'No pay grade assigned to this employee. Base salary information is not available.';
+      } else if (!baseSalary) {
+        response.warning = 'Pay grade found but base salary information is not available.';
+      }
+
+      return response;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||

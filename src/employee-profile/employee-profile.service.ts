@@ -37,6 +37,8 @@ import {
   GraduationType,
 } from './enums/employee-profile.enums';
 
+import { RegisterCandidateDto } from './dto/register-candidate.dto';
+
 @Injectable()
 export class EmployeeProfileService {
   constructor(
@@ -1220,5 +1222,79 @@ export class EmployeeProfileService {
         return acc;
       }, {}),
     };
+  }
+
+  async registerCandidate(
+    registerDto: RegisterCandidateDto,
+  ): Promise<Candidate> {
+    // Check for duplicate national ID
+    const existingCandidate = await this.candidateModel
+      .findOne({ nationalId: registerDto.nationalId })
+      .exec();
+
+    if (existingCandidate) {
+      throw new ConflictException(
+        'Candidate with this National ID already exists',
+      );
+    }
+
+    // Check for duplicate personal email
+    const existingEmail = await this.candidateModel
+      .findOne({ personalEmail: registerDto.personalEmail })
+      .exec();
+
+    if (existingEmail) {
+      throw new ConflictException('Candidate with this email already exists');
+    }
+
+    // Generate candidate number
+    const candidateNumber = await this.generateCandidateNumber();
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+    // Create full name
+    const fullName = [
+      registerDto.firstName,
+      registerDto.middleName,
+      registerDto.lastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    // Convert dateOfBirth string to Date object if provided
+    const dateOfBirth = registerDto.dateOfBirth
+      ? new Date(registerDto.dateOfBirth)
+      : undefined;
+
+    const candidate = new this.candidateModel({
+      firstName: registerDto.firstName,
+      middleName: registerDto.middleName,
+      lastName: registerDto.lastName,
+      nationalId: registerDto.nationalId,
+      password: hashedPassword,
+      gender: registerDto.gender,
+      maritalStatus: registerDto.maritalStatus,
+      dateOfBirth: dateOfBirth,
+      personalEmail: registerDto.personalEmail,
+      mobilePhone: registerDto.mobilePhone,
+      homePhone: registerDto.homePhone,
+      address: registerDto.address,
+      candidateNumber,
+      fullName,
+      status: CandidateStatus.APPLIED,
+      applicationDate: new Date(),
+    });
+
+    const savedCandidate = await candidate.save();
+
+    // Create system role for candidate
+    await this.systemRoleModel.create({
+      employeeProfileId: savedCandidate._id, // Note: Using candidate ID as employeeProfileId
+      roles: [SystemRole.JOB_CANDIDATE],
+      isActive: true,
+    });
+
+    return savedCandidate.toObject();
   }
 }

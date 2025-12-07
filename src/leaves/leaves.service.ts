@@ -8,7 +8,6 @@ import { HolidayType } from '../time-management/models/enums';
 import { HydratedDocument } from 'mongoose';
 import { NotFoundException } from '@nestjs/common';
 
-
 import { LeavePolicy, LeavePolicyDocument } from './models/leave-policy.schema';
 import {
   LeaveRequest,
@@ -234,12 +233,15 @@ export class LeavesService {
   ) {}
 
   // In-memory storage for delegation records (Map<managerId, Array<delegation>>)
-  private delegationMap: Map<string, Array<{
-    delegateId: string;
-    startDate: Date;
-    endDate: Date;
-    isActive: boolean;
-  }>> = new Map();
+  private delegationMap: Map<
+    string,
+    Array<{
+      delegateId: string;
+      startDate: Date;
+      endDate: Date;
+      isActive: boolean;
+    }>
+  > = new Map();
 
   // LeavePolicy
   async createLeavePolicy(
@@ -690,30 +692,40 @@ export class LeavesService {
   }
 
   // Phase 2: REQ-021 - Manager approve leave request
-  async approveLeaveRequest(approveDto: ApproveLeaveRequestDto, managerId: string, leaveRequestId?: string): Promise<LeaveRequestDocument> {
+  async approveLeaveRequest(
+    approveDto: ApproveLeaveRequestDto,
+    managerId: string,
+    leaveRequestId?: string,
+  ): Promise<LeaveRequestDocument> {
     const { status } = approveDto;
     // Use route parameter if provided, otherwise fall back to DTO
     const requestId = leaveRequestId || approveDto.leaveRequestId;
     const leaveRequestObjectId = new Types.ObjectId(requestId);
 
     // Step 1: Fetch the leave request by ID
-    const leaveRequest = await this.leaveRequestModel.findById(leaveRequestObjectId).exec();
+    const leaveRequest = await this.leaveRequestModel
+      .findById(leaveRequestObjectId)
+      .exec();
 
     // Step 2: If leave request doesn't exist, throw NotFoundException
     if (!leaveRequest) {
-      throw new NotFoundException(`Leave request with ID ${leaveRequestObjectId} not found`);
+      throw new NotFoundException(
+        `Leave request with ID ${leaveRequestObjectId} not found`,
+      );
     }
 
     // Step 3: Ensure the leave request is in PENDING status before approval
     if (leaveRequest.status !== LeaveStatus.PENDING) {
-      throw new BadRequestException(`Leave request has already been ${leaveRequest.status}`);
+      throw new BadRequestException(
+        `Leave request has already been ${leaveRequest.status}`,
+      );
     }
 
     // Step 4: Check if the approver is a delegated employee
     // If they are a delegate, they're approving on behalf of the manager who delegated to them
     const delegatedManagerId = this.getDelegatedManagerId(managerId);
     const isDelegate = delegatedManagerId !== null;
-    
+
     // The actual manager ID (either the approver themselves or the manager they're delegated for)
     // This is used for tracking purposes, but decidedBy will always record who actually made the decision
     const actualManagerId = isDelegate ? delegatedManagerId! : managerId;
@@ -721,26 +733,19 @@ export class LeavesService {
     // Step 5: Update the approval flow with the manager's decision
     // Note: decidedBy records who actually made the decision (could be delegate), role is always Department_Head
     leaveRequest.approvalFlow.push({
-      role: 'Departement_Head',  // Role of the person approving/rejecting (always Department Head)
-      status: status,  // Status can be APPROVED or REJECTED
+      role: 'Departement_Head', // Role of the person approving/rejecting (always Department Head)
+      status: status, // Status can be APPROVED or REJECTED
       decidedBy: new Types.ObjectId(managerId), // The actual person who made the decision (could be delegate)
-      decidedAt: new Date(),  // Timestamp of when the decision was made
+      decidedAt: new Date(), // Timestamp of when the decision was made
     });
 
-   
-    leaveRequest.status = status;  // Set the leave status to APPROVED or REJECTED
-  
+    leaveRequest.status = status; // Set the leave status to APPROVED or REJECTED
+
     // Step 6: Save the updated leave request
     const updatedLeaveRequest = await leaveRequest.save();
 
     return updatedLeaveRequest;
   }
-
-    
-    
-
-  
-  
 
   // Phase 2: REQ-022 - Manager reject leave request
   async rejectLeaveRequest(
@@ -757,23 +762,27 @@ export class LeavesService {
     const leaveRequest = await this.leaveRequestModel
       .findById(leaveRequestObjectId)
       .exec();
-    
+
     // Step 2: If leave request doesn't exist, throw NotFoundException
     if (!leaveRequest) {
-      throw new NotFoundException(`Leave request with ID ${leaveRequestObjectId} not found`);
+      throw new NotFoundException(
+        `Leave request with ID ${leaveRequestObjectId} not found`,
+      );
     }
 
     // Step 3: Ensure the leave request is in PENDING status before rejection
     if (leaveRequest.status !== LeaveStatus.PENDING) {
-      throw new BadRequestException(`Leave request has already been ${leaveRequest.status}`);
+      throw new BadRequestException(
+        `Leave request has already been ${leaveRequest.status}`,
+      );
     }
 
     // Step 4: Update the approval flow with the manager's decision
     leaveRequest.approvalFlow.push({
-      role: 'Departement_Head',  // Role of the person approving/rejecting
+      role: 'Departement_Head', // Role of the person approving/rejecting
       status: LeaveStatus.REJECTED,
       decidedBy: new Types.ObjectId(managerId), // The manager's ID from the logged-in user
-      decidedAt: new Date(),  // Timestamp of when the decision was made
+      decidedAt: new Date(), // Timestamp of when the decision was made
     });
 
     // Step 5: Set the leave status to REJECTED
@@ -847,21 +856,24 @@ export class LeavesService {
   }
 
   async getLeaveEntitlement(
-  employeeId: string,
-  leaveTypeId: string,
-): Promise<LeaveEntitlementDocument> {
+    employeeId: string,
+    leaveTypeId: string,
+  ): Promise<LeaveEntitlementDocument> {
+    const leaveEntitlement = await this.leaveEntitlementModel
+      .findOne({
+        employeeId: new Types.ObjectId(employeeId),
+        leaveTypeId: new Types.ObjectId(leaveTypeId),
+      })
+      .exec();
 
-  const leaveEntitlement = await this.leaveEntitlementModel.findOne({
-    employeeId: new Types.ObjectId(employeeId),
-    leaveTypeId: new Types.ObjectId(leaveTypeId),
-  }).exec();
+    if (!leaveEntitlement) {
+      throw new NotFoundException(
+        'Entitlement for employee ${employeeId} with leave type ${leaveTypeId} not found',
+      );
+    }
 
-  if (!leaveEntitlement) {
-    throw new NotFoundException("Entitlement for employee ${employeeId} with leave type ${leaveTypeId} not found" );
+    return leaveEntitlement;
   }
-
-  return leaveEntitlement;
-}
 
   async updateLeaveEntitlement(
     id: string,
@@ -1109,7 +1121,9 @@ export class LeavesService {
     }
 
     // Validate that delegateId is a valid employee
-    const delegate = await this.employeeProfileModel.findById(delegateId).exec();
+    const delegate = await this.employeeProfileModel
+      .findById(delegateId)
+      .exec();
     if (!delegate) {
       throw new NotFoundException(`Employee with ID ${delegateId} not found.`);
     }
@@ -1165,10 +1179,7 @@ export class LeavesService {
   }
 
   // Helper method to check if an employee is a delegated approver for a manager
-  private isDelegatedApprover(
-    employeeId: string,
-    managerId: string,
-  ): boolean {
+  private isDelegatedApprover(employeeId: string, managerId: string): boolean {
     const delegations = this.delegationMap.get(managerId);
     if (!delegations || delegations.length === 0) {
       return false;
@@ -1213,27 +1224,35 @@ export class LeavesService {
     const leaveRequest = await this.leaveRequestModel
       .findById(leaveRequestObjectId)
       .exec();
-    
+
     // Step 2: If leave request doesn't exist, throw NotFoundException
     if (!leaveRequest) {
-      throw new NotFoundException(`Leave request with ID ${leaveRequestObjectId} not found`);
+      throw new NotFoundException(
+        `Leave request with ID ${leaveRequestObjectId} not found`,
+      );
     }
 
     // Step 3: Check if leave request is approved by Department Head and ready for HR finalization
     if (leaveRequest.status !== LeaveStatus.APPROVED) {
-      throw new BadRequestException(`Leave request must be APPROVED by Department Head before HR finalization. Current status: ${leaveRequest.status}`);
+      throw new BadRequestException(
+        `Leave request must be APPROVED by Department Head before HR finalization. Current status: ${leaveRequest.status}`,
+      );
     }
 
     const lastApproval =
       leaveRequest.approvalFlow[leaveRequest.approvalFlow.length - 1];
-    
+
     // Check if already finalized by HR Manager
     const alreadyFinalized = leaveRequest.approvalFlow.some(
-      (approval) => approval.role === 'HR Manager' && approval.status === LeaveStatus.APPROVED
+      (approval) =>
+        approval.role === 'HR Manager' &&
+        approval.status === LeaveStatus.APPROVED,
     );
-    
+
     if (alreadyFinalized) {
-      throw new BadRequestException('Leave request has already been finalized by HR Manager.');
+      throw new BadRequestException(
+        'Leave request has already been finalized by HR Manager.',
+      );
     }
 
     // Check if the last approval is from Department Head (not HR Manager)
@@ -1242,7 +1261,9 @@ export class LeavesService {
       lastApproval.role !== 'Departement_Head' ||
       lastApproval.status !== LeaveStatus.APPROVED
     ) {
-      throw new BadRequestException('Leave request must be approved by Department Head before HR finalization.');
+      throw new BadRequestException(
+        'Leave request must be approved by Department Head before HR finalization.',
+      );
     }
 
     // Step 4: REQ-028 - Verify medical documents if required
@@ -1272,7 +1293,7 @@ export class LeavesService {
       role: 'HR Manager',
       status: LeaveStatus.APPROVED,
       decidedBy: new Types.ObjectId(hrUserId), // The HR Manager's ID from the logged-in user
-      decidedAt: new Date(),  // Timestamp of when the decision was made
+      decidedAt: new Date(), // Timestamp of when the decision was made
     });
 
     // Step 7: Leave status remains APPROVED (already approved by Department Head, now finalized by HR)
@@ -1416,7 +1437,6 @@ export class LeavesService {
 
   // Phase 2: REQ-042, BR 692 - Sync with payroll system (internal helper)
   // renamed to avoid collision with public `syncWithPayroll` that accepts event payloads
-  
 
   // Phase 2: REQ-026, BR 479 - HR Manager override manager decision
   async hrOverrideDecision(

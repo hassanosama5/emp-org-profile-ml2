@@ -31,6 +31,7 @@ import { TimeManagementModule } from '../time-management/time-management.module'
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
 import { LeavesModule } from '../leaves/leaves.module';
 import { RecruitmentModule } from '../recruitment/recruitment.module';
+import { EmployeeSystemRole, EmployeeSystemRoleSchema } from '../employee-profile/models/employee-system-role.schema';
 
 @Module({
   imports: [
@@ -39,24 +40,20 @@ import { RecruitmentModule } from '../recruitment/recruitment.module';
     TimeManagementModule,
     EmployeeProfileModule,
     LeavesModule,
-    RecruitmentModule, // Also add this if you're using TerminationRequest
+    RecruitmentModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '1h' },
+    }),
     MongooseModule.forFeature([
       { name: payrollRuns.name, schema: payrollRunsSchema },
       { name: paySlip.name, schema: paySlipSchema },
-      {
-        name: employeePayrollDetails.name,
-        schema: employeePayrollDetailsSchema,
-      },
+      { name: employeePayrollDetails.name, schema: employeePayrollDetailsSchema },
       { name: employeeSigningBonus.name, schema: employeeSigningBonusSchema },
-      {
-        name: EmployeeTerminationResignation.name,
-        schema: EmployeeTerminationResignationSchema,
-      },
-      {
-        name: terminationAndResignationBenefits.name,
-        schema: terminationAndResignationBenefitsSchema,
-      },
+      { name: EmployeeTerminationResignation.name, schema: EmployeeTerminationResignationSchema },
+      { name: terminationAndResignationBenefits.name, schema: terminationAndResignationBenefitsSchema },
       { name: employeePenalties.name, schema: employeePenaltiesSchema },
+      { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
     ]),
   ],
   controllers: [PayrollExecutionController],
