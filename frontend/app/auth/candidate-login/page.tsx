@@ -2,21 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "../../../lib/hooks/use-auth";
+import { useAuth } from "@/lib/hooks/use-auth";
 
-const inputClass =
-  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500";
-
-export default function LoginPage() {
+export default function CandidateLoginPage() {
   const router = useRouter();
   const { login, loading, error } = useAuth();
 
-  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await login({ employeeNumber, password });
+
+    await login({
+      employeeNumber: identifier, // candidateNumber or personalEmail
+      password,
+    });
+
     router.push("/auth/dashboard-redirect");
   };
 
@@ -24,11 +26,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg"
+        className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md"
       >
-        <h2 className="mb-6 text-center text-2xl font-semibold text-gray-900">
-          Login
-        </h2>
+        <h2 className="text-2xl font-semibold mb-6">Candidate Login</h2>
 
         {error && (
           <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-600">
@@ -37,17 +37,17 @@ export default function LoginPage() {
         )}
 
         <input
-          className={inputClass}
-          placeholder="Employee Number"
-          value={employeeNumber}
-          onChange={(e) => setEmployeeNumber(e.target.value)}
+          placeholder="Candidate Number or Email"
+          className="w-full p-3 mb-4 border rounded"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
         />
 
         <input
           type="password"
-          className={`${inputClass} mt-4`}
           placeholder="Password"
+          className="w-full p-3 mb-6 border rounded"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -55,7 +55,7 @@ export default function LoginPage() {
 
         <button
           disabled={loading}
-          className="mt-6 w-full rounded-md bg-indigo-600 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+          className="w-full bg-indigo-600 text-white py-3 rounded hover:bg-indigo-700"
         >
           {loading ? "Logging in..." : "Login"}
         </button>

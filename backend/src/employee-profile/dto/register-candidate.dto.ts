@@ -8,6 +8,7 @@ import {
   MaxLength,
   Matches,
   ValidateNested,
+  IsMongoId,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Gender, MaritalStatus } from '../enums/employee-profile.enums';
@@ -78,4 +79,22 @@ export class RegisterCandidateDto {
   @ValidateNested()
   @Type(() => AddressDto)
   address?: AddressDto;
+
+  // Optional organizational context
+  @IsOptional()
+  @IsMongoId()
+  departmentId?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  positionId?: string;
+
+  // Optional attachments/notes
+  @IsOptional()
+  @IsString()
+  resumeUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

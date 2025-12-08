@@ -1,123 +1,85 @@
-// lib/hooks/use-auth.ts
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore } from '@/lib/stores/auth.store';
-import { SystemRole } from '@/types';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "../stores/auth.store";
 
 export const useAuth = () => {
-  const {
-    user,
-    token,
-    isLoading,
-    isAuthenticated,
-    login,
-    logout,
-    register,
-    updateUser,
-    checkAuth,
-    hasRole,
-    hasPermission,
-    getUserType,
-  } = useAuthStore();
+  const store = useAuthStore();
 
   useEffect(() => {
-    checkAuth();
+    store.initialize();
   }, []);
 
-  return {
-    user,
-    token,
-    isLoading,
-    isAuthenticated,
-    login,
-    logout,
-    register,
-    updateUser,
-    checkAuth,
-    hasRole,
-    hasPermission,
-    getUserType,
-  };
+  return store;
 };
 
 export const useRequireAuth = (
-  requiredRole?: SystemRole | string,
+  requiredRole?: string,
   redirectTo?: string,
+  requiredUserType?: "employee" | "candidate"
 ) => {
-  const { user, isLoading, isAuthenticated, hasRole } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
+  const { isAuthenticated, user, loading } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+
+  const hasRequiredRole = useMemo(() => {
+    if (!requiredRole) return true;
+    const roles = user?.roles || [];
+    return roles.includes(requiredRole);
+  }, [user, requiredRole]);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!loading) {
       if (!isAuthenticated) {
-        router.push(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
-      } else if (requiredRole && !hasRole(requiredRole)) {
-        router.push(redirectTo || '/dashboard');
+        router.replace(redirectTo || "/auth/login");
+      } else if (!hasRequiredRole) {
+        router.replace(redirectTo || "/auth/login");
+      } else if (
+        requiredUserType &&
+        user?.userType &&
+        user.userType !== requiredUserType
+      ) {
+        router.replace(redirectTo || "/auth/login");
       }
+      setIsLoading(false);
     }
   }, [
+    loading,
     isAuthenticated,
-    isLoading,
-    user,
-    requiredRole,
-    router,
-    pathname,
+    hasRequiredRole,
+    requiredUserType,
+    user?.userType,
     redirectTo,
-    hasRole,
-  ]);
-
-  return { user, isLoading };
-};
-
-export const useRequireUserType = (requiredType: 'employee' | 'candidate') => {
-  const { user, isLoading, isAuthenticated, getUserType } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    if (!isLoading) {
-      if (!isAuthenticated) {
-        router.push(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
-      } else if (getUserType() !== requiredType) {
-        // Redirect based on user type
-        if (getUserType() === 'employee') {
-          router.push('/dashboard');
-        } else {
-          router.push('/candidate-portal');
-        }
-      }
-    }
-  }, [
-    isAuthenticated,
-    isLoading,
-    user,
-    requiredType,
     router,
-    pathname,
-    getUserType,
   ]);
 
-  return { user, isLoading };
+  return { isLoading };
 };
 
-export const useRequireNoAuth = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+export const useRequireUserType = (
+  expectedType: "employee" | "candidate",
+  redirectTo?: string
+) => {
   const router = useRouter();
+  const { isAuthenticated, user, loading } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+
+  const matchesType = useMemo(() => {
+    if (!user) return false;
+    return user.userType === expectedType;
+  }, [user, expectedType]);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      // Redirect based on user type
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (user.userType === 'candidate') {
-        router.push('/candidate-portal');
-      } else {
-        router.push('/dashboard');
+    if (!loading) {
+      if (!isAuthenticated) {
+        router.replace(redirectTo || "/auth/login");
+      } else if (!matchesType) {
+        router.replace(redirectTo || "/auth/login");
       }
+      setIsLoading(false);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [loading, isAuthenticated, matchesType, redirectTo, router]);
 
   return { isLoading };
 };

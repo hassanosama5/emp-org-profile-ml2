@@ -2,7 +2,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { useRequireAuth } from '@/lib/hooks/use-auth';
+import { useRequireAuth, useRequireUserType } from '@/lib/hooks/use-auth';
 import { SystemRole } from '@/types';
 
 interface ProtectedRouteProps {
@@ -29,7 +29,11 @@ export function ProtectedRoute({
   redirectTo,
   fallback = <DefaultFallback />,
 }: ProtectedRouteProps) {
-  const { isLoading } = useRequireAuth(requiredRole, redirectTo);
+  const { isLoading } = useRequireAuth(
+    requiredRole,
+    redirectTo,
+    requiredUserType
+  );
 
   if (isLoading) {
     return <>{fallback}</>;

@@ -27,9 +27,9 @@ export function RoleGuard({
   allowedUserTypes,
   fallback = null,
 }: RoleGuardProps) {
-  const { user, isLoading, getUserType, hasRole } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (isLoading) {
+  if (loading) {
     return <LoadingIndicator />;
   }
 
@@ -37,17 +37,18 @@ export function RoleGuard({
     return <>{fallback}</>;
   }
 
-  // Check user type if specified
   if (allowedUserTypes && allowedUserTypes.length > 0) {
-    const userType = getUserType();
+    const userType = user.userType;
     if (!userType || !allowedUserTypes.includes(userType)) {
       return <>{fallback}</>;
     }
   }
 
-  // Check roles if specified
   if (allowedRoles && allowedRoles.length > 0) {
-    const hasAllowedRole = allowedRoles.some((role) => hasRole(role));
+    const roles = user.roles || [];
+    const hasAllowedRole = allowedRoles.some((role) =>
+      roles.includes(String(role))
+    );
     if (!hasAllowedRole) {
       return <>{fallback}</>;
     }

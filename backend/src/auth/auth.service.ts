@@ -20,10 +20,12 @@ import {
   CandidateDocument,
 } from '../employee-profile/models/candidate.schema';
 import { RegisterCandidateDto } from '../employee-profile/dto/register-candidate.dto';
+// removed CreateEmployeeDto import
 import {
   SystemRole,
   CandidateStatus,
 } from '../employee-profile/enums/employee-profile.enums';
+// removed duplicate import and unused EmployeeStatus
 
 @Injectable()
 export class AuthService {
@@ -206,6 +208,10 @@ export class AuthService {
       mobilePhone: registerDto.mobilePhone,
       homePhone: registerDto.homePhone,
       address: registerDto.address,
+      departmentId: registerDto.departmentId,
+      positionId: registerDto.positionId,
+      resumeUrl: registerDto.resumeUrl,
+      notes: registerDto.notes,
       candidateNumber,
       fullName,
       status: CandidateStatus.APPLIED,
@@ -249,6 +255,12 @@ export class AuthService {
       },
     };
   }
+
+  // removed registerEmployee
+
+  // removed duplicate registerEmployee implementation
+
+  // removed generateEmployeeNumber
 
   private async generateCandidateNumber(): Promise<string> {
     const year = new Date().getFullYear();

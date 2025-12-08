@@ -9,7 +9,7 @@ export interface User {
   workEmail?: string;
   personalEmail?: string;
   roles: string[];
-  userType: 'employee' | 'candidate';
+  userType: "employee" | "candidate";
   username?: string; // From JWT payload
   permissions?: string[];
 }
@@ -25,13 +25,21 @@ export interface RegisterRequest {
   lastName: string;
   nationalId: string;
   password: string;
-  gender: string;
-  maritalStatus: string;
-  dateOfBirth: string;
+  gender?: "MALE" | "FEMALE";
+  maritalStatus?: "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED";
+  dateOfBirth?: string;
   personalEmail: string;
-  mobilePhone: string;
+  mobilePhone?: string;
   homePhone?: string;
-  address: string;
+  address?: {
+    city?: string;
+    streetAddress?: string;
+    country?: string;
+  };
+  departmentId?: string;
+  positionId?: string;
+  resumeUrl?: string;
+  notes?: string;
 }
 
 // Main response from your backend
@@ -56,18 +64,18 @@ export interface AuthResponse {
 }
 
 export enum SystemRole {
-  DEPARTMENT_EMPLOYEE = 'department employee',
-  DEPARTMENT_HEAD = 'department head',
-  HR_MANAGER = 'HR Manager',
-  HR_EMPLOYEE = 'HR Employee',
-  PAYROLL_SPECIALIST = 'Payroll Specialist',
-  PAYROLL_MANAGER = 'Payroll Manager',
-  SYSTEM_ADMIN = 'System Admin',
-  LEGAL_POLICY_ADMIN = 'Legal & Policy Admin',
-  RECRUITER = 'Recruiter',
-  FINANCE_STAFF = 'Finance Staff',
-  JOB_CANDIDATE = 'Job Candidate',
-  HR_ADMIN = 'HR Admin',
+  DEPARTMENT_EMPLOYEE = "department employee",
+  DEPARTMENT_HEAD = "department head",
+  HR_MANAGER = "HR Manager",
+  HR_EMPLOYEE = "HR Employee",
+  PAYROLL_SPECIALIST = "Payroll Specialist",
+  PAYROLL_MANAGER = "Payroll Manager",
+  SYSTEM_ADMIN = "System Admin",
+  LEGAL_POLICY_ADMIN = "Legal & Policy Admin",
+  RECRUITER = "Recruiter",
+  FINANCE_STAFF = "Finance Staff",
+  JOB_CANDIDATE = "Job Candidate",
+  HR_ADMIN = "HR Admin",
 }
 
 // JWT payload from your backend
@@ -76,7 +84,7 @@ export interface JwtPayload {
   sub: string;
   roles: string[];
   permissions: string[];
-  userType: 'employee' | 'candidate';
+  userType: "employee" | "candidate";
   iat?: number;
   exp?: number;
 }
