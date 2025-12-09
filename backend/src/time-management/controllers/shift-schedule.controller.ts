@@ -105,32 +105,6 @@ export class ShiftAndScheduleController {
     return this.shiftScheduleService.getShifts(filters);
   }
 
-  @Get('shift/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD, SystemRole.DEPARTMENT_EMPLOYEE)
-  async getShiftById(@Param('id') id: string) {
-    return this.shiftScheduleService.getShiftById(id);
-  }
-
-  @Put('shift/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
-  async updateShift(
-    @Param('id') id: string,
-    @Body() updateShiftDto: UpdateShiftDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.shiftScheduleService.updateShift(
-      id,
-      updateShiftDto,
-      user.userId,
-    );
-  }
-
-  @Delete('shift/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
-  async deleteShift(@Param('id') id: string) {
-    return this.shiftScheduleService.deleteShift(id);
-  }
-
   @Get('shifts/type/:shiftTypeId')
   @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD)
   async getShiftsByType(@Param('shiftTypeId') shiftTypeId: string) {
@@ -138,49 +112,9 @@ export class ShiftAndScheduleController {
   }
 
   // ===== Shift Assignment Management =====
-  @Post('shift/assign')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
-  async assignShiftToEmployee(
-    @Body() assignShiftToEmployeeDto: AssignShiftToEmployeeDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.shiftScheduleService.assignShiftToEmployee(
-      assignShiftToEmployeeDto,
-      user.userId,
-    );
-  }
-
-  // ===== NEW: Assign Shift to Department =====
-  @Post('shift/assign/department')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
-  async assignShiftToDepartment(
-    @Body() dto: AssignShiftToDepartmentDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.shiftScheduleService.assignShiftToDepartment(dto, user.userId);
-  }
-
-  // ===== NEW: Assign Shift to Position =====
-  @Post('shift/assign/position')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
-  async assignShiftToPosition(
-    @Body() dto: AssignShiftToPositionDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.shiftScheduleService.assignShiftToPosition(dto, user.userId);
-  }
-
-  // ===== NEW: Update Shift Assignment =====
-  @Put('shift/assignment/:id')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
-  async updateShiftAssignment(
-    @Param('id') id: string,
-    @Body() dto: UpdateShiftAssignmentDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.shiftScheduleService.updateShiftAssignment(id, dto, user.userId);
-  }
-
+  // IMPORTANT: These specific routes MUST come before the generic shift/:id route
+  // to prevent route conflicts (e.g., "assignments" being matched as an ID)
+  
   // ===== NEW: Get All Shift Assignments with Filters =====
   @Get('shift/assignments')
   @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD)
@@ -239,6 +173,76 @@ export class ShiftAndScheduleController {
     @CurrentUser() user: any,
   ) {
     return this.shiftScheduleService.getShiftAssignmentStatus(id, user.userId);
+  }
+
+  @Post('shift/assign')
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  async assignShiftToEmployee(
+    @Body() assignShiftToEmployeeDto: AssignShiftToEmployeeDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.shiftScheduleService.assignShiftToEmployee(
+      assignShiftToEmployeeDto,
+      user.userId,
+    );
+  }
+
+  // ===== NEW: Assign Shift to Department =====
+  @Post('shift/assign/department')
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  async assignShiftToDepartment(
+    @Body() dto: AssignShiftToDepartmentDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.shiftScheduleService.assignShiftToDepartment(dto, user.userId);
+  }
+
+  // ===== NEW: Assign Shift to Position =====
+  @Post('shift/assign/position')
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  async assignShiftToPosition(
+    @Body() dto: AssignShiftToPositionDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.shiftScheduleService.assignShiftToPosition(dto, user.userId);
+  }
+
+  // ===== NEW: Update Shift Assignment =====
+  @Put('shift/assignment/:id')
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  async updateShiftAssignment(
+    @Param('id') id: string,
+    @Body() dto: UpdateShiftAssignmentDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.shiftScheduleService.updateShiftAssignment(id, dto, user.userId);
+  }
+
+  // ===== Generic Shift Routes (must come AFTER specific routes) =====
+  @Get('shift/:id')
+  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD, SystemRole.DEPARTMENT_EMPLOYEE)
+  async getShiftById(@Param('id') id: string) {
+    return this.shiftScheduleService.getShiftById(id);
+  }
+
+  @Put('shift/:id')
+  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  async updateShift(
+    @Param('id') id: string,
+    @Body() updateShiftDto: UpdateShiftDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.shiftScheduleService.updateShift(
+      id,
+      updateShiftDto,
+      user.userId,
+    );
+  }
+
+  @Delete('shift/:id')
+  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  async deleteShift(@Param('id') id: string) {
+    return this.shiftScheduleService.deleteShift(id);
   }
 
   // ===== NEW: Renew Shift Assignment =====

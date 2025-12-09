@@ -126,9 +126,21 @@ export class ShiftScheduleService {
       query.active = filters.active;
     }
     if (filters?.shiftType) {
+      // Validate shiftType ID before using it
+      if (!Types.ObjectId.isValid(filters.shiftType)) {
+        throw new BadRequestException('Invalid shiftType ID format');
+      }
       query.shiftType = new Types.ObjectId(filters.shiftType);
     }
-    return this.shiftModel.find(query).populate('shiftType').exec();
+    
+    try {
+      return await this.shiftModel.find(query).populate('shiftType').exec();
+    } catch (error: any) {
+      // If populate fails due to invalid references, return shifts without populate
+      // This can happen if shiftType references are invalid
+      console.warn('Failed to populate shiftType, returning shifts without populate:', error.message);
+      return this.shiftModel.find(query).exec();
+    }
   }
 
   // 9. Get shift by ID
@@ -402,24 +414,74 @@ export class ShiftScheduleService {
   }) {
     const query: any = {};
 
+    // Helper function to validate ObjectId
+    const isValidObjectId = (id: any): boolean => {
+      if (!id) return false;
+      if (Types.ObjectId.isValid(id)) {
+        try {
+          new Types.ObjectId(id);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    };
+
     if (filters.status) {
       query.status = filters.status;
     }
     if (filters.employeeId) {
+      if (!isValidObjectId(filters.employeeId)) {
+        throw new BadRequestException('Invalid employeeId format');
+      }
       query.employeeId = new Types.ObjectId(filters.employeeId);
     }
     if (filters.departmentId) {
+      if (!isValidObjectId(filters.departmentId)) {
+        throw new BadRequestException('Invalid departmentId format');
+      }
       query.departmentId = new Types.ObjectId(filters.departmentId);
     }
     if (filters.positionId) {
+      if (!isValidObjectId(filters.positionId)) {
+        throw new BadRequestException('Invalid positionId format');
+      }
       query.positionId = new Types.ObjectId(filters.positionId);
     }
     if (filters.shiftId) {
+      if (!isValidObjectId(filters.shiftId)) {
+        throw new BadRequestException('Invalid shiftId format');
+      }
       query.shiftId = new Types.ObjectId(filters.shiftId);
     }
 
+    // Filter out assignments with invalid ObjectIds before populating
+    // This prevents errors when trying to populate with invalid reference IDs
+    const assignments = await this.shiftAssignmentModel.find(query).lean().exec();
+    
+    // Filter out assignments with invalid ObjectIds
+    const validAssignments = assignments.filter(assignment => {
+      return (
+        (!assignment.shiftId || isValidObjectId(assignment.shiftId)) &&
+        (!assignment.employeeId || isValidObjectId(assignment.employeeId)) &&
+        (!assignment.departmentId || isValidObjectId(assignment.departmentId)) &&
+        (!assignment.positionId || isValidObjectId(assignment.positionId))
+      );
+    });
+
+    // Convert back to Mongoose documents and populate
+    const assignmentIds = validAssignments.map(a => {
+      // Handle both string and ObjectId _id formats
+      return typeof a._id === 'string' ? new Types.ObjectId(a._id) : a._id;
+    });
+
+    if (assignmentIds.length === 0) {
+      return [];
+    }
+
     return this.shiftAssignmentModel
-      .find(query)
+      .find({ _id: { $in: assignmentIds } })
       .populate('shiftId')
       .populate('employeeId')
       .populate('departmentId')
