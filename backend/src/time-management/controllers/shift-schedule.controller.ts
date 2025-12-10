@@ -114,7 +114,7 @@ export class ShiftAndScheduleController {
   // ===== Shift Assignment Management =====
   // IMPORTANT: These specific routes MUST come before the generic shift/:id route
   // to prevent route conflicts (e.g., "assignments" being matched as an ID)
-  
+
   // ===== NEW: Get All Shift Assignments with Filters =====
   @Get('shift/assignments')
   @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD)

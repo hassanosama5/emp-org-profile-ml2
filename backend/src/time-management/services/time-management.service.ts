@@ -594,7 +594,7 @@ export class TimeManagementService {
     // Validate employeeId if provided - must be a valid ObjectId
     if (employeeId) {
       if (Types.ObjectId.isValid(employeeId)) {
-        query.employeeId = employeeId;
+      query.employeeId = employeeId;
       } else {
         // If employeeId is not a valid ObjectId, return empty array
         // Could also look up by employee number, but for now just return empty
@@ -624,9 +624,9 @@ export class TimeManagementService {
       // Fetch and populate only valid requests
       const populatedRequests = await this.correctionRequestModel
         .find({ _id: { $in: validRequestIds } })
-        .populate('attendanceRecord')
+      .populate('attendanceRecord')
         .populate('employeeId', 'firstName lastName email employeeNumber')
-        .exec();
+      .exec();
 
       return populatedRequests;
     } catch (error: any) {
@@ -764,13 +764,13 @@ export class TimeManagementService {
     try {
       // First get without populate to check validity
       const requestWithoutPopulate = await this.correctionRequestModel.findById(requestId).exec();
-      
+    
       if (!requestWithoutPopulate) {
-        return {
-          success: false,
-          message: 'Correction request not found',
-        };
-      }
+      return {
+        success: false,
+        message: 'Correction request not found',
+      };
+    }
 
       // Validate ObjectIds before populating
       const hasValidEmployeeId = requestWithoutPopulate.employeeId && 
@@ -796,19 +796,19 @@ export class TimeManagementService {
         populateOptions.forEach(opt => query.populate(opt));
         request = await query.exec();
       }
-      
-      return {
-        success: true,
-        request: {
-          id: (request as any)._id,
-          employeeId: request.employeeId,
-          status: request.status,
-          reason: request.reason,
-          attendanceRecord: request.attendanceRecord,
-          createdAt: (request as any).createdAt,
-          updatedAt: (request as any).updatedAt,
-        },
-      };
+    
+    return {
+      success: true,
+      request: {
+        id: (request as any)._id,
+        employeeId: request.employeeId,
+        status: request.status,
+        reason: request.reason,
+        attendanceRecord: request.attendanceRecord,
+        createdAt: (request as any).createdAt,
+        updatedAt: (request as any).updatedAt,
+      },
+    };
     } catch (error: any) {
       console.error('Error loading correction request:', error);
       return {
@@ -943,9 +943,9 @@ export class TimeManagementService {
     try {
       // First, get all pending requests without populate
       const allPendingRequests = await this.correctionRequestModel
-        .find({
-          status: { $in: [CorrectionRequestStatus.SUBMITTED, CorrectionRequestStatus.IN_REVIEW, CorrectionRequestStatus.ESCALATED] },
-        })
+      .find({
+        status: { $in: [CorrectionRequestStatus.SUBMITTED, CorrectionRequestStatus.IN_REVIEW, CorrectionRequestStatus.ESCALATED] },
+      })
         .sort({ createdAt: 1 }) // Oldest first
         .limit(limit * 2) // Get more to account for filtering
         .exec();
@@ -970,36 +970,36 @@ export class TimeManagementService {
       // Fetch and populate only valid requests
       const pendingRequests = await this.correctionRequestModel
         .find({ _id: { $in: validRequestIds } })
-        .populate('employeeId', 'firstName lastName email employeeNumber departmentId')
-        .populate('attendanceRecord')
+      .populate('employeeId', 'firstName lastName email employeeNumber departmentId')
+      .populate('attendanceRecord')
         .sort({ createdAt: 1 })
-        .exec();
-      
-      // Group by status
-      const byStatus = {
-        submitted: pendingRequests.filter(r => r.status === CorrectionRequestStatus.SUBMITTED),
-        inReview: pendingRequests.filter(r => r.status === CorrectionRequestStatus.IN_REVIEW),
-        escalated: pendingRequests.filter(r => r.status === CorrectionRequestStatus.ESCALATED),
-      };
-      
-      return {
-        summary: {
-          total: pendingRequests.length,
-          submitted: byStatus.submitted.length,
-          inReview: byStatus.inReview.length,
-          escalated: byStatus.escalated.length,
-        },
-        requests: pendingRequests.map(req => ({
-          id: (req as any)._id,
-          employee: req.employeeId,
-          status: req.status,
-          reason: req.reason,
-          attendanceRecord: req.attendanceRecord,
-          createdAt: (req as any).createdAt,
-          waitingDays: Math.floor((Date.now() - new Date((req as any).createdAt).getTime()) / (1000 * 60 * 60 * 24)),
-        })),
-        byStatus,
-      };
+      .exec();
+    
+    // Group by status
+    const byStatus = {
+      submitted: pendingRequests.filter(r => r.status === CorrectionRequestStatus.SUBMITTED),
+      inReview: pendingRequests.filter(r => r.status === CorrectionRequestStatus.IN_REVIEW),
+      escalated: pendingRequests.filter(r => r.status === CorrectionRequestStatus.ESCALATED),
+    };
+    
+    return {
+      summary: {
+        total: pendingRequests.length,
+        submitted: byStatus.submitted.length,
+        inReview: byStatus.inReview.length,
+        escalated: byStatus.escalated.length,
+      },
+      requests: pendingRequests.map(req => ({
+        id: (req as any)._id,
+        employee: req.employeeId,
+        status: req.status,
+        reason: req.reason,
+        attendanceRecord: req.attendanceRecord,
+        createdAt: (req as any).createdAt,
+        waitingDays: Math.floor((Date.now() - new Date((req as any).createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+      })),
+      byStatus,
+    };
     } catch (error: any) {
       // If populate fails, return empty result
       console.error('Error loading pending correction requests:', error);
@@ -1275,16 +1275,16 @@ export class TimeManagementService {
     // Validate employeeId if provided - must be a valid ObjectId
     if (filters.employeeId) {
       if (Types.ObjectId.isValid(filters.employeeId)) {
-        query.employeeId = filters.employeeId;
+      query.employeeId = filters.employeeId;
       } else {
         // If employeeId is not a valid ObjectId, return empty array
         return [];
-      }
+    }
     }
     // Validate assignedTo if provided
     if (filters.assignedTo) {
       if (Types.ObjectId.isValid(filters.assignedTo)) {
-        query.assignedTo = filters.assignedTo;
+      query.assignedTo = filters.assignedTo;
       } else {
         return [];
       }
@@ -1321,11 +1321,11 @@ export class TimeManagementService {
       // Fetch and populate only valid exceptions
       const populatedExceptions = await this.timeExceptionModel
         .find({ _id: { $in: validExceptionIds } })
-        .populate('employeeId', 'firstName lastName email employeeNumber')
-        .populate('attendanceRecordId')
-        .populate('assignedTo', 'firstName lastName email')
-        .sort({ createdAt: -1 })
-        .exec();
+      .populate('employeeId', 'firstName lastName email employeeNumber')
+      .populate('attendanceRecordId')
+      .populate('assignedTo', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .exec();
 
       return populatedExceptions;
     } catch (error: any) {
@@ -1355,8 +1355,8 @@ export class TimeManagementService {
       const exceptionWithoutPopulate = await this.timeExceptionModel.findById(id).exec();
 
       if (!exceptionWithoutPopulate) {
-        throw new Error('Time exception not found');
-      }
+      throw new Error('Time exception not found');
+    }
 
       // Validate ObjectIds before populating
       const hasValidEmployeeId = exceptionWithoutPopulate.employeeId && 
@@ -1389,7 +1389,7 @@ export class TimeManagementService {
         exception = await query.exec();
       }
 
-      return exception;
+    return exception;
     } catch (error: any) {
       console.error('Error loading time exception:', error);
       throw new Error('Failed to load time exception: ' + error.message);
@@ -1691,10 +1691,10 @@ export class TimeManagementService {
 
       // First, get all pending exceptions without populate
       const allPendingExceptions = await this.timeExceptionModel
-        .find({
-          assignedTo,
-          status: { $in: [TimeExceptionStatus.OPEN, TimeExceptionStatus.PENDING] },
-        })
+      .find({
+        assignedTo,
+        status: { $in: [TimeExceptionStatus.OPEN, TimeExceptionStatus.PENDING] },
+      })
         .sort({ createdAt: -1 })
         .exec();
 
@@ -1715,10 +1715,10 @@ export class TimeManagementService {
       // Fetch and populate only valid exceptions
       const pendingExceptions = await this.timeExceptionModel
         .find({ _id: { $in: validExceptionIds } })
-        .populate('employeeId', 'firstName lastName email employeeNumber')
-        .populate('attendanceRecordId')
-        .sort({ createdAt: -1 })
-        .exec();
+      .populate('employeeId', 'firstName lastName email employeeNumber')
+      .populate('attendanceRecordId')
+      .sort({ createdAt: -1 })
+      .exec();
 
       return pendingExceptions;
     } catch (error: any) {
@@ -1831,10 +1831,10 @@ export class TimeManagementService {
     try {
       // First, get all overdue exceptions without populate
       const allOverdueExceptions = await this.timeExceptionModel
-        .find({
-          status: { $in: status },
-          createdAt: { $lte: thresholdDate },
-        })
+      .find({
+        status: { $in: status },
+        createdAt: { $lte: thresholdDate },
+      })
         .sort({ createdAt: 1 }) // Oldest first
         .exec();
 
@@ -1858,27 +1858,27 @@ export class TimeManagementService {
       // Fetch and populate only valid exceptions
       const overdueExceptions = await this.timeExceptionModel
         .find({ _id: { $in: validExceptionIds } })
-        .populate('employeeId', 'firstName lastName email employeeNumber')
-        .populate('attendanceRecordId')
-        .populate('assignedTo', 'firstName lastName email')
-        .sort({ createdAt: 1 }) // Oldest first
-        .exec();
-
-      return {
-        thresholdDays,
-        thresholdDate,
-        totalOverdue: overdueExceptions.length,
-        exceptions: overdueExceptions.map(exc => ({
-          id: (exc as any)._id,
-          employeeId: exc.employeeId,
-          type: exc.type,
-          status: exc.status,
-          assignedTo: exc.assignedTo,
-          reason: exc.reason,
-          createdAt: (exc as any).createdAt,
-          daysPending: Math.floor((Date.now() - new Date((exc as any).createdAt).getTime()) / (1000 * 60 * 60 * 24)),
-        })),
-      };
+      .populate('employeeId', 'firstName lastName email employeeNumber')
+      .populate('attendanceRecordId')
+      .populate('assignedTo', 'firstName lastName email')
+      .sort({ createdAt: 1 }) // Oldest first
+      .exec();
+    
+    return {
+      thresholdDays,
+      thresholdDate,
+      totalOverdue: overdueExceptions.length,
+      exceptions: overdueExceptions.map(exc => ({
+        id: (exc as any)._id,
+        employeeId: exc.employeeId,
+        type: exc.type,
+        status: exc.status,
+        assignedTo: exc.assignedTo,
+        reason: exc.reason,
+        createdAt: (exc as any).createdAt,
+        daysPending: Math.floor((Date.now() - new Date((exc as any).createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+      })),
+    };
     } catch (error: any) {
       // If populate fails, return empty result
       console.error('Error loading overdue exceptions:', error);
@@ -3263,15 +3263,15 @@ export class TimeManagementService {
     let expiringAssignments: any[];
     try {
       expiringAssignments = await this.shiftAssignmentModel
-        .find({
-          endDate: { $lte: expiryDateUTC, $gte: nowUTC },
-          status: 'APPROVED',
-        })
-        .populate('employeeId', 'firstName lastName email employeeNumber')
-        .populate('shiftId', 'name startTime endTime')
-        .populate('departmentId', 'name')
-        .populate('positionId', 'name')
-        .exec();
+      .find({
+        endDate: { $lte: expiryDateUTC, $gte: nowUTC },
+        status: 'APPROVED',
+      })
+      .populate('employeeId', 'firstName lastName email employeeNumber')
+      .populate('shiftId', 'name startTime endTime')
+      .populate('departmentId', 'name')
+      .populate('positionId', 'name')
+      .exec();
     } catch (error: any) {
       // If populate fails due to invalid ObjectIds, fetch without populate and handle manually
       const rawAssignments = await this.shiftAssignmentModel

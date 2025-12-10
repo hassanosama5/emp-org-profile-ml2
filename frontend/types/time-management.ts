@@ -530,3 +530,4 @@ export interface ExportReportResponse {
   reportType: 'overtime' | 'lateness' | 'exception';
   generatedAt: Date | string;
 }
+ 
