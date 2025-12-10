@@ -16,6 +16,7 @@ import { Button } from "@/components/shared/ui/Button";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { employeeProfileApi } from "@/lib/api/employee-profile/employee-profile";
 import { isHRAdminOrManager } from "@/lib/utils/role-utils";
+import api from "@/lib/api/client";
 
 export default function ApprovalsPage() {
   const { user } = useAuth();

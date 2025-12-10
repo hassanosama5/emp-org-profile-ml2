@@ -793,16 +793,27 @@ export class EmployeeProfileService {
     if (updatedRequest.status === ProfileChangeStatus.APPROVED) {
       try {
         const raw = request.requestDescription || '';
+        console.log('🔍 Raw request description:', raw);
+
         let payload: any = null;
         if (typeof raw === 'string' && raw.trim().startsWith('{')) {
           try {
             payload = JSON.parse(raw.trim());
-          } catch {
+            console.log('✅ Parsed payload:', payload);
+          } catch (parseError: any) {
+            // Add type annotation
+            console.error('❌ JSON parse error:', parseError.message);
+            console.error('❌ Raw string:', raw);
             payload = null;
           }
+        } else {
+          console.log('⚠️ Request description is not JSON or empty');
         }
 
         if (payload && payload.type && payload.changes) {
+          console.log('📝 Payload has type:', payload.type);
+          console.log('📝 Payload changes:', payload.changes);
+
           const allowedFields = [
             'firstName',
             'middleName',
@@ -817,20 +828,35 @@ export class EmployeeProfileService {
           for (const key of Object.keys(payload.changes)) {
             if (allowedFields.includes(key)) {
               changes[key] = payload.changes[key];
+              console.log(
+                `✅ Adding allowed field "${key}": ${payload.changes[key]}`,
+              );
+            } else {
+              console.log(`⚠️ Skipping non-allowed field "${key}"`);
             }
           }
+
+          console.log('📋 Final changes to apply:', changes);
 
           if (Object.keys(changes).length > 0) {
             const employeeId =
               (updatedRequest.employeeProfileId as any)?._id?.toString() ||
               (updatedRequest.employeeProfileId as any)?.toString();
 
+            console.log('👤 Employee ID to update:', employeeId);
+
             if (employeeId) {
               // Validate specific fields before applying
               if (typeof changes.nationalId === 'string') {
                 const validNat = /^[0-9]{14}$/.test(changes.nationalId);
-                if (!validNat) delete changes.nationalId;
+                if (!validNat) {
+                  console.log(
+                    `❌ Invalid national ID format: ${changes.nationalId}`,
+                  );
+                  delete changes.nationalId;
+                }
               }
+
               if (typeof changes.maritalStatus === 'string') {
                 const allowedStatuses = [
                   'SINGLE',
@@ -838,16 +864,30 @@ export class EmployeeProfileService {
                   'DIVORCED',
                   'WIDOWED',
                 ];
-                if (!allowedStatuses.includes(changes.maritalStatus))
+                if (!allowedStatuses.includes(changes.maritalStatus)) {
+                  console.log(
+                    `❌ Invalid marital status: ${changes.maritalStatus}`,
+                  );
                   delete changes.maritalStatus;
+                }
               }
+
               if (typeof changes.primaryPositionId === 'string') {
-                if (!Types.ObjectId.isValid(changes.primaryPositionId))
+                if (!Types.ObjectId.isValid(changes.primaryPositionId)) {
+                  console.log(
+                    `❌ Invalid position ID: ${changes.primaryPositionId}`,
+                  );
                   delete changes.primaryPositionId;
+                }
               }
+
               if (typeof changes.primaryDepartmentId === 'string') {
-                if (!Types.ObjectId.isValid(changes.primaryDepartmentId))
+                if (!Types.ObjectId.isValid(changes.primaryDepartmentId)) {
+                  console.log(
+                    `❌ Invalid department ID: ${changes.primaryDepartmentId}`,
+                  );
                   delete changes.primaryDepartmentId;
+                }
               }
 
               const nameChanged =
@@ -856,11 +896,15 @@ export class EmployeeProfileService {
                 changes.lastName !== undefined;
 
               if (nameChanged) {
+                console.log('👥 Name change detected');
                 const current = await this.employeeModel
                   .findById(employeeId)
                   .select('firstName middleName lastName')
                   .lean()
                   .exec();
+
+                console.log('📄 Current name:', current);
+
                 const fullName = [
                   (changes.firstName ?? current?.firstName) as
                     | string
@@ -872,18 +916,50 @@ export class EmployeeProfileService {
                 ]
                   .filter(Boolean)
                   .join(' ');
+
                 changes['fullName'] = fullName;
+                console.log('📝 New full name:', fullName);
               }
 
-              await this.employeeModel
+              console.log('🔄 Applying changes to employee:', employeeId);
+              console.log('📄 Final changes object:', changes);
+
+              // Apply the changes
+              const updatedEmployee = await this.employeeModel
                 .findByIdAndUpdate(employeeId, { $set: changes }, { new: true })
                 .select('-password')
                 .exec();
+
+              if (updatedEmployee) {
+                console.log('✅ Employee updated successfully!');
+                console.log('📄 Updated employee:', {
+                  id: updatedEmployee._id,
+                  firstName: updatedEmployee.firstName,
+                  lastName: updatedEmployee.lastName,
+                  fullName: updatedEmployee.fullName,
+                });
+              } else {
+                console.log('❌ Employee not found or update failed');
+              }
+            } else {
+              console.log('❌ No employee ID found');
             }
+          } else {
+            console.log('⚠️ No allowed fields to update after filtering');
           }
+        } else {
+          console.log('⚠️ No valid payload or changes found');
         }
-      } catch {
-        // silently ignore apply failures to avoid breaking approval endpoint
+      } catch (error: any) {
+        // Add type annotation
+        // DON'T SILENTLY IGNORE! Log the error
+        console.error('❌ ERROR applying profile changes:');
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        // Re-throw or handle as needed
+        throw new BadRequestException(
+          `Failed to apply changes: ${error.message}`,
+        );
       }
     }
 

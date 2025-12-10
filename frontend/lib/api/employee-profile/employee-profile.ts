@@ -147,32 +147,53 @@ export const employeeProfileApi = {
     sortBy?: string;
     sortOrder?: "asc" | "desc";
   }) => {
-    const response = await api.get<{
-      data: EmployeeProfile[];
-      meta: {
-        total: number;
-        page: number;
-        limit: number;
-        totalPages: number;
+    console.log("🔍 Calling getAllEmployees with params:", params);
+
+    try {
+      const response = await api.get("/employee-profile", { params });
+
+      console.log("✅ Backend response:", response);
+
+      // Backend returns: { message: "...", data: [...] }
+      // Extract the data array
+      let data = response;
+
+      if (response && typeof response === "object") {
+        // If response has 'data' property
+        if ("data" in response) {
+          data = response.data;
+
+          // If data is nested again (data.data)
+          if (data && typeof data === "object" && "data" in data) {
+            data = data.data;
+          }
+        }
+      }
+
+      // Ensure we return the expected structure
+      const employeesArray = Array.isArray(data) ? data : [];
+
+      return {
+        data: employeesArray,
+        meta: {
+          total: employeesArray.length,
+          page: params?.page || 1,
+          limit: params?.limit || 10,
+          totalPages: Math.ceil(employeesArray.length / (params?.limit || 10)),
+        },
       };
-    }>("/employee-profile", { params });
-
-    // If response already has data property, return it
-    if (response && typeof response === "object" && "data" in response) {
-      return response;
+    } catch (error: any) {
+      console.error("❌ Error in getAllEmployees:", error.message);
+      return {
+        data: [],
+        meta: {
+          total: 0,
+          page: params?.page || 1,
+          limit: params?.limit || 10,
+          totalPages: 0,
+        },
+      };
     }
-
-    // Otherwise extract and format
-    const data = extractData<EmployeeProfile[]>(response);
-    return {
-      data: Array.isArray(data) ? data : [],
-      meta: {
-        total: 0,
-        page: 1,
-        limit: 10,
-        totalPages: 0,
-      },
-    };
   },
 
   updateEmployee: (id: string, data: Partial<EmployeeProfile>) =>

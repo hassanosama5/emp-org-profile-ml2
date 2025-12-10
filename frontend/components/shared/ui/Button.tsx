@@ -1,9 +1,9 @@
-import React from 'react';
-import Link from 'next/link';
+import React from "react";
+import Link from "next/link";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: "primary" | "secondary" | "outline" | "ghost";
+  size?: "sm" | "md" | "lg";
   isLoading?: boolean;
   asChild?: boolean;
 }
@@ -12,30 +12,34 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
       children,
-      variant = 'primary',
-      size = 'md',
+      variant = "primary",
+      size = "md",
       isLoading = false,
       disabled,
-      className = '',
+      className = "",
       asChild = false,
       ...props
     },
-    ref,
+    ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none';
+      "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-600 disabled:border-gray-300 disabled:cursor-not-allowed disabled:opacity-100";
 
     const variants = {
-      primary: 'bg-blue-600 text-white hover:bg-blue-700',
-      secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
-      outline: 'border border-gray-300 bg-transparent hover:bg-gray-50',
-      ghost: 'bg-transparent hover:bg-gray-100',
+      primary:
+        "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-700",
+      secondary:
+        "bg-gray-100 text-gray-900 hover:bg-gray-200 disabled:bg-gray-200 disabled:text-gray-600",
+      outline:
+        "border border-gray-300 bg-white text-gray-900 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-600 disabled:border-gray-300",
+      ghost:
+        "bg-transparent text-gray-900 hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-600",
     };
 
     const sizes = {
-      sm: 'h-9 px-3 text-sm',
-      md: 'h-10 px-4 text-sm',
-      lg: 'h-11 px-6 text-base',
+      sm: "h-9 px-3 text-sm",
+      md: "h-10 px-4 text-sm",
+      lg: "h-11 px-6 text-base",
     };
 
     const buttonClasses = `${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`;
@@ -45,10 +49,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         children as React.ReactElement,
         {
           className: `${
-            (children as React.ReactElement<any>).props?.className || ''
+            (children as React.ReactElement<any>).props?.className || ""
           } ${buttonClasses}`,
           ref,
-        } as any,
+        } as any
       );
     }
 
@@ -83,7 +87,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {children}
       </button>
     );
-  },
+  }
 );
 
-Button.displayName = 'Button';
+Button.displayName = "Button";

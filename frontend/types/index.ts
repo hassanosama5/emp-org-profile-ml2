@@ -213,3 +213,37 @@ export interface ChangeRequestInput {
   subject?: string;
   details?: string;
 }
+
+// Add these enums to your existing types/index.ts file
+
+export enum ContractType {
+  FULL_TIME_CONTRACT = "FULL_TIME_CONTRACT",
+  PART_TIME_CONTRACT = "PART_TIME_CONTRACT",
+}
+
+export enum WorkType {
+  FULL_TIME = "FULL_TIME",
+  PART_TIME = "PART_TIME",
+}
+
+export enum EmployeeStatus {
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+  ON_LEAVE = "ON_LEAVE",
+  SUSPENDED = "SUSPENDED",
+  RETIRED = "RETIRED",
+  PROBATION = "PROBATION",
+  TERMINATED = "TERMINATED",
+}
+
+export enum Gender {
+  MALE = "MALE",
+  FEMALE = "FEMALE",
+}
+
+export enum MaritalStatus {
+  SINGLE = "SINGLE",
+  MARRIED = "MARRIED",
+  DIVORCED = "DIVORCED",
+  WIDOWED = "WIDOWED",
+}
