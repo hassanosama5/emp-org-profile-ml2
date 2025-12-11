@@ -17,6 +17,7 @@ import {
 } from '../dtos/notification-and-sync.dtos';
 import { LeavesService } from '../../leaves/leaves.service';
 import { PayrollExecutionService } from '../../payroll-execution/payroll-execution.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { Inject, forwardRef } from '@nestjs/common';
 import { Types } from 'mongoose';
 
@@ -40,6 +41,7 @@ export class NotificationService {
     private leavesService: LeavesService,
     @Inject(forwardRef(() => PayrollExecutionService))
     private payrollExecutionService: PayrollExecutionService,
+    private unifiedNotificationsService: NotificationsService,
   ) {}
 
   // ===== NOTIFICATIONS =====
@@ -920,6 +922,7 @@ export class NotificationService {
   /**
    * Send shift expiry notification to HR Admin
    * Triggered when a shift assignment is nearing its end date
+   * Now uses unified notification service
    */
   async sendShiftExpiryNotification(
     recipientId: string,
@@ -929,17 +932,14 @@ export class NotificationService {
     daysRemaining: number,
     currentUserId: string,
   ) {
-    const message = `Shift assignment ${shiftAssignmentId} for employee ${employeeId} is expiring in ${daysRemaining} days (${endDate.toISOString().split('T')[0]}). Please renew or reassign.`;
-    
-    const notification = new this.notificationLogModel({
-      to: recipientId,
-      type: 'SHIFT_EXPIRY_ALERT',
-      message,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
-    });
-    
-    await notification.save();
+    const notification = await this.unifiedNotificationsService.sendShiftExpiryNotification(
+      recipientId,
+      shiftAssignmentId,
+      employeeId,
+      endDate,
+      daysRemaining,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'SHIFT_EXPIRY_NOTIFICATION_SENT',
@@ -959,6 +959,7 @@ export class NotificationService {
   /**
    * Send bulk shift expiry notifications to HR Admins
    * Used when running batch expiry checks
+   * Now uses unified notification service
    */
   async sendBulkShiftExpiryNotifications(
     hrAdminIds: string[],
@@ -972,26 +973,11 @@ export class NotificationService {
     }>,
     currentUserId: string,
   ) {
-    const notifications: any[] = [];
-    
-    for (const hrAdminId of hrAdminIds) {
-      // Create summary message for HR Admin
-      const message = `${expiringAssignments.length} shift assignment(s) expiring soon:\n` +
-        expiringAssignments
-          .map(a => `- ${a.employeeName || a.employeeId}: ${a.shiftName || 'Shift'} expires in ${a.daysRemaining} days`)
-          .join('\n');
-      
-      const notification = new this.notificationLogModel({
-        to: hrAdminId,
-        type: 'SHIFT_EXPIRY_BULK_ALERT',
-        message,
-        createdBy: currentUserId,
-        updatedBy: currentUserId,
-      });
-      
-      await notification.save();
-      notifications.push(notification);
-    }
+    const result = await this.unifiedNotificationsService.sendBulkShiftExpiryNotifications(
+      hrAdminIds,
+      expiringAssignments,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'SHIFT_EXPIRY_BULK_NOTIFICATIONS_SENT',
@@ -1003,33 +989,21 @@ export class NotificationService {
       currentUserId,
     );
     
-    return {
-      notificationsSent: notifications.length,
-      notifications,
-    };
+    return result;
   }
 
   /**
    * Get shift expiry notifications for an HR Admin
+   * Now uses unified notification service
    */
   async getShiftExpiryNotifications(hrAdminId: string, currentUserId: string) {
-    const notifications = await this.notificationLogModel
-      .find({
-        to: hrAdminId,
-        type: { $in: ['SHIFT_EXPIRY_ALERT', 'SHIFT_EXPIRY_BULK_ALERT'] },
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-    
-    return {
-      count: notifications.length,
-      notifications,
-    };
+    return this.unifiedNotificationsService.getShiftExpiryNotifications(hrAdminId);
   }
 
   /**
    * Send renewal confirmation notification
    * Sent when a shift assignment is successfully renewed
+   * Now uses unified notification service
    */
   async sendShiftRenewalConfirmation(
     recipientId: string,
@@ -1037,17 +1011,12 @@ export class NotificationService {
     newEndDate: Date,
     currentUserId: string,
   ) {
-    const message = `Shift assignment ${shiftAssignmentId} has been renewed. New end date: ${newEndDate.toISOString().split('T')[0]}.`;
-    
-    const notification = new this.notificationLogModel({
-      to: recipientId,
-      type: 'SHIFT_RENEWAL_CONFIRMATION',
-      message,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
-    });
-    
-    await notification.save();
+    const notification = await this.unifiedNotificationsService.sendShiftRenewalConfirmation(
+      recipientId,
+      shiftAssignmentId,
+      newEndDate,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'SHIFT_RENEWAL_NOTIFICATION_SENT',
@@ -1065,6 +1034,7 @@ export class NotificationService {
   /**
    * Send archive notification
    * Sent when a shift assignment is archived/expired
+   * Now uses unified notification service
    */
   async sendShiftArchiveNotification(
     recipientId: string,
@@ -1072,17 +1042,12 @@ export class NotificationService {
     employeeId: string,
     currentUserId: string,
   ) {
-    const message = `Shift assignment ${shiftAssignmentId} for employee ${employeeId} has been archived/expired. Consider creating a new assignment if needed.`;
-    
-    const notification = new this.notificationLogModel({
-      to: recipientId,
-      type: 'SHIFT_ARCHIVE_NOTIFICATION',
-      message,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
-    });
-    
-    await notification.save();
+    const notification = await this.unifiedNotificationsService.sendShiftArchiveNotification(
+      recipientId,
+      shiftAssignmentId,
+      employeeId,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'SHIFT_ARCHIVE_NOTIFICATION_SENT',
@@ -1099,41 +1064,10 @@ export class NotificationService {
 
   /**
    * Get all shift-related notifications (expiry, renewal, archive)
+   * Now uses unified notification service
    */
   async getAllShiftNotifications(hrAdminId: string, currentUserId: string) {
-    const notifications = await this.notificationLogModel
-      .find({
-        to: hrAdminId,
-        type: {
-          $in: [
-            'SHIFT_EXPIRY_ALERT',
-            'SHIFT_EXPIRY_BULK_ALERT',
-            'SHIFT_RENEWAL_CONFIRMATION',
-            'SHIFT_ARCHIVE_NOTIFICATION',
-          ],
-        },
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-    
-    // Group by type for better organization
-    const grouped = {
-      expiryAlerts: notifications.filter(n => 
-        n.type === 'SHIFT_EXPIRY_ALERT' || n.type === 'SHIFT_EXPIRY_BULK_ALERT'
-      ),
-      renewalConfirmations: notifications.filter(n => 
-        n.type === 'SHIFT_RENEWAL_CONFIRMATION'
-      ),
-      archiveNotifications: notifications.filter(n => 
-        n.type === 'SHIFT_ARCHIVE_NOTIFICATION'
-      ),
-    };
-    
-    return {
-      totalCount: notifications.length,
-      grouped,
-      all: notifications,
-    };
+    return this.unifiedNotificationsService.getAllShiftNotifications(hrAdminId);
   }
 
   // ===== US8: MISSED PUNCH MANAGEMENT & ALERTS =====
@@ -1142,6 +1076,7 @@ export class NotificationService {
   /**
    * Send missed punch alert to employee
    * BR-TM-14: Notify employee when a missed punch is detected
+   * Now uses unified notification service
    */
   async sendMissedPunchAlertToEmployee(
     employeeId: string,
@@ -1150,17 +1085,13 @@ export class NotificationService {
     date: Date,
     currentUserId: string,
   ) {
-    const message = `Missed ${missedPunchType === 'CLOCK_IN' ? 'clock-in' : 'clock-out'} detected on ${date.toISOString().split('T')[0]}. Please submit a correction request.`;
-    
-    const notification = new this.notificationLogModel({
-      to: employeeId,
-      type: 'MISSED_PUNCH_EMPLOYEE_ALERT',
-      message,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
-    });
-    
-    await notification.save();
+    const notification = await this.unifiedNotificationsService.sendMissedPunchAlertToEmployee(
+      employeeId,
+      attendanceRecordId,
+      missedPunchType,
+      date,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'MISSED_PUNCH_EMPLOYEE_ALERT_SENT',
@@ -1179,6 +1110,7 @@ export class NotificationService {
   /**
    * Send missed punch alert to manager/line manager
    * BR-TM-14: Notify manager for correction review
+   * Now uses unified notification service
    */
   async sendMissedPunchAlertToManager(
     managerId: string,
@@ -1189,17 +1121,15 @@ export class NotificationService {
     date: Date,
     currentUserId: string,
   ) {
-    const message = `Employee ${employeeName} (${employeeId}) has a missed ${missedPunchType === 'CLOCK_IN' ? 'clock-in' : 'clock-out'} on ${date.toISOString().split('T')[0]}. Pending correction review.`;
-    
-    const notification = new this.notificationLogModel({
-      to: managerId,
-      type: 'MISSED_PUNCH_MANAGER_ALERT',
-      message,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
-    });
-    
-    await notification.save();
+    const notification = await this.unifiedNotificationsService.sendMissedPunchAlertToManager(
+      managerId,
+      employeeId,
+      employeeName,
+      attendanceRecordId,
+      missedPunchType,
+      date,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'MISSED_PUNCH_MANAGER_ALERT_SENT',
@@ -1220,6 +1150,7 @@ export class NotificationService {
   /**
    * Send bulk missed punch alerts
    * BR-TM-14: Efficiently notify multiple employees/managers
+   * Now uses unified notification service
    */
   async sendBulkMissedPunchAlerts(
     alerts: Array<{
@@ -1232,127 +1163,51 @@ export class NotificationService {
     }>,
     currentUserId: string,
   ) {
-    const notifications: any[] = [];
-    
-    for (const alert of alerts) {
-      // Send to employee
-      const employeeNotification = await this.sendMissedPunchAlertToEmployee(
-        alert.employeeId,
-        alert.attendanceRecordId,
-        alert.missedPunchType,
-        alert.date,
-        currentUserId,
-      );
-      notifications.push({ type: 'employee', notification: employeeNotification });
-      
-      // Send to manager if provided
-      if (alert.managerId) {
-        const managerNotification = await this.sendMissedPunchAlertToManager(
-          alert.managerId,
-          alert.employeeId,
-          alert.employeeName || 'Unknown Employee',
-          alert.attendanceRecordId,
-          alert.missedPunchType,
-          alert.date,
-          currentUserId,
-        );
-        notifications.push({ type: 'manager', notification: managerNotification });
-      }
-    }
+    const result = await this.unifiedNotificationsService.sendBulkMissedPunchAlerts(
+      alerts,
+      currentUserId,
+    );
     
     await this.logTimeManagementChange(
       'BULK_MISSED_PUNCH_ALERTS_SENT',
       {
         alertCount: alerts.length,
-        notificationsSent: notifications.length,
+        notificationsSent: result.notificationsSent,
       },
       currentUserId,
     );
     
-    return {
-      alertsProcessed: alerts.length,
-      notificationsSent: notifications.length,
-      notifications,
-    };
+    return result;
   }
 
   /**
    * Get missed punch notifications for an employee
    * BR-TM-14: Employee can view their missed punch alerts
+   * Now uses unified notification service
    */
   async getMissedPunchNotificationsByEmployee(employeeId: string, currentUserId: string) {
-    const notifications = await this.notificationLogModel
-      .find({
-        to: employeeId,
-        type: 'MISSED_PUNCH_EMPLOYEE_ALERT',
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-    
-    return {
-      count: notifications.length,
-      notifications,
-    };
+    return this.unifiedNotificationsService.getMissedPunchNotificationsByEmployee(employeeId);
   }
 
   /**
    * Get missed punch notifications for a manager
    * BR-TM-14: Manager can view pending missed punch corrections
+   * Now uses unified notification service
    */
   async getMissedPunchNotificationsByManager(managerId: string, currentUserId: string) {
-    const notifications = await this.notificationLogModel
-      .find({
-        to: managerId,
-        type: 'MISSED_PUNCH_MANAGER_ALERT',
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-    
-    return {
-      count: notifications.length,
-      notifications,
-    };
+    return this.unifiedNotificationsService.getMissedPunchNotificationsByManager(managerId);
   }
 
   /**
    * Get all missed punch notifications (for HR Admin)
    * BR-TM-14: HR Admin oversight of missed punch tracking
+   * Now uses unified notification service
    */
   async getAllMissedPunchNotifications(
     filters: { startDate?: Date; endDate?: Date },
     currentUserId: string,
   ) {
-    const query: any = {
-      type: { $in: ['MISSED_PUNCH_EMPLOYEE_ALERT', 'MISSED_PUNCH_MANAGER_ALERT'] },
-    };
-    
-    if (filters.startDate && filters.endDate) {
-      query.createdAt = {
-        $gte: this.convertDateToUTCStart(filters.startDate),
-        $lte: this.convertDateToUTCEnd(filters.endDate),
-      };
-    }
-    
-    const notifications = await this.notificationLogModel
-      .find(query)
-      .sort({ createdAt: -1 })
-      .exec();
-    
-    // Group by type
-    const employeeAlerts = notifications.filter(n => n.type === 'MISSED_PUNCH_EMPLOYEE_ALERT');
-    const managerAlerts = notifications.filter(n => n.type === 'MISSED_PUNCH_MANAGER_ALERT');
-    
-    return {
-      total: notifications.length,
-      employeeAlerts: {
-        count: employeeAlerts.length,
-        notifications: employeeAlerts,
-      },
-      managerAlerts: {
-        count: managerAlerts.length,
-        notifications: managerAlerts,
-      },
-    };
+    return this.unifiedNotificationsService.getAllMissedPunchNotifications(filters);
   }
 
   /**

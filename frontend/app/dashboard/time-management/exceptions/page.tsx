@@ -84,7 +84,13 @@ export default function TimeExceptionsPage() {
       setLoadingOverdue(true);
       const data = await timeManagementApi.getOverdueExceptions(thresholdDays);
       setOverdueExceptions(data);
-      setExceptions(data.exceptions || []);
+      // Map the response to TimeException array, providing default for attendanceRecordId
+      const mappedExceptions: TimeException[] = (data.exceptions || []).map((exc: any) => ({
+        ...exc,
+        _id: exc.id || exc._id,
+        attendanceRecordId: exc.attendanceRecordId || '',
+      }));
+      setExceptions(mappedExceptions);
     } catch (error: any) {
       showToast(error.message || "Failed to load overdue exceptions", "error");
       setOverdueExceptions(null);

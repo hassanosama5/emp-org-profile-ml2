@@ -14,6 +14,7 @@ import { EmployeeProfileModule } from '../employee-profile/employee-profile.modu
 import { forwardRef } from '@nestjs/common';
 import { TimeManagementModule } from '../time-management/time-management.module';
 import { EmployeeProfile, EmployeeProfileSchema } from '../employee-profile/models/employee-profile.schema';
+import { NotificationsModule } from '../notifications/notifications.module';
 // import { PositionAssignment, PositionAssignmentSchema } from '../organization-structure/models/position-assignment.schema';
 // import { Position, PositionSchema } from '../organization-structure/models/position.schema';
 
@@ -34,6 +35,7 @@ import { EmployeeProfile, EmployeeProfileSchema } from '../employee-profile/mode
     ]),
     EmployeeProfileModule,
     forwardRef(() => TimeManagementModule),
+    NotificationsModule,
   ],
   controllers: [LeaveController],
   providers: [LeavesService],

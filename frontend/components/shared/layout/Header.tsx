@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/use-auth";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 export default function Header() {
   const router = useRouter();
@@ -30,6 +31,9 @@ export default function Header() {
               >
                 Dashboard
               </Link>
+
+              {/* Notification Bell */}
+              <NotificationBell />
 
               <span className="text-sm text-gray-600">
                 Welcome, {user?.fullName || user?.firstName}

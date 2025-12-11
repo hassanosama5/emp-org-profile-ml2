@@ -93,20 +93,6 @@ export default function TimeManagementPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Shift Expiry Notifications</CardTitle>
-            <CardDescription>View notifications and check for shift assignments nearing expiry</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link 
-              href="/dashboard/time-management/notifications/expiry" 
-              className="text-blue-600 hover:underline font-medium"
-            >
-              View Notifications →
-            </Link>
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>

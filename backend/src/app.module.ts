@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config'; // Add ConfigService
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -13,6 +14,7 @@ import { LeavesModule } from './leaves/leaves.module';
 import { PayrollConfigurationModule } from './payroll-configuration/payroll-configuration.module';
 import { PayrollExecutionModule } from './payroll-execution/payroll-execution.module';
 import { PayrollTrackingModule } from './payroll-tracking/payroll-tracking.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -22,6 +24,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     // ✅ FIXED: Use forRootAsync to access ConfigService
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -41,6 +44,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     PayrollConfigurationModule,
     PayrollExecutionModule,
     PayrollTrackingModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

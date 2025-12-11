@@ -49,12 +49,14 @@ import { NotificationService } from './services/notification.service';
 import { PolicyConfigService } from './services/policy-config.service';
 import { LeavesModule } from '../leaves/leaves.module';
 import { PayrollExecutionModule } from '../payroll-execution/payroll-execution.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { forwardRef } from '@nestjs/common';
 
 @Module({
   imports: [
     forwardRef(() => LeavesModule),
     forwardRef(() => PayrollExecutionModule),
+    NotificationsModule,
     MongooseModule.forFeature([
       { name: NotificationLog.name, schema: NotificationLogSchema },
       {
