@@ -49,12 +49,6 @@ export default function Header() {
                   Employees
                 </Link>
 
-              {/* Notification Bell */}
-              <NotificationBell />
-
-              <span className="text-sm text-gray-600">
-                Welcome, {user?.fullName || user?.firstName}
-              </span>
                 <Link
                   href="/dashboard/employee-profile/admin/approvals"
                   className={navItemClass(
@@ -132,6 +126,9 @@ export default function Header() {
                 My Profile
               </Link>
             )}
+
+            {/* Notification Bell - Available for All Users */}
+            <NotificationBell />
 
             <span className="text-sm text-gray-600">
               Welcome, {user?.fullName || user?.firstName}

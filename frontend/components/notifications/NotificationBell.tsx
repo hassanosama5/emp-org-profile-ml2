@@ -118,7 +118,7 @@ export default function NotificationBell() {
                         onClick={(e) => handleDelete(e, notif._id)}
                         className="ml-1 text-gray-400 hover:text-red-600 transition-colors"
                       >
-                        🗑️
+                        ✕
                       </button>
                     </div>
                   </div>
