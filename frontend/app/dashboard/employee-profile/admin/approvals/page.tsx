@@ -334,11 +334,9 @@ export default function ApprovalsPage() {
                           request.id || request._id || `REQ-${index + 1}`;
                         const employeeName =
                           request.employee?.fullName ||
-                          request.employeeName ||
                           "Unknown Employee";
                         const employeeId =
                           request.employee?.employeeNumber ||
-                          request.employeeNumber ||
                           "N/A";
                         const description =
                           request.requestDescription || "No description";
@@ -407,16 +405,16 @@ export default function ApprovalsPage() {
                               )}
                             </td>
                             <td className="py-4 px-4">
-                              {request.createdAt ? (
+                              {request.submittedAt ? (
                                 <div className="text-sm">
                                   <p className="text-gray-600">
                                     {new Date(
-                                      request.createdAt
+                                      request.submittedAt
                                     ).toLocaleDateString()}
                                   </p>
                                   <p className="text-gray-400 text-xs">
                                     {new Date(
-                                      request.createdAt
+                                      request.submittedAt
                                     ).toLocaleTimeString([], {
                                       hour: "2-digit",
                                       minute: "2-digit",

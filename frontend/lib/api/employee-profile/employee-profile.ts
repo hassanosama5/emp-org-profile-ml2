@@ -266,7 +266,7 @@ export const employeeProfileApi = {
     const response = await api.get<{ message: string; data: string }>(
       `/employee-profile/${id}/pdf`
     );
-    return response.data; // This should be the base64 string
+    return (response.data as any).data || response.data; // This should be the base64 string
   },
 
   // Update contact info

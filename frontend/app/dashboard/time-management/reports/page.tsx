@@ -513,7 +513,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <Toast toast={toast} onClose={hideToast} />
+      <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={hideToast} />
     </div>
   );
 }

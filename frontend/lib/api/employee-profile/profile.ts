@@ -130,7 +130,7 @@ export const employeeProfileApi = {
 
     // Handle paginated response
     if (response && typeof response === "object" && "data" in response) {
-      return response as {
+      return response as unknown as {
         data: EmployeeProfile[];
         meta: {
           total: number;

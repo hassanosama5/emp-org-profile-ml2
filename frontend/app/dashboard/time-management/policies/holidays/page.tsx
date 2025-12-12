@@ -86,9 +86,9 @@ export default function HolidaysPage() {
   // Helper functions to get display names
   const getShiftDisplay = (shiftId: string): string => {
     if (!shiftId) return "Select a shift...";
-    const shift = shifts.find((s) => (s._id || s.id) === shiftId);
+    const shift = shifts.find((s) => (s._id || (s as any).id) === shiftId);
     if (!shift) return shiftId;
-    return shift.name || shift.shiftType?.name || shiftId;
+    return shift.name || (typeof shift.shiftType === 'object' && shift.shiftType !== null ? (shift.shiftType as any).name : shift.shiftType) || shiftId;
   };
 
   const getDepartmentDisplay = (deptId: string): string => {
@@ -140,8 +140,8 @@ export default function HolidaysPage() {
       }
       
       // Handle different response formats
-      const finalShifts = Array.isArray(shiftsData) ? shiftsData : (shiftsData?.data || shiftsData?.shifts || []);
-      const finalDepartments = Array.isArray(departmentsData) ? departmentsData : (departmentsData?.data || departmentsData?.departments || []);
+      const finalShifts = Array.isArray(shiftsData) ? shiftsData : ((shiftsData as any)?.data || (shiftsData as any)?.shifts || []);
+      const finalDepartments = Array.isArray(departmentsData) ? departmentsData : ((departmentsData as any)?.data || (departmentsData as any)?.departments || []);
       
       console.log("Final shifts array:", finalShifts);
       console.log("Final departments array:", finalDepartments);

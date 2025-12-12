@@ -30,7 +30,7 @@ export default function TeamPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const members = await employeeProfileApi.getTeamMembers();
+        const members = await employeeProfileApi.getMyTeam();
         setTeam(members);
       } catch (error: any) {
         showToast(error.message || "Failed to load team", "error");

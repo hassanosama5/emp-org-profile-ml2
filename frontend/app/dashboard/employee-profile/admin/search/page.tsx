@@ -110,11 +110,11 @@ export default function EmployeeManagementPage() {
           ) {
             departmentsData = deptResponse.data.data;
             console.log("✅ Found data in response.data.data");
-          } else if (Array.isArray(deptResponse.items)) {
-            departmentsData = deptResponse.items;
+          } else if (Array.isArray((deptResponse as any).items)) {
+            departmentsData = (deptResponse as any).items;
             console.log("✅ Found data in response.items");
-          } else if (Array.isArray(deptResponse.content)) {
-            departmentsData = deptResponse.content;
+          } else if (Array.isArray((deptResponse as any).content)) {
+            departmentsData = (deptResponse as any).content;
             console.log("✅ Found data in response.content");
           }
         }
@@ -276,8 +276,8 @@ export default function EmployeeManagementPage() {
       },
 
       // Banking
-      bankName: employee.bankName || "",
-      bankAccountNumber: employee.bankAccountNumber || "",
+      bankName: (employee as any).bankName || "",
+      bankAccountNumber: (employee as any).bankAccountNumber || "",
 
       // Biography
       biography: employee.biography || "",
@@ -1360,7 +1360,7 @@ export default function EmployeeManagementPage() {
                               className="flex items-center gap-1"
                               variant={
                                 editingId === (employee.id || employee._id)
-                                  ? "default"
+                                  ? "primary"
                                   : "outline"
                               }
                             >
