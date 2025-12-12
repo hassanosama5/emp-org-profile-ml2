@@ -474,12 +474,15 @@ export class LeavesService {
     }
 
     // Validate balance and overlaps using ObjectIds (cast to any for existing helper)
+    // Only validate balance if the leave type is deductible
     const validationResult = await this.validateLeaveRequest(
       employeeObjectId as any,
       leaveTypeObjectId as any,
       startDate,
       endDate,
       durationDays,
+      undefined,
+      leaveTypeDoc.deductible !== false, // Only check balance if deductible
     );
     if (!validationResult.isValid) {
       throw new Error(validationResult.errorMessage);
@@ -505,17 +508,22 @@ export class LeavesService {
     });
 
     // Update pending balance atomically using ObjectIds
-    const entitlement = await this.getLeaveEntitlement(
-      employeeObjectId as any,
-      leaveTypeObjectId as any,
-    );
-    await this.leaveEntitlementModel
-      .findByIdAndUpdate(
-        entitlement._id,
-        { $inc: { pending: durationDays } },
-        { new: true },
-      )
-      .exec();
+    // Only increment pending if the leave type is deductible (non-deductible leaves don't reserve or deduct from balance)
+    if (leaveTypeDoc.deductible !== false) {
+      const entitlement = await this.getLeaveEntitlement(
+        employeeObjectId as any,
+        leaveTypeObjectId as any,
+      );
+      await this.leaveEntitlementModel
+        .findByIdAndUpdate(
+          entitlement._id,
+          { $inc: { pending: durationDays } },
+          { new: true },
+        )
+        .exec();
+    }
+    // Note: Non-deductible leaves (deductible = false) don't affect balance at all
+    // They are tracked in the leave request but don't reserve or deduct from entitlement balance
 
     const savedLeaveRequest = await leaveRequest.save();
     
@@ -533,15 +541,19 @@ export class LeavesService {
     endDate: Date,
     durationDays: number,
     excludeRequestId?: string, // 👈 NEW optional param
+    checkBalance: boolean = true, // 👈 NEW param to control balance checking
   ): Promise<{ isValid: boolean; errorMessage?: string }> {
-    const entitlement = await this.getLeaveEntitlement(employeeId, leaveTypeId);
-    const availableBalance = entitlement.remaining - entitlement.pending;
+    // Only check balance if checkBalance is true (for deductible leave types)
+    if (checkBalance) {
+      const entitlement = await this.getLeaveEntitlement(employeeId, leaveTypeId);
+      const availableBalance = entitlement.remaining - entitlement.pending;
 
-    if (availableBalance < durationDays) {
-      return {
-        isValid: false,
-        errorMessage: `Insufficient leave balance. Available: ${availableBalance} days, Requested: ${durationDays} days.`,
-      };
+      if (availableBalance < durationDays) {
+        return {
+          isValid: false,
+          errorMessage: `Insufficient leave balance. Available: ${availableBalance} days, Requested: ${durationDays} days.`,
+        };
+      }
     }
 
     // Build base query
@@ -1494,9 +1506,6 @@ export class LeavesService {
       );
     }
 
-    const lastApproval =
-      leaveRequest.approvalFlow[leaveRequest.approvalFlow.length - 1];
-
     // Check if already finalized by HR Manager
     const alreadyFinalized = leaveRequest.approvalFlow.some(
       (approval) =>
@@ -1510,12 +1519,17 @@ export class LeavesService {
       );
     }
 
-    // Check if the last approval is from Department Head (not HR Manager)
-    if (
-      !lastApproval ||
-      lastApproval.role !== 'Departement_Head' ||
-      lastApproval.status !== LeaveStatus.APPROVED
-    ) {
+    // Check if there's a Department Head approval in the approval flow
+    // This allows finalization even if HR Manager overrode (last approval might be HR Manager)
+    const hasDepartmentHeadApproval = leaveRequest.approvalFlow.some(
+      (approval) =>
+        (approval.role === 'Departement_Head' || 
+         approval.role === 'Department Head' ||
+         approval.role?.toLowerCase().includes('department')) &&
+        approval.status === LeaveStatus.APPROVED,
+    );
+
+    if (!hasDepartmentHeadApproval) {
       throw new BadRequestException(
         'Leave request must be approved by Department Head before HR finalization.',
       );
@@ -1665,19 +1679,53 @@ export class LeavesService {
       leaveRequest.leaveTypeId.toString(),
     );
 
-    // BR 32: Proper balance calculation - move from pending to taken atomically
-    const updated = await this.leaveEntitlementModel
-      .findByIdAndUpdate(
-        entitlement._id,
-        {
-          $inc: {
-            pending: -leaveRequest.durationDays,
-            taken: leaveRequest.durationDays,
-          },
-        },
-        { new: true },
-      )
+    // Get leave type to check if it's deductible
+    const leaveType = await this.leaveTypeModel
+      .findById(leaveRequest.leaveTypeId)
       .exec();
+
+    if (!leaveType) {
+      throw new Error(`Leave type with ID ${leaveRequest.leaveTypeId} not found`);
+    }
+
+    // BR 32: Proper balance calculation - move from pending to taken atomically
+    // Only deduct from balance if the leave type is deductible
+    // Non-deductible leaves (e.g., unpaid leave, special leave) don't count against balance
+    
+    let updated;
+    if (leaveType.deductible !== false) {
+      // For deductible leaves: decrement pending and increment taken
+      updated = await this.leaveEntitlementModel
+        .findByIdAndUpdate(
+          entitlement._id,
+          {
+            $inc: {
+              pending: -leaveRequest.durationDays,
+              taken: leaveRequest.durationDays,
+            },
+          },
+          { new: true },
+        )
+        .exec();
+
+      if (!updated) {
+        throw new Error('Failed to update entitlement');
+      }
+    } else {
+      // For non-deductible leaves: do nothing (they were never added to pending, so nothing to remove)
+      // Just recalculate remaining in case other deductible leaves affected it
+      updated = await this.leaveEntitlementModel
+        .findById(entitlement._id)
+        .exec();
+      
+      if (!updated) {
+        throw new Error('Failed to find entitlement');
+      }
+    }
+
+    // Recalculate remaining using helper method
+    updated.remaining = this.calculateRemaining(updated);
+    await updated.save();
 
     if (!updated) {
       throw new Error('Failed to update entitlement');

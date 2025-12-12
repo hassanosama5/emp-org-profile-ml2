@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { LeaveController } from './leaves.controller';
 import { LeavesService } from './leaves.service';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LeaveType, LeaveTypeSchema } from './models/leave-type.schema';
 import { LeaveRequest, LeaveRequestSchema } from './models/leave-request.schema';
 import { LeavePolicy, LeavePolicySchema } from './models/leave-policy.schema';

@@ -10,7 +10,17 @@ import {
   UseGuards,
   Query,
   Req,
+  UseInterceptors,
+  UploadedFile,
+  Res,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { LeavesService } from './leaves.service';
 import { CreateLeavePolicyDto } from './dto/CreateLeavePolicy.dto';
 import { UpdateLeavePolicyDto } from './dto/UpdateLeavePolicy.dto';
@@ -249,7 +259,13 @@ export class LeaveController {
   // Leave Type Endpoints
   @Get('types')
   @UseGuards(RolesGuard)
-  @Roles(SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.HR_EMPLOYEE)
+  @Roles(
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD
+  )
   async getLeaveTypes() {
     return await this.leavesService.getLeaveTypes();
   }
@@ -616,6 +632,118 @@ export class LeaveController {
       delegateDto.delegateId,
       delegateDto.startDate,
       delegateDto.endDate,
+    );
+  }
+
+  // NEW CODE: Upload attachment for leave request
+  @Post('attachment/upload')
+  @UseGuards(RolesGuard)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+  )
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './src/leaves/uploads/attachments',
+        filename: (req, file, cb) => {
+          const fileExtension = file.originalname.split('.').pop();
+          const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          const filename = `${uniqueSuffix}.${fileExtension}`;
+          cb(null, filename);
+        },
+      }),
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+      fileFilter: (req: any, file: any, cb: any) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Invalid file type'), false);
+        }
+      },
+    }),
+  )
+  async uploadAttachment(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return await this.leavesService.uploadAttachment(file);
+  }
+
+  // NEW CODE: Download attachment
+  @Get('attachments/:id/download')
+  @UseGuards(RolesGuard)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+  )
+  async downloadAttachment(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const attachment = await this.leavesService.getAttachmentById(id);
+    if (!attachment) {
+      throw new NotFoundException('Attachment not found');
+    }
+
+    const filePath = attachment.filePath;
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('File not found on server');
+    }
+
+    res.setHeader('Content-Type', attachment.fileType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${attachment.originalName}"`,
+    );
+    return res.sendFile(path.resolve(filePath));
+  }
+
+  // NEW CODE: Verify document
+  @Post('request/:id/verify-document')
+  @UseGuards(RolesGuard)
+  @Roles(SystemRole.HR_MANAGER)
+  async verifyDocument(
+    @Param('id') id: string,
+    @Body() body: { verified: boolean; verificationNotes?: string },
+    @Req() req: any,
+  ) {
+    const hrUserId = req.user.userId || req.user._id || req.user.id;
+    return await this.leavesService.verifyDocument(
+      id,
+      hrUserId,
+      body.verificationNotes,
+    );
+  }
+
+  // NEW CODE: Reject document
+  @Post('request/:id/reject-document')
+  @UseGuards(RolesGuard)
+  @Roles(SystemRole.HR_MANAGER)
+  async rejectDocument(
+    @Param('id') id: string,
+    @Body() body: { verified: boolean; rejectionReason: string },
+    @Req() req: any,
+  ) {
+    const hrUserId = req.user.userId || req.user._id || req.user.id;
+    return await this.leavesService.rejectDocument(
+      id,
+      hrUserId,
+      body.rejectionReason,
     );
   }
 }

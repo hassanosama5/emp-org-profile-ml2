@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useRequireAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
@@ -11,9 +12,11 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/shared/ui/Card";
+import { Button } from "@/components/shared/ui/Button";
 
 export default function HRManagerDashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   useRequireAuth(SystemRole.HR_MANAGER);
 
   return (
@@ -101,7 +104,27 @@ export default function HRManagerDashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Leave Management Section */}
+      <div className="mb-10">
+        <Card className="border-2 border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardHeader>
+            <CardTitle className="text-xl">Leave Management</CardTitle>
+            <CardDescription>
+              Manage leave requests: finalize approved requests, override decisions, process in bulk, and verify medical documents
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={() => router.push("/dashboard/leaves/hr-manager")}
+              variant="primary"
+              className="w-full text-lg py-3"
+            >
+              Manage Leave Requests
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
-

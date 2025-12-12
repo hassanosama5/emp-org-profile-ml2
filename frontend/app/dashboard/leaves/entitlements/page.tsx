@@ -94,14 +94,29 @@ export default function LeaveEntitlementsPage() {
     }
   };
 
-  // Get contract types from employees
+  // Get contract types from employees AND from leave policies
+  // This ensures all contract types defined in policies are available, even if no employees have them yet
   const getContractTypes = (): string[] => {
     const contractTypes = new Set<string>();
+    
+    // Add contract types from employees
     employees.forEach(emp => {
       if (emp.contractType) {
         contractTypes.add(emp.contractType);
       }
     });
+    
+    // Add contract types from leave policies' eligibility rules
+    policies.forEach(policy => {
+      if (policy.eligibility?.contractTypesAllowed && Array.isArray(policy.eligibility.contractTypesAllowed)) {
+        policy.eligibility.contractTypesAllowed.forEach((ct: string) => {
+          if (ct) {
+            contractTypes.add(ct);
+          }
+        });
+      }
+    });
+    
     return Array.from(contractTypes).sort();
   };
 
