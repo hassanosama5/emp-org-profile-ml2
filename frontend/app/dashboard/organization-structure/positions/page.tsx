@@ -476,7 +476,7 @@ export default function PositionsPage() {
 
             <div className="flex flex-wrap gap-4">
               <Link
-                href="/dashboard/organization-structure/department"
+                href="/dashboard/organization-structure/departments"
                 className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
               >
                 ← View Departments

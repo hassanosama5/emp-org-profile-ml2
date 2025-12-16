@@ -720,7 +720,7 @@ export default function ViewPositionPage() {
                   ← All Positions
                 </Link>
                 <Link
-                  href="/dashboard/organization-structure/department"
+                  href="/dashboard/organization-structure/departments"
                   className="block text-sm text-blue-600 hover:text-blue-800 hover:underline"
                 >
                   ← Department Management
