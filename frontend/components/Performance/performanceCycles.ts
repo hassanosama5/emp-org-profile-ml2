@@ -1,8 +1,6 @@
 // frontend/components/Performance/performanceCycles.ts
 
-import {
-  AppraisalTemplateType,
-} from "./performanceTemplates";
+import { AppraisalTemplateType } from "./performanceTemplates";
 
 // Cycle status enum (matches backend AppraisalCycleStatus)
 export const APPRAISAL_CYCLE_STATUSES = [
@@ -12,8 +10,7 @@ export const APPRAISAL_CYCLE_STATUSES = [
   "ARCHIVED",
 ] as const;
 
-export type AppraisalCycleStatus =
-  (typeof APPRAISAL_CYCLE_STATUSES)[number];
+export type AppraisalCycleStatus = (typeof APPRAISAL_CYCLE_STATUSES)[number];
 
 // Template assignment inside a cycle
 export interface CycleTemplateAssignment {
@@ -41,7 +38,7 @@ export interface AppraisalCycle {
   cycleType: AppraisalTemplateType;
 
   startDate: string; // ISO date string
-  endDate: string;   // ISO date string
+  endDate: string; // ISO date string
 
   managerDueDate?: string;
   employeeAcknowledgementDueDate?: string;
@@ -77,4 +74,35 @@ export interface UpdateAppraisalCycleInput {
   managerDueDate?: string;
   employeeAcknowledgementDueDate?: string;
   templateAssignments?: CycleTemplateAssignment[];
+}
+
+/* ============================================================
+   Step 4 – HR Monitoring & Reminders (frontend types)
+   Matches PerformanceService.getCycleProgress / sendCycleReminders
+   ============================================================ */
+
+export interface CycleProgressByDepartment {
+  departmentId: string;
+  totalAssignments: number;
+  submitted: number;
+  completionRate: number;
+}
+
+export interface CycleProgressSummary {
+  cycleId: string;
+  name: string;
+  status: AppraisalCycleStatus;
+  totalAssignments: number;
+  byStatus: Record<string, number>;
+  completionRate: number;
+  byDepartment: CycleProgressByDepartment[];
+}
+
+// Shape of POST /performance/cycles/:id/reminders response
+export interface CycleReminderResult {
+  cycleId: string;
+  cycleName: string;
+  pendingCount: number;
+  // We only need the count in the UI; keep pendingAssignments loose
+  pendingAssignments: any[];
 }

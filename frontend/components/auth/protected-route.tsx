@@ -46,6 +46,11 @@ export function ProtectedRoute({
       return () => clearTimeout(timer);
     }
 
+    // If no user at this point, deny access (should have been caught above, but double-check)
+    if (!user) {
+      return;
+    }
+
     let hasAccess = true;
 
     // Check user type if required
