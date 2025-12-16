@@ -78,3 +78,34 @@ export interface UpdateAppraisalCycleInput {
   employeeAcknowledgementDueDate?: string;
   templateAssignments?: CycleTemplateAssignment[];
 }
+
+/* ============================================================
+   Step 4 – HR Monitoring & Reminders (frontend types)
+   Matches PerformanceService.getCycleProgress / sendCycleReminders
+   ============================================================ */
+
+export interface CycleProgressByDepartment {
+  departmentId: string;
+  totalAssignments: number;
+  submitted: number;
+  completionRate: number;
+}
+
+export interface CycleProgressSummary {
+  cycleId: string;
+  name: string;
+  status: AppraisalCycleStatus;
+  totalAssignments: number;
+  byStatus: Record<string, number>;
+  completionRate: number;
+  byDepartment: CycleProgressByDepartment[];
+}
+
+// Shape of POST /performance/cycles/:id/reminders response
+export interface CycleReminderResult {
+  cycleId: string;
+  cycleName: string;
+  pendingCount: number;
+  // We only need the count in the UI; keep pendingAssignments loose
+  pendingAssignments: any[];
+}
