@@ -34,7 +34,7 @@ const getEmployeeLabel = (employeeProfileId: any) => {
 export default function PositionAssignmentsPage({
   params,
 }: {
-  params: { positionId: string };
+  params: Promise<{ positionId: string }> | { positionId: string };
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -52,6 +52,7 @@ export default function PositionAssignmentsPage({
   const [assignments, setAssignments] = useState<PositionAssignmentResponseDto[]>(
     []
   );
+  const [positionId, setPositionId] = useState<string>("");
 
   const canManageAssignments = useMemo(() => {
     const roles = user?.roles || [];
@@ -60,19 +61,36 @@ export default function PositionAssignmentsPage({
     return has(SystemRole.SYSTEM_ADMIN) || has(SystemRole.HR_ADMIN);
   }, [user?.roles]);
 
+  // Unwrap params if it's a Promise
+  useEffect(() => {
+    if (params && typeof params === 'object' && 'then' in params) {
+      (params as Promise<{ positionId: string }>).then((resolved) => {
+        setPositionId(resolved.positionId);
+      });
+    } else {
+      setPositionId((params as { positionId: string }).positionId);
+    }
+  }, [params]);
+
   const fetchAssignments = async () => {
+    if (!positionId) return;
     try {
-      const data = await getPositionAssignments(params.positionId);
-      setAssignments(data);
-    } catch (e) {
+      console.log("Fetching assignments for position:", positionId);
+      const data = await getPositionAssignments(positionId);
+      console.log("Received assignments:", data);
+      setAssignments(data || []);
+    } catch (e: any) {
       console.error("Failed to fetch position assignments:", e);
+      setAssignments([]);
     }
   };
 
   useEffect(() => {
-    fetchAssignments();
+    if (positionId) {
+      fetchAssignments();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.positionId]);
+  }, [positionId]);
 
   const handleEnd = async (assignmentId: string) => {
     if (!canManageAssignments) return;
@@ -124,7 +142,7 @@ export default function PositionAssignmentsPage({
               Position Assignments
             </h1>
             <p className="text-gray-600 mt-1">
-              Position ID: <span className="font-mono">{params.positionId}</span>
+              Position ID: <span className="font-mono">{positionId || "Loading..."}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -161,8 +179,16 @@ export default function PositionAssignmentsPage({
           </div>
         ) : assignments.length === 0 ? (
           <Card>
-            <CardContent className="py-10 text-center text-gray-600">
-              No assignments found.
+            <CardContent className="py-10 text-center">
+              <p className="text-gray-600 mb-2">No assignments found.</p>
+              <p className="text-sm text-gray-500">
+                This position has no employee assignments.
+              </p>
+              {positionId && (
+                <p className="text-xs text-gray-400 mt-2 font-mono">
+                  Position ID: {positionId}
+                </p>
+              )}
             </CardContent>
           </Card>
         ) : (

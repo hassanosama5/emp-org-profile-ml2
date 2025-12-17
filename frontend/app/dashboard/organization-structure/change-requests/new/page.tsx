@@ -36,6 +36,7 @@ export default function CreateChangeRequestPage() {
 
   const [departments, setDepartments] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -130,20 +131,24 @@ export default function CreateChangeRequestPage() {
       return;
     }
 
+    setSubmitError(null);
     try {
       const payload = {
         requestedByEmployeeId: requesterId,
         requestType: formData.requestType,
-        targetDepartmentId: formData.targetDepartmentId || undefined,
-        targetPositionId: formData.targetPositionId || undefined,
-        details: formData.details.trim() || undefined,
-        reason: formData.reason.trim(),
+        targetDepartmentId: formData.targetDepartmentId?.trim() || undefined,
+        targetPositionId: formData.targetPositionId?.trim() || undefined,
+        details: formData.details?.trim() || undefined,
+        reason: formData.reason?.trim() || undefined,
       };
 
+      console.log("Submitting change request payload:", payload);
       await createChangeRequest(payload);
       router.push("/dashboard/organization-structure/change-requests");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Change request creation failed:", err);
+      const errorMessage = err?.response?.data?.message || err?.message || "Failed to create change request. Please try again.";
+      setSubmitError(errorMessage);
     }
   };
 
@@ -202,12 +207,24 @@ export default function CreateChangeRequestPage() {
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Global Error */}
-                  {error && (
+                  {(error || submitError) && (
                     <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                      <p className="text-red-700 font-medium">Error: {error}</p>
+                      <p className="text-red-700 font-medium">Error: {error || submitError}</p>
                       <p className="text-red-600 text-sm mt-1">
                         Please check your inputs and try again.
                       </p>
+                      {(error || submitError) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearError();
+                            setSubmitError(null);
+                          }}
+                          className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                        >
+                          Dismiss
+                        </button>
+                      )}
                     </div>
                   )}
 

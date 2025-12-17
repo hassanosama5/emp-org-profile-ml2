@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -22,7 +22,7 @@ const getId = (value: any): string => {
 export default function ChangeRequestDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }> | { id: string };
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -37,6 +37,7 @@ export default function ChangeRequestDetailPage({
   } = useOrganizationStructure();
 
   const [request, setRequest] = useState<StructureChangeRequestResponseDto | null>(null);
+  const [requestId, setRequestId] = useState<string>("");
 
   const roles = user?.roles || [];
   const hasRole = (role: string) =>
@@ -47,9 +48,21 @@ export default function ChangeRequestDetailPage({
     [user?.roles]
   );
 
+  // Unwrap params if it's a Promise
+  useEffect(() => {
+    if (params && typeof params === 'object' && 'then' in params) {
+      (params as Promise<{ id: string }>).then((resolved) => {
+        setRequestId(resolved.id);
+      });
+    } else {
+      setRequestId((params as { id: string }).id);
+    }
+  }, [params]);
+
   const fetchReq = async () => {
+    if (!requestId) return;
     try {
-      const data = await getChangeRequestById(params.id);
+      const data = await getChangeRequestById(requestId);
       setRequest(data);
     } catch (e) {
       console.error("Failed to fetch change request:", e);
@@ -57,9 +70,11 @@ export default function ChangeRequestDetailPage({
   };
 
   useEffect(() => {
-    fetchReq();
+    if (requestId) {
+      fetchReq();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id]);
+  }, [requestId]);
 
   const statusBadge = (status: StructureRequestStatus) => {
     const display = getStatusDisplay(status);
@@ -107,7 +122,7 @@ export default function ChangeRequestDetailPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Change Request</h1>
             <p className="text-gray-600 mt-1">
-              ID: <span className="font-mono">{params.id}</span>
+              ID: <span className="font-mono">{requestId || "Loading..."}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">

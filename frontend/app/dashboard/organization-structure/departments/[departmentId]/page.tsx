@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -21,8 +21,9 @@ const getId = (value: any): string => {
 export default function DepartmentDetailPage({
   params,
 }: {
-  params: { departmentId: string };
+  params: Promise<{ departmentId: string }>;
 }) {
+  const { departmentId } = React.use(params);
   const router = useRouter();
   const { user } = useAuth();
   const {
@@ -46,9 +47,9 @@ export default function DepartmentDetailPage({
 
   const fetchAll = async () => {
     try {
-      const dept = await getDepartmentById(params.departmentId);
+      const dept = await getDepartmentById(departmentId);
       setDepartment(dept);
-      const pos = await getPositions({ departmentId: params.departmentId });
+      const pos = await getPositions({ departmentId });
       setPositions(pos);
     } catch (e) {
       console.error("Failed to load department detail:", e);
@@ -58,7 +59,7 @@ export default function DepartmentDetailPage({
   useEffect(() => {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.departmentId]);
+  }, [departmentId]);
 
   const handleDeactivate = async () => {
     if (!department) return;
@@ -79,7 +80,7 @@ export default function DepartmentDetailPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Department Details</h1>
             <p className="text-gray-600 mt-1">
-              ID: <span className="font-mono">{params.departmentId}</span>
+              ID: <span className="font-mono">{departmentId}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -156,7 +157,7 @@ export default function DepartmentDetailPage({
                         variant="outline"
                         onClick={() =>
                           router.push(
-                            `/dashboard/organization-structure/departments/${params.departmentId}/edit`
+                            `/dashboard/organization-structure/departments/${departmentId}/edit`
                           )
                         }
                       >

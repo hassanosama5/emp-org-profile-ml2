@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -15,7 +15,7 @@ import { StructureChangeRequestResponseDto, StructureRequestStatus } from "@/typ
 export default function SubmitChangeRequestPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }> | { id: string };
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -29,6 +29,7 @@ export default function SubmitChangeRequestPage({
 
   const [req, setReq] = useState<StructureChangeRequestResponseDto | null>(null);
   const [comments, setComments] = useState("");
+  const [requestId, setRequestId] = useState<string>("");
 
   const roles = user?.roles || [];
   const hasRole = (role: string) =>
@@ -39,9 +40,21 @@ export default function SubmitChangeRequestPage({
     [user?.roles]
   );
 
+  // Unwrap params if it's a Promise
+  useEffect(() => {
+    if (params && typeof params === 'object' && 'then' in params) {
+      (params as Promise<{ id: string }>).then((resolved) => {
+        setRequestId(resolved.id);
+      });
+    } else {
+      setRequestId((params as { id: string }).id);
+    }
+  }, [params]);
+
   const fetchReq = async () => {
+    if (!requestId) return;
     try {
-      const data = await getChangeRequestById(params.id);
+      const data = await getChangeRequestById(requestId);
       setReq(data);
     } catch (e) {
       console.error("Failed to fetch change request:", e);
@@ -49,12 +62,14 @@ export default function SubmitChangeRequestPage({
   };
 
   useEffect(() => {
-    fetchReq();
+    if (requestId) {
+      fetchReq();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id]);
+  }, [requestId]);
 
   const doSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !requestId) return;
     const submittedByEmployeeId = user?.id || (user as any)?.userId;
     if (!submittedByEmployeeId) {
       console.error("Missing user id for submit");
@@ -64,9 +79,9 @@ export default function SubmitChangeRequestPage({
     if (!confirm("Submit this change request for approval?")) return;
 
     try {
-      await submitChangeRequest(params.id, { submittedByEmployeeId });
+      await submitChangeRequest(requestId, { submittedByEmployeeId });
       // comments are not part of submit DTO; keep them here for UX only
-      router.push(`/dashboard/organization-structure/change-requests/${params.id}`);
+      router.push(`/dashboard/organization-structure/change-requests/${requestId}`);
     } catch (e) {
       console.error("Failed to submit change request:", e);
     }
@@ -81,11 +96,11 @@ export default function SubmitChangeRequestPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Submit for Approval</h1>
             <p className="text-gray-600 mt-1">
-              Change Request ID: <span className="font-mono">{params.id}</span>
+              Change Request ID: <span className="font-mono">{requestId || "Loading..."}</span>
             </p>
           </div>
           <Link
-            href={`/dashboard/organization-structure/change-requests/${params.id}`}
+            href={`/dashboard/organization-structure/change-requests/${requestId || "#"}`}
             className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
           >
             ← Back
@@ -156,7 +171,7 @@ export default function SubmitChangeRequestPage({
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
               <Button
                 variant="outline"
-                onClick={() => router.push(`/dashboard/organization-structure/change-requests/${params.id}`)}
+                onClick={() => router.push(`/dashboard/organization-structure/change-requests/${requestId || "#"}`)}
                 disabled={loading}
               >
                 Cancel

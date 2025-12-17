@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -15,8 +15,9 @@ const shortId = (id?: string) => (id ? `${id.slice(0, 8)}…` : "—");
 export default function EntityChangeLogsPage({
   params,
 }: {
-  params: { entityType: string; entityId: string };
+  params: Promise<{ entityType: string; entityId: string }>;
 }) {
+  const { entityType, entityId } = React.use(params);
   const router = useRouter();
   const { getEntityChangeLogs, getActionDisplay, loading, error, clearError } =
     useOrganizationStructure();
@@ -47,7 +48,7 @@ export default function EntityChangeLogsPage({
 
   const fetch = async () => {
     try {
-      const data = await getEntityChangeLogs(params.entityType, params.entityId);
+      const data = await getEntityChangeLogs(entityType, entityId);
       setLogs(data);
     } catch (e) {
       console.error("Failed to fetch entity change logs:", e);
@@ -57,7 +58,7 @@ export default function EntityChangeLogsPage({
   useEffect(() => {
     fetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.entityType, params.entityId]);
+  }, [entityType, entityId]);
 
   return (
     <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN]}>
@@ -68,8 +69,8 @@ export default function EntityChangeLogsPage({
               Change Log Timeline
             </h1>
             <p className="text-gray-600 mt-1">
-              <span className="font-medium">{params.entityType}</span> —{" "}
-              <span className="font-mono">{params.entityId}</span>
+              <span className="font-medium">{entityType}</span> —{" "}
+              <span className="font-mono">{entityId}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -142,8 +143,8 @@ export default function EntityChangeLogsPage({
                         onClick={() =>
                           router.push(
                             `/dashboard/organization-structure/change-logs?entityType=${encodeURIComponent(
-                              params.entityType
-                            )}&entityId=${encodeURIComponent(params.entityId)}`
+                              entityType
+                            )}&entityId=${encodeURIComponent(entityId)}`
                           )
                         }
                       >

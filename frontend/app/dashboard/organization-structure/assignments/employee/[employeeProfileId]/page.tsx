@@ -49,7 +49,7 @@ const getDepartmentLabel = (departmentId: any) => {
 export default function EmployeeAssignmentsPage({
   params,
 }: {
-  params: { employeeProfileId: string };
+  params: Promise<{ employeeProfileId: string }> | { employeeProfileId: string };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -69,6 +69,7 @@ export default function EmployeeAssignmentsPage({
   const [assignments, setAssignments] = useState<PositionAssignmentResponseDto[]>(
     []
   );
+  const [employeeProfileId, setEmployeeProfileId] = useState<string>("");
 
   const activeOnly = searchParams.get("activeOnly") === "true";
 
@@ -79,21 +80,38 @@ export default function EmployeeAssignmentsPage({
     return has(SystemRole.SYSTEM_ADMIN) || has(SystemRole.HR_ADMIN);
   }, [user?.roles]);
 
+  // Unwrap params if it's a Promise
+  useEffect(() => {
+    if (params && typeof params === 'object' && 'then' in params) {
+      (params as Promise<{ employeeProfileId: string }>).then((resolved) => {
+        setEmployeeProfileId(resolved.employeeProfileId);
+      });
+    } else {
+      setEmployeeProfileId((params as { employeeProfileId: string }).employeeProfileId);
+    }
+  }, [params]);
+
   const fetchAssignments = async () => {
+    if (!employeeProfileId) return;
     try {
-      const data = await getEmployeeAssignments(params.employeeProfileId, {
+      console.log("Fetching assignments for employee:", employeeProfileId);
+      const data = await getEmployeeAssignments(employeeProfileId, {
         activeOnly,
       });
-      setAssignments(data);
-    } catch (e) {
+      console.log("Received assignments:", data);
+      setAssignments(data || []);
+    } catch (e: any) {
       console.error("Failed to fetch employee assignments:", e);
+      setAssignments([]);
     }
   };
 
   useEffect(() => {
-    fetchAssignments();
+    if (employeeProfileId) {
+      fetchAssignments();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.employeeProfileId, activeOnly]);
+  }, [employeeProfileId, activeOnly]);
 
   const toggleActiveOnly = (next: boolean) => {
     const qs = next ? "?activeOnly=true" : "";
@@ -151,7 +169,7 @@ export default function EmployeeAssignmentsPage({
             </h1>
             <p className="text-gray-600 mt-1">
               Employee Profile ID:{" "}
-              <span className="font-mono">{params.employeeProfileId}</span>
+              <span className="font-mono">{employeeProfileId || "Loading..."}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -203,8 +221,18 @@ export default function EmployeeAssignmentsPage({
           </div>
         ) : assignments.length === 0 ? (
           <Card>
-            <CardContent className="py-10 text-center text-gray-600">
-              No assignments found.
+            <CardContent className="py-10 text-center">
+              <p className="text-gray-600 mb-2">No assignments found.</p>
+              <p className="text-sm text-gray-500">
+                {activeOnly 
+                  ? "No active assignments for this employee." 
+                  : "This employee has no position assignments."}
+              </p>
+              {employeeProfileId && (
+                <p className="text-xs text-gray-400 mt-2 font-mono">
+                  Employee ID: {employeeProfileId}
+                </p>
+              )}
             </CardContent>
           </Card>
         ) : (
