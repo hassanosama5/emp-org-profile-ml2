@@ -106,8 +106,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-       
-
         {/* 🔹 Cycles – HR Employee only */}
         {isHREmployee && (
           <Card>
@@ -143,6 +141,26 @@ export default function DashboardPage() {
                 className="text-blue-600 hover:underline"
               >
                 Open Assignments
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 🔹 My Appraisals – normal employees see their ratings & feedback */}
+        {(user?.userType || "").toLowerCase() === "employee" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>My Appraisals</CardTitle>
+              <CardDescription>
+                View your ratings, feedback, and development notes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/dashboard/performance/my-appraisals"
+                className="text-blue-600 hover:underline"
+              >
+                View My Appraisals
               </Link>
             </CardContent>
           </Card>

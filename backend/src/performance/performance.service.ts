@@ -481,15 +481,20 @@ export class PerformanceService {
   }
 
   async getEmployeeAppraisals(employeeProfileId: string) {
-    return this.recordModel
-      .find({
-        employeeProfileId,
-        status: { $in: [AppraisalRecordStatus.HR_PUBLISHED] },
-      })
-      .populate('assignmentId cycleId templateId managerProfileId')
-      .lean()
-      .exec();
+  if (!Types.ObjectId.isValid(employeeProfileId)) {
+    throw new BadRequestException('Invalid employeeProfileId');
   }
+
+  return this.recordModel
+    .find({
+      employeeProfileId: new Types.ObjectId(employeeProfileId),
+      status: { $in: [AppraisalRecordStatus.HR_PUBLISHED] },
+    })
+    .populate('assignmentId cycleId templateId managerProfileId')
+    .lean()
+    .exec();
+}
+
 
   async getAppraisalById(id: string) {
     const record = await this.recordModel
