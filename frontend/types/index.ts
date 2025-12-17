@@ -44,11 +44,44 @@ export interface EmployeeProfile {
     | "TERMINATED";
   maritalStatus?: "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED";
 
-  // MongoDB ObjectId fields (as strings)
-  primaryPositionId?: string;
-  primaryDepartmentId?: string;
-  supervisorPositionId?: string;
-  payGradeId?: string;
+  // MongoDB ObjectId fields - can be raw IDs (string)
+  // or populated reference objects depending on the API endpoint
+  primaryPositionId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        title?: string;
+        code?: string;
+      };
+  primaryDepartmentId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        name?: string;
+        code?: string;
+      };
+  supervisorPositionId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        title?: string;
+        code?: string;
+      };
+  payGradeId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        name?: string;
+        grade?: string;
+        level?: number;
+        code?: string;
+        minSalary?: number;
+        maxSalary?: number;
+      };
 
   // Populated fields (from refs)
   primaryPosition?: {
