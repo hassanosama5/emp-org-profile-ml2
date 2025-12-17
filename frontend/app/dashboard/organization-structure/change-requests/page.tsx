@@ -67,6 +67,28 @@ export default function ChangeRequestsPage() {
     );
   };
 
+  const formatRequestedBy = (requestedByEmployeeId: any): string => {
+    if (!requestedByEmployeeId) return 'Unknown';
+    
+    if (typeof requestedByEmployeeId === 'string') {
+      return `${requestedByEmployeeId.substring(0, 8)}...`;
+    }
+    
+    // Handle populated object
+    if (typeof requestedByEmployeeId === 'object') {
+      const employee = requestedByEmployeeId as any;
+      if (employee.employeeNumber) return employee.employeeNumber;
+      if (employee.firstName && employee.lastName) {
+        return `${employee.firstName} ${employee.lastName}`;
+      }
+      if (employee._id) {
+        return employee._id.toString().substring(0, 8) + '...';
+      }
+    }
+    
+    return 'Unknown';
+  };
+
   return (
     <ProtectedRoute
       allowedRoles={[
@@ -168,7 +190,7 @@ export default function ChangeRequestsPage() {
                       
                       <div className="text-sm text-gray-600">
                         <p>Request #: {request.requestNumber}</p>
-                        <p>Requested by: {request.requestedByEmployeeId.substring(0, 8)}...</p>
+                        <p>Requested by: {formatRequestedBy(request.requestedByEmployeeId)}</p>
                         {request.submittedAt && (
                           <p>Submitted: {new Date(request.submittedAt).toLocaleDateString()}</p>
                         )}
