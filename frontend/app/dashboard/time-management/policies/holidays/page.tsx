@@ -25,10 +25,11 @@ import { Input } from "@/components/shared/ui/Input";
 import { Select } from "@/components/leaves/Select";
 import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
+import HolidayCalendar from "@/components/time-management/HolidayCalendar";
 
 export default function HolidaysPage() {
   const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
+  useRequireAuth([SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN]);
   const { toast, showToast, hideToast } = useToast();
 
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -38,7 +39,11 @@ export default function HolidaysPage() {
   const [isBulkCreateModalOpen, setIsBulkCreateModalOpen] = useState(false);
   const [isRestDaysModalOpen, setIsRestDaysModalOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
 
   // Dropdown data
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -47,6 +52,15 @@ export default function HolidaysPage() {
 
   // Create holiday form
   const [createForm, setCreateForm] = useState<CreateHolidayRequest>({
+    type: HolidayType.NATIONAL,
+    startDate: "",
+    endDate: "",
+    name: "",
+    active: true,
+  });
+
+  // Edit holiday form
+  const [editForm, setEditForm] = useState<CreateHolidayRequest>({
     type: HolidayType.NATIONAL,
     startDate: "",
     endDate: "",
@@ -99,6 +113,7 @@ export default function HolidaysPage() {
   };
 
   useEffect(() => {
+    console.log("Filters changed, reloading holidays:", filters);
     loadHolidays();
     loadDropdowns();
   }, [filters]);
@@ -163,9 +178,12 @@ export default function HolidaysPage() {
   const loadHolidays = async () => {
     try {
       setLoading(true);
+      console.log("Loading holidays with filters:", filters);
       const data = await policyConfigApi.getHolidays(filters);
+      console.log("Holidays response:", data);
       setHolidays(Array.isArray(data) ? data : []);
     } catch (error: any) {
+      console.error("Failed to load holidays:", error);
       showToast(error.message || "Failed to load holidays", "error");
       setHolidays([]);
     } finally {
@@ -365,6 +383,30 @@ export default function HolidaysPage() {
         </p>
       </div>
 
+      {/* View Toggle */}
+      <div className="flex gap-2 mb-6">
+        <Button
+          variant={viewMode === "list" ? "primary" : "outline"}
+          onClick={() => setViewMode("list")}
+        >
+          📋 List View
+        </Button>
+        <Button
+          variant={viewMode === "calendar" ? "primary" : "outline"}
+          onClick={() => setViewMode("calendar")}
+        >
+          📅 Calendar View
+        </Button>
+      </div>
+
+      {viewMode === "calendar" ? (
+        <HolidayCalendar
+          onHolidayClick={(holiday) => {
+            setSelectedHoliday(holiday);
+          }}
+        />
+      ) : (
+        <>
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-4 mb-6">
         <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
@@ -815,6 +857,8 @@ export default function HolidaysPage() {
           </div>
         </div>
       </Modal>
+      </>
+      )}
     </div>
   );
 }

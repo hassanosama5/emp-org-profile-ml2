@@ -19,7 +19,7 @@ import { Toast, useToast } from "@/components/leaves/Toast";
 
 export default function OvertimePoliciesPage() {
   const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
+  useRequireAuth(SystemRole.HR_MANAGER);
   const { toast, showToast, hideToast } = useToast();
 
   const [limitsConfig, setLimitsConfig] = useState<OvertimeLimitsConfig | null>(null);

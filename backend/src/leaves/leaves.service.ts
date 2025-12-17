@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { populate } from 'dotenv';
@@ -35,7 +36,11 @@ import {
   EmployeeProfile,
   EmployeeProfileDocument,
 } from '../employee-profile/models/employee-profile.schema';
-import { EmployeeStatus } from '../employee-profile/enums/employee-profile.enums';
+import {
+  EmployeeSystemRole,
+  EmployeeSystemRoleDocument,
+} from '../employee-profile/models/employee-system-role.schema';
+import { EmployeeStatus, SystemRole } from '../employee-profile/enums/employee-profile.enums';
 // import { PositionAssignment, PositionAssignmentDocument } from '../organization-structure/models/position-assignment.schema';
 // import { Position, PositionDocument } from '../organization-structure/models/position.schema';
 
@@ -69,6 +74,7 @@ import {
 import { RunCarryForwardDto } from './dto/CarryForward.dto';
 import { AccrualAdjustmentDto } from './dto/AccrualAdjustment.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
 
 @Injectable()
 export class LeavesService {
@@ -229,6 +235,10 @@ export class LeavesService {
     private calendarModel: mongoose.Model<CalendarDocument>,
     @InjectModel(EmployeeProfile.name)
     private employeeProfileModel: mongoose.Model<EmployeeProfileDocument>,
+    @InjectModel(EmployeeSystemRole.name)
+    private systemRoleModel: mongoose.Model<EmployeeSystemRoleDocument>,
+    @InjectModel('NotificationLog')
+    private notificationLogModel: mongoose.Model<any>,
     // @InjectModel(PositionAssignment.name) private positionAssignmentModel: mongoose.Model<PositionAssignmentDocument>,
     // @InjectModel(Position.name) private positionModel: mongoose.Model<PositionDocument>,
     @InjectModel(LeaveCategory.name)
@@ -404,16 +414,16 @@ export class LeavesService {
     // REQ-016: Validate medical certificate requirement for sick leave exceeding one day
     if (leaveType.code === 'SICK_LEAVE' && durationDays > 1) {
       if (!attachmentId) {
-        throw new Error(
-          'Medical certificate is required for sick leave exceeding one day.',
+        throw new BadRequestException(
+          'Medical certificate is required for sick leave exceeding one day. Please upload a medical certificate before submitting your request.',
         );
       }
     }
 
     // REQ-016: Validate attachment requirement
     if (leaveType.requiresAttachment && !attachmentId) {
-      throw new Error(
-        `Attachment is required for ${leaveType.name} leave requests.`,
+      throw new BadRequestException(
+        `Attachment is required for ${leaveType.name} leave requests. Please upload the required supporting document before submitting.`,
       );
     }
 
@@ -422,7 +432,7 @@ export class LeavesService {
         .findById(attachmentId)
         .exec();
       if (!attachment) {
-        throw new Error('Attachment not found');
+        throw new NotFoundException(`Attachment with ID '${attachmentId}' not found. Please upload a new attachment or verify the attachment ID.`);
       }
     }
 
@@ -446,21 +456,21 @@ export class LeavesService {
       .findById(leaveTypeObjectId)
       .exec();
     if (!leaveTypeDoc) {
-      throw new Error('Leave type not found');
+      throw new NotFoundException(`Leave type with ID '${leaveTypeId}' not found. Please select a valid leave type.`);
     }
 
     // REQ-016 validations remain the same (use original attachmentId variable)
     if (leaveTypeDoc.code === 'SICK_LEAVE' && durationDays > 1) {
       if (!attachmentId) {
-        throw new Error(
-          'Medical certificate is required for sick leave exceeding one day.',
+        throw new BadRequestException(
+          'Medical certificate is required for sick leave exceeding one day. Please upload a medical certificate before submitting your request.',
         );
       }
     }
 
     if (leaveTypeDoc.requiresAttachment && !attachmentId) {
-      throw new Error(
-        `Attachment is required for ${leaveTypeDoc.name} leave requests.`,
+      throw new BadRequestException(
+        `Attachment is required for ${leaveTypeDoc.name} leave requests. Please upload the required supporting document before submitting.`,
       );
     }
 
@@ -469,7 +479,7 @@ export class LeavesService {
         .findById(this.toObjectId(attachmentId))
         .exec();
       if (!attachment) {
-        throw new Error('Attachment not found');
+        throw new NotFoundException(`Attachment with ID '${attachmentId}' not found. Please upload a new attachment or verify the attachment ID.`);
       }
     }
 
@@ -485,7 +495,7 @@ export class LeavesService {
       leaveTypeDoc.deductible !== false, // Only check balance if deductible
     );
     if (!validationResult.isValid) {
-      throw new Error(validationResult.errorMessage);
+      throw new BadRequestException(validationResult.errorMessage || 'Invalid leave request. Please check your input and try again.');
     }
 
     // Create leave request with initial approval flow, ensuring ObjectId fields are set
@@ -589,10 +599,57 @@ export class LeavesService {
   // Phase 2: REQ-020 - Get Line Manager/Department Head ID
 
   async getLeaveRequestById(id: string): Promise<LeaveRequestDocument> {
-    const leaveRequest = await this.leaveRequestModel.findById(id).exec();
+    const leaveRequest = await this.leaveRequestModel
+      .findById(id)
+      .populate('leaveTypeId', 'name code')
+      .exec();
     if (!leaveRequest) {
-      throw new Error(`LeaveRequest with ID ${id} not found`);
+      throw new NotFoundException(`Leave request with ID ${id} not found. Please verify the request ID and try again.`);
     }
+    
+    // Handle case where leaveTypeId is not populated or populate returned null (leave type was deleted)
+    const leaveTypeIdValue = leaveRequest.leaveTypeId instanceof Types.ObjectId 
+      ? leaveRequest.leaveTypeId 
+      : (typeof leaveRequest.leaveTypeId === 'string' 
+          ? new Types.ObjectId(leaveRequest.leaveTypeId) 
+          : (leaveRequest.leaveTypeId as any)?._id || leaveRequest.leaveTypeId);
+    
+    // Check if populate succeeded (has name property) or if it's still an ObjectId (not populated)
+    const isPopulated = leaveRequest.leaveTypeId && 
+      typeof leaveRequest.leaveTypeId === 'object' && 
+      leaveRequest.leaveTypeId !== null &&
+      !(leaveRequest.leaveTypeId instanceof Types.ObjectId) &&
+      (leaveRequest.leaveTypeId as any).name;
+    
+    if (!isPopulated && leaveTypeIdValue) {
+      // Populate failed or returned null - fetch the leave type separately
+      try {
+        const leaveType = await this.leaveTypeModel.findById(leaveTypeIdValue).exec();
+        if (leaveType) {
+          // Manually set the populated leaveTypeId with the fetched data
+          (leaveRequest.leaveTypeId as any) = {
+            _id: leaveType._id,
+            name: leaveType.name,
+            code: leaveType.code,
+          };
+        } else {
+          // Leave type was deleted - set a placeholder
+          (leaveRequest.leaveTypeId as any) = {
+            _id: leaveTypeIdValue,
+            name: 'Deleted Leave Type',
+            code: 'DELETED',
+          };
+        }
+      } catch (err) {
+        // If fetch fails, set placeholder
+        (leaveRequest.leaveTypeId as any) = {
+          _id: leaveTypeIdValue,
+          name: 'Unknown Leave Type',
+          code: 'UNKNOWN',
+        };
+      }
+    }
+    
     return leaveRequest;
   }
 
@@ -609,7 +666,11 @@ export class LeavesService {
     }
 
     if (leaveRequest.status !== LeaveStatus.PENDING) {
-      throw new Error('Only pending requests can be modified');
+      const statusDisplay = leaveRequest.status.charAt(0).toUpperCase() + leaveRequest.status.slice(1).toLowerCase();
+      throw new BadRequestException(
+        `Only pending leave requests can be edited. This request has been ${statusDisplay.toLowerCase()} and cannot be modified. ` +
+        `If you need to make changes, please cancel this request (if still pending) or contact HR for assistance.`
+      );
     }
 
     // 🔹 Determine the new dates & duration (use updated values if provided, otherwise existing ones)
@@ -630,7 +691,7 @@ export class LeavesService {
     );
 
     if (!validationResult.isValid) {
-      throw new Error(validationResult.errorMessage);
+      throw new BadRequestException(validationResult.errorMessage || 'Invalid leave request update. Please check your input and try again.');
     }
 
     // 🔹 If duration changed, update pending balance atomically
@@ -691,7 +752,11 @@ export class LeavesService {
     }
 
     if (leaveRequest.status !== LeaveStatus.PENDING) {
-      throw new Error('Only pending requests can be canceled');
+      const statusDisplay = leaveRequest.status.charAt(0).toUpperCase() + leaveRequest.status.slice(1).toLowerCase();
+      throw new BadRequestException(
+        `Only pending leave requests can be canceled. This request has been ${statusDisplay.toLowerCase()} and cannot be canceled. ` +
+        `If you need to make changes to an approved request, please contact HR for assistance.`
+      );
     }
 
     // Release pending balance atomically (and clamp to 0 if negative)
@@ -969,8 +1034,78 @@ export class LeavesService {
     doc.leaveTypeId = this.toObjectId(
       createLeaveEntitlementDto.leaveTypeId,
     ) as Types.ObjectId;
+    
+    // Get the leave policy to determine rounding rule
+    let leavePolicy = await this.leavePolicyModel
+      .findOne({ leaveTypeId: doc.leaveTypeId })
+      .exec();
+    
+    // If not found, try as string comparison
+    if (!leavePolicy) {
+      leavePolicy = await this.leavePolicyModel
+        .findOne({ leaveTypeId: createLeaveEntitlementDto.leaveTypeId })
+        .exec();
+    }
+    
+    // If still not found, try to find by string comparison as fallback
+    if (!leavePolicy) {
+      const allPolicies = await this.leavePolicyModel.find({}).exec();
+      const matchingPolicy = allPolicies.find(p => 
+        p.leaveTypeId?.toString() === doc.leaveTypeId?.toString() || 
+        p.leaveTypeId?.toString() === createLeaveEntitlementDto.leaveTypeId ||
+        (p.leaveTypeId instanceof Types.ObjectId && p.leaveTypeId.equals(doc.leaveTypeId))
+      );
+      if (matchingPolicy) {
+        leavePolicy = matchingPolicy;
+      }
+    }
+    
+    const roundingRule = leavePolicy?.roundingRule || RoundingRule.NONE;
+    console.log(`[createLeaveEntitlement] Policy lookup:`, {
+      leaveTypeId: doc.leaveTypeId?.toString(),
+      policyFound: !!leavePolicy,
+      roundingRule: roundingRule,
+      accruedActual: doc.accruedActual
+    });
+    
+    // ALWAYS recalculate accruedRounded from accruedActual based on rounding rule
+    // This ensures rounding is applied correctly when creating entitlements
+    if (doc.accruedActual !== undefined && doc.accruedActual !== null && doc.accruedActual !== 0) {
+      const originalAccruedRounded = doc.accruedRounded;
+      doc.accruedRounded = this.applyRoundingRule(
+        doc.accruedActual,
+        roundingRule,
+      );
+      console.log(`[createLeaveEntitlement] ✅ Applied rounding: ${doc.accruedActual} -> ${doc.accruedRounded} (rule: ${roundingRule}, employeeId: ${doc.employeeId?.toString()})`);
+      
+      if (originalAccruedRounded !== undefined && originalAccruedRounded !== doc.accruedRounded) {
+        console.log(`[createLeaveEntitlement] ⚠️ Overrode frontend accruedRounded value: ${originalAccruedRounded} -> ${doc.accruedRounded}`);
+      }
+    } else {
+      // If accruedActual is not provided or is 0, default to 0
+      if (doc.accruedActual === undefined || doc.accruedActual === null) {
+        doc.accruedActual = 0;
+      }
+      doc.accruedRounded = this.applyRoundingRule(doc.accruedActual, roundingRule);
+      console.log(`[createLeaveEntitlement] Set accruedActual: ${doc.accruedActual}, accruedRounded: ${doc.accruedRounded} (employeeId: ${doc.employeeId?.toString()})`);
+    }
+    
     const newLeaveEntitlement = new this.leaveEntitlementModel(doc);
-    return await newLeaveEntitlement.save();
+    const saved = await newLeaveEntitlement.save();
+    
+    // Recalculate remaining to ensure it's correct
+    saved.remaining = this.calculateRemaining(saved);
+    await saved.save();
+    
+    console.log(`[createLeaveEntitlement] ✅ Saved entitlement:`, {
+      employeeId: saved.employeeId?.toString(),
+      leaveTypeId: saved.leaveTypeId?.toString(),
+      accruedActual: saved.accruedActual,
+      accruedRounded: saved.accruedRounded,
+      remaining: saved.remaining
+    });
+    
+    return saved;
   }
 
   async getLeaveEntitlement(
@@ -985,8 +1120,31 @@ export class LeavesService {
       .exec();
 
     if (!leaveEntitlement) {
+      // Fetch employee and leave type names for user-friendly error message
+      let employeeName = 'the employee';
+      let leaveTypeName = 'this leave type';
+      
+      try {
+        const employee = await this.employeeProfileModel.findById(employeeId).exec();
+        if (employee) {
+          employeeName = employee.fullName || `${employee.firstName} ${employee.lastName}`.trim() || employee.employeeNumber || 'the employee';
+        }
+      } catch (err) {
+        // Ignore errors fetching employee name
+      }
+      
+      try {
+        const leaveType = await this.leaveTypeModel.findById(leaveTypeId).exec();
+        if (leaveType) {
+          leaveTypeName = leaveType.name || 'this leave type';
+        }
+      } catch (err) {
+        // Ignore errors fetching leave type name
+      }
+      
       throw new NotFoundException(
-        `Entitlement for employee ${employeeId} with leave type ${leaveTypeId} not found`,
+        `Leave entitlement not found for ${employeeName} with leave type "${leaveTypeName}". ` +
+        `Please contact HR to create a leave entitlement before submitting leave requests.`
       );
     }
 
@@ -1024,7 +1182,9 @@ export class LeavesService {
 
     // Always recalculate and save to ensure consistency
     // Use Math.abs to handle floating point precision issues
-    if (Math.abs(leaveEntitlement.accruedRounded - expectedRounded) > 0.001) {
+    const needsUpdate = Math.abs(leaveEntitlement.accruedRounded - expectedRounded) > 0.001;
+    if (needsUpdate) {
+      console.log(`[getLeaveEntitlement] Recalculating rounding: ${leaveEntitlement.accruedRounded} -> ${expectedRounded} (accruedActual: ${leaveEntitlement.accruedActual}, rule: ${roundingRule})`);
       leaveEntitlement.accruedRounded = expectedRounded;
       leaveEntitlement.remaining = this.calculateRemaining(leaveEntitlement);
       await leaveEntitlement.save();
@@ -1050,17 +1210,27 @@ export class LeavesService {
       : leaveEntitlement.accruedActual;
     
     // Get policy for rounding rule
-    const leavePolicy = await this.leavePolicyModel
+    let leavePolicy = await this.leavePolicyModel
       .findOne({ leaveTypeId: leaveEntitlement.leaveTypeId })
       .exec();
+    
+    // If not found, try as string comparison
+    if (!leavePolicy) {
+      leavePolicy = await this.leavePolicyModel
+        .findOne({ leaveTypeId: leaveEntitlement.leaveTypeId.toString() })
+        .exec();
+    }
     
     const roundingRule = leavePolicy?.roundingRule || RoundingRule.NONE;
     
     // ALWAYS recalculate accruedRounded from accruedActual (override any frontend value)
-    updateLeaveEntitlementDto.accruedRounded = this.applyRoundingRule(
+    const newAccruedRounded = this.applyRoundingRule(
       accruedActualToUse,
       roundingRule,
     );
+    
+    console.log(`[updateLeaveEntitlement] Applied rounding: ${accruedActualToUse} -> ${newAccruedRounded} (rule: ${roundingRule}, entitlementId: ${id})`);
+    updateLeaveEntitlementDto.accruedRounded = newAccruedRounded;
 
     // Apply the update
     leaveEntitlement = await this.leaveEntitlementModel
@@ -1126,19 +1296,53 @@ export class LeavesService {
     );
   }
 
+  // Helper: Normalize ID to handle both ObjectId and string formats
+  // Returns both ObjectId and string versions for flexible querying
+  private normalizeId(id: any): { objectId: Types.ObjectId | null; string: string | null } {
+    if (!id) {
+      return { objectId: null, string: null };
+    }
+    
+    if (id instanceof Types.ObjectId) {
+      return { objectId: id, string: id.toString() };
+    }
+    
+    if (typeof id === 'string' && Types.ObjectId.isValid(id)) {
+      return { objectId: new Types.ObjectId(id), string: id };
+    }
+    
+    // If it's a string but not a valid ObjectId, return as string
+    return { objectId: null, string: String(id) };
+  }
+
+  // Helper: Create query that handles both ObjectId and string formats for position/department IDs
+  private createFlexibleIdQuery(fieldName: string, value: any): any {
+    const normalized = this.normalizeId(value);
+    
+    if (!normalized.objectId && !normalized.string) {
+      return null; // Invalid value
+    }
+    
+    // Use $in to match both ObjectId and string formats
+    const queryValues: any[] = [];
+    if (normalized.objectId) {
+      queryValues.push(normalized.objectId);
+    }
+    if (normalized.string) {
+      queryValues.push(normalized.string);
+    }
+    
+    return queryValues.length > 0 ? { [fieldName]: { $in: queryValues } } : null;
+  }
+
   //next method
   async assignPersonalizedEntitlement(
     employeeId: string,
     leaveTypeId: string,
     personalizedEntitlement: number,
   ): Promise<LeaveEntitlementDocument> {
+    // getLeaveEntitlement will throw NotFoundException with user-friendly message if not found
     const entitlement = await this.getLeaveEntitlement(employeeId, leaveTypeId);
-
-    if (!entitlement) {
-      throw new Error(
-        `Leave entitlement for employee ${employeeId} with leave type ${leaveTypeId} not found`,
-      );
-    }
 
     // Add personalized entitlement to accruedActual
     // This gives the employee extra days beyond their normal policy
@@ -1379,12 +1583,12 @@ export class LeavesService {
   ): Promise<{ message: string; delegation: any }> {
     // Validate dates
     if (startDate >= endDate) {
-      throw new BadRequestException('Start date must be before end date.');
+      throw new BadRequestException('End date must be after start date for delegation period. Please select a valid date range.');
     }
 
     const now = new Date();
     if (endDate < now) {
-      throw new BadRequestException('End date must be in the future.');
+      throw new BadRequestException('End date must be in the future. Please select a future date for the delegation period.');
     }
 
     // Validate that delegateId is a valid employee
@@ -1392,18 +1596,18 @@ export class LeavesService {
       .findById(delegateId)
       .exec();
     if (!delegate) {
-      throw new NotFoundException(`Employee with ID ${delegateId} not found.`);
+      throw new NotFoundException(`Employee with ID '${delegateId}' not found. Please verify the employee ID and try again.`);
     }
 
     // Validate that managerId is a valid employee
     const manager = await this.employeeProfileModel.findById(managerId).exec();
     if (!manager) {
-      throw new NotFoundException(`Manager with ID ${managerId} not found.`);
+      throw new NotFoundException(`Manager with ID '${managerId}' not found. Please verify the manager ID and try again.`);
     }
 
     // Check if delegate is the same as manager
     if (managerId === delegateId) {
-      throw new BadRequestException('Manager cannot delegate to themselves.');
+      throw new BadRequestException('You cannot delegate approval authority to yourself. Please select a different employee to delegate to.');
     }
 
     // Get or create delegation array for this manager
@@ -1762,18 +1966,204 @@ export class LeavesService {
         ? `${employee.firstName} ${employee.lastName}`
         : 'Employee';
       
-      // Get manager ID - try directManagerId first, otherwise we'll need to get it from employee profile
+      // Get manager ID (Department Head) - use the same logic as getTeamMembers but in reverse
+      // Method 1: Try directManagerId first (if set)
+      // Method 2: Use supervisorPositionId to find manager (reverse of getTeamMembers logic)
       let managerId: string | null = null;
+      
       if (employee.directManagerId) {
         managerId = employee.directManagerId.toString();
+        console.log(`[NOTIFICATION] Found managerId from populated directManagerId: ${managerId}`);
       } else {
-        // Try to get manager from employee profile
+        // Fetch employee profile to check directManagerId and supervisorPositionId
         const employeeProfile = await this.employeeProfileModel
           .findById(employeeId)
-          .select('directManagerId')
+          .select('directManagerId supervisorPositionId employeeNumber')
+          .lean()
           .exec();
+        
+        console.log(`[NOTIFICATION] Employee profile fetched:`, {
+          employeeId,
+          employeeNumber: (employeeProfile as any)?.employeeNumber,
+          hasDirectManagerId: !!(employeeProfile as any)?.directManagerId,
+          directManagerId: (employeeProfile as any)?.directManagerId,
+          supervisorPositionId: (employeeProfile as any)?.supervisorPositionId,
+        });
+        
+        // Method 1: Check directManagerId from profile
         if (employeeProfile && (employeeProfile as any).directManagerId) {
           managerId = (employeeProfile as any).directManagerId.toString();
+          console.log(`[NOTIFICATION] Found managerId from employee profile directManagerId: ${managerId}`);
+        } 
+        // Method 2: Use supervisorPositionId to find the manager (reverse of getTeamMembers)
+        // If employee has supervisorPositionId, find the employee who has that position as primaryPositionId
+        else if (employeeProfile && (employeeProfile as any).supervisorPositionId) {
+          const supervisorPositionId = (employeeProfile as any).supervisorPositionId;
+          console.log(`[NOTIFICATION] Employee has supervisorPositionId: ${supervisorPositionId}, finding manager...`);
+          
+          // Find the employee who has this position as their primaryPositionId (this is the manager/department head)
+          // This is the reverse of: find employees where supervisorPositionId matches manager's primaryPositionId
+          // IMPORTANT: primaryPositionId is stored as STRING in MongoDB, not ObjectId
+          // Convert supervisorPositionId to string for comparison
+          const supervisorPosIdString = supervisorPositionId instanceof Types.ObjectId 
+            ? supervisorPositionId.toString() 
+            : String(supervisorPositionId);
+          
+          console.log(`[NOTIFICATION] Searching for manager with primaryPositionId (as string): ${supervisorPosIdString}`);
+          console.log(`[NOTIFICATION] supervisorPositionId type: ${typeof supervisorPositionId}, value: ${supervisorPositionId}`);
+          
+          // Use flexible query to handle both ObjectId and string formats
+          const primaryPositionQuery = this.createFlexibleIdQuery('primaryPositionId', supervisorPositionId);
+          
+          if (primaryPositionQuery) {
+            // Try with status filter first
+            let managerProfile = await this.employeeProfileModel
+              .findOne({
+                ...primaryPositionQuery,
+                status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+              })
+              .select('_id employeeNumber firstName lastName primaryPositionId')
+              .lean()
+              .exec();
+            
+            // If not found, try without status filter (in case status is the issue)
+            if (!managerProfile) {
+              console.log(`[NOTIFICATION] Not found with status filter, trying without status filter...`);
+              managerProfile = await this.employeeProfileModel
+                .findOne(primaryPositionQuery)
+                .select('_id employeeNumber firstName lastName primaryPositionId status')
+                .lean()
+                .exec();
+            }
+            
+            if (managerProfile) {
+              managerId = managerProfile._id.toString();
+              console.log(`[NOTIFICATION] ✅ Found Department Head via primaryPositionId: ${managerId} (${(managerProfile as any).employeeNumber || 'N/A'} - ${(managerProfile as any).firstName || ''} ${(managerProfile as any).lastName || ''})`);
+              console.log(`[NOTIFICATION] Manager's primaryPositionId: ${(managerProfile as any).primaryPositionId?.toString() || 'N/A'}`);
+            } else {
+              // Alternative approach: Since getTeamMembers works, let's reverse it
+              // Find all employees and check which one has this employee in their team
+              // This works even if the manager's primaryPositionId is not set correctly in the UI
+              const supervisorPosIdString = supervisorPositionId instanceof Types.ObjectId 
+                ? supervisorPositionId.toString() 
+                : String(supervisorPositionId);
+              console.warn(`[NOTIFICATION] ❌ No employee found with primaryPositionId matching supervisorPositionId ${supervisorPosIdString}`);
+            console.warn(`[NOTIFICATION] Trying alternative: Finding manager by checking who has this employee in their team...`);
+            
+            // Get all active employees who might be managers (have DEPARTMENT_HEAD role or have a primaryPositionId)
+            // We'll check each one to see if this employee is in their team
+            const potentialManagers = await this.employeeProfileModel
+              .find({
+                status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+                $or: [
+                  { primaryPositionId: { $exists: true, $ne: null } },
+                ],
+              })
+              .select('_id employeeNumber firstName lastName primaryPositionId')
+              .lean()
+              .exec();
+            
+            console.log(`[NOTIFICATION] Checking ${potentialManagers.length} potential managers...`);
+            
+            // For each potential manager, check if this employee is in their team
+            // (i.e., check if employee's supervisorPositionId matches manager's primaryPositionId)
+            for (const potentialManager of potentialManagers) {
+              if ((potentialManager as any).primaryPositionId) {
+                const managerPrimaryPosId = String((potentialManager as any).primaryPositionId);
+                if (managerPrimaryPosId === supervisorPosIdString) {
+                  managerProfile = potentialManager;
+                  managerId = potentialManager._id.toString();
+                  console.log(`[NOTIFICATION] ✅ Found Department Head via reverse team lookup: ${managerId} (${(potentialManager as any).employeeNumber || 'N/A'} - ${(potentialManager as any).firstName || ''} ${(potentialManager as any).lastName || ''})`);
+                  console.log(`[NOTIFICATION] Manager's primaryPositionId: ${managerPrimaryPosId}`);
+                  break;
+                }
+              }
+            }
+            
+            // If still not found, check all employees (including inactive)
+            if (!managerProfile) {
+              console.warn(`[NOTIFICATION] Not found in active employees, checking all employees (including inactive)...`);
+              const allEmployeesQuery = this.createFlexibleIdQuery('primaryPositionId', supervisorPositionId);
+              const allEmployees = allEmployeesQuery 
+                ? await this.employeeProfileModel
+                    .find(allEmployeesQuery)
+                    .select('_id employeeNumber firstName lastName status primaryPositionId')
+                    .lean()
+                    .exec()
+                : [];
+              
+              console.warn(`[NOTIFICATION] Found ${allEmployees.length} employees (any status) with primaryPositionId ${supervisorPosIdString}:`, 
+                allEmployees.map((e: any) => ({
+                  id: e._id.toString(),
+                  employeeNumber: e.employeeNumber,
+                  name: `${e.firstName || ''} ${e.lastName || ''}`,
+                  status: e.status,
+                  primaryPositionId: String(e.primaryPositionId || 'null'),
+                }))
+              );
+              
+              if (allEmployees.length > 0) {
+                const foundEmployee = allEmployees[0];
+                managerProfile = foundEmployee;
+                managerId = foundEmployee._id.toString();
+                console.warn(`[NOTIFICATION] ⚠️ Using employee with matching position (status: ${foundEmployee.status}): ${managerId} (${foundEmployee.employeeNumber || 'N/A'})`);
+              } else {
+                // Final debug: Check what Karim's actual primaryPositionId is
+                // Karim's employee ID from the image: 692d95ebf2f917c28a7da59e
+                console.error(`[NOTIFICATION] ❌ CRITICAL: No employee found with primaryPositionId ${supervisorPosIdString}`);
+                console.error(`[NOTIFICATION] Employee's supervisorPositionId: ${supervisorPosIdString}`);
+                
+                // Debug: Check Karim's actual profile
+                const karimProfile = await this.employeeProfileModel
+                  .findById('692d95ebf2f917c28a7da59e')
+                  .select('_id employeeNumber firstName lastName primaryPositionId supervisorPositionId')
+                  .lean()
+                  .exec();
+                
+                if (karimProfile) {
+                  const karimPrimaryPosId = String((karimProfile as any).primaryPositionId || 'null');
+                  console.error(`[NOTIFICATION] DEBUG - Karim's profile:`, {
+                    id: karimProfile._id.toString(),
+                    employeeNumber: (karimProfile as any).employeeNumber,
+                    name: `${(karimProfile as any).firstName || ''} ${(karimProfile as any).lastName || ''}`,
+                    primaryPositionId: karimPrimaryPosId,
+                    supervisorPositionId: String((karimProfile as any).supervisorPositionId || 'null'),
+                  });
+                  console.error(`[NOTIFICATION] Expected primaryPositionId: ${supervisorPosIdString}`);
+                  console.error(`[NOTIFICATION] Karim's actual primaryPositionId: ${karimPrimaryPosId}`);
+                  
+                  // If Karim's primaryPositionId doesn't match, but we know the team view works,
+                  // maybe we should just use Karim directly if he's the only department head
+                  if (karimPrimaryPosId !== supervisorPosIdString) {
+                    console.error(`[NOTIFICATION] ⚠️ MISMATCH: Karim's primaryPositionId doesn't match employee's supervisorPositionId!`);
+                    console.error(`[NOTIFICATION] This explains why notifications aren't working. Karim needs to have primaryPositionId set to ${supervisorPosIdString}`);
+                  }
+                }
+              }
+            }
+            }
+          } else {
+            console.warn(`[NOTIFICATION] Invalid supervisorPositionId format: ${supervisorPositionId}`);
+          }
+        } else {
+          console.warn(`[NOTIFICATION] Employee ${employeeId} does not have directManagerId or supervisorPositionId set!`);
+        }
+      }
+      
+      // Verify managerId exists and is valid
+      if (managerId) {
+        const managerProfile = await this.employeeProfileModel
+          .findById(managerId)
+          .select('_id employeeNumber firstName lastName')
+          .lean()
+          .exec();
+        if (!managerProfile) {
+          console.warn(`[NOTIFICATION] Manager with ID ${managerId} not found in EmployeeProfile`);
+          managerId = null;
+        } else {
+          // Ensure we use the exact _id format (as string) - this matches userId in JWT
+          managerId = managerProfile._id.toString();
+          console.log(`[NOTIFICATION] Verified Department Head: ${managerId} (${(managerProfile as any).employeeNumber || 'N/A'} - ${(managerProfile as any).firstName || ''} ${(managerProfile as any).lastName || ''})`);
         }
       }
 
@@ -1788,14 +2178,39 @@ export class LeavesService {
       // Handle different notification events
       switch (event) {
         case 'created':
-          // Notify manager when new leave request is created
+          // Notify manager (department head) when new leave request is created
+          // Also notify delegate if manager has delegated approval authority
           if (managerId) {
+            // Notify the manager
             await this.notificationsService.notifyLeaveRequestCreated(
               leaveRequest._id.toString(),
               employeeId,
               managerId,
               leaveDetails,
             );
+            
+            // Check if manager has an active delegate
+            const delegations = this.delegationMap.get(managerId);
+            if (delegations && delegations.length > 0) {
+              const now = new Date();
+              const activeDelegations = delegations.filter(
+                (del) =>
+                  del.isActive &&
+                  now >= del.startDate &&
+                  now <= del.endDate,
+              );
+              
+              // Notify all active delegates
+              for (const delegation of activeDelegations) {
+                console.log(`[NOTIFICATION] Manager ${managerId} has active delegate ${delegation.delegateId}, sending notification...`);
+                await this.notificationsService.notifyLeaveRequestCreated(
+                  leaveRequest._id.toString(),
+                  employeeId,
+                  delegation.delegateId, // Notify the delegate
+                  leaveDetails,
+                );
+              }
+            }
           }
           break;
 
@@ -1838,19 +2253,29 @@ export class LeavesService {
         case 'finalized':
         case 'overridden_approved':
         case 'overridden_rejected':
-          // Notify HR Manager, employee, and manager when leave request is finalized
-          // For HR Manager, we need to find an HR Manager user
-          // For now, we'll use the managerId as coordinatorId (can be improved)
-          const hrManagerId = managerId || employeeId; // Fallback - should be improved to find actual HR Manager
-          const coordinatorId = hrManagerId; // Attendance coordinator - should be improved
-          
-          if (managerId && hrManagerId && coordinatorId) {
+          // Notify employee and manager (department head) when leave request is finalized by HR Manager
+          // Requirement: As an HR manager, I want the system to notify the employee, 
+          // the employee's manager, when a leave request is finalized so that everyone is informed.
+          if (managerId) {
+            console.log(`[NOTIFICATION] Finalizing leave request - notifying employee and manager`);
+            console.log(`[NOTIFICATION] Employee ID: ${employeeId}, Manager ID: ${managerId}`);
+            
             await this.notificationsService.notifyLeaveRequestFinalized(
               leaveRequest._id.toString(),
               employeeId,
               managerId,
-              coordinatorId,
+              managerId, // Use managerId as coordinatorId (for backward compatibility with the method signature)
               leaveDetails,
+            );
+            
+            console.log(`[NOTIFICATION] ✅ Notifications sent to employee and manager for finalized leave request`);
+          } else {
+            // If no manager found, still notify the employee
+            console.warn(`[NOTIFICATION] No manager found, only notifying employee for finalized leave request`);
+            await this.notificationsService.notifyLeaveRequestStatusChanged(
+              leaveRequest._id.toString(),
+              employeeId,
+              'APPROVED', // Finalized means approved
             );
           }
           break;
@@ -1872,53 +2297,199 @@ export class LeavesService {
     leaveRequestId: string,
     hrUserId: string,
     overrideToApproved: boolean,
-    overrideReason?: string,
+    overrideReason: string,
   ): Promise<LeaveRequestDocument> {
     const leaveRequest = await this.leaveRequestModel
       .findById(leaveRequestId)
+      .populate('leaveTypeId', 'name code')
       .exec();
     if (!leaveRequest) {
-      throw new Error(`LeaveRequest with ID ${leaveRequestId} not found`);
+      throw new NotFoundException(`Leave request with ID ${leaveRequestId} not found. Please verify the request ID and try again.`);
     }
 
-    // BR 479: Validate override conditions (e.g., only for special circumstances)
-    if (!overrideReason || overrideReason.trim().length === 0) {
-      throw new Error('Override reason is required for HR override decisions.');
+    // Validate override reason is provided (required but no character limit)
+    if (!overrideReason || typeof overrideReason !== 'string') {
+      throw new BadRequestException('Override justification is required. Please provide a reason for this override decision.');
     }
 
+    // Store override reason in approval flow for audit purposes
     leaveRequest.approvalFlow.push({
       role: 'HR Manager',
       status: overrideToApproved ? LeaveStatus.APPROVED : LeaveStatus.REJECTED,
       decidedBy: new Types.ObjectId(hrUserId),
       decidedAt: new Date(),
+      // Store the override reason in the approval flow (if the schema supports it)
+      // Note: If the schema doesn't have a reason field, we can add it to justification or create a separate field
     });
+    
+    // Also store override reason in the request's justification field if it exists, or append it
+    if (overrideReason.trim()) {
+      const existingJustification = leaveRequest.justification || '';
+      const overrideNote = `[HR Override: ${overrideReason.trim()}]`;
+      leaveRequest.justification = existingJustification 
+        ? `${existingJustification}\n${overrideNote}` 
+        : overrideNote;
+    }
 
     if (overrideToApproved) {
       leaveRequest.status = LeaveStatus.APPROVED;
-      await this.finalizeApprovedLeaveRequest(leaveRequest);
-      await this.notifyStakeholders(leaveRequest, 'overridden_approved');
+      try {
+        // Extract leaveTypeId correctly before calling finalizeApprovedLeaveRequest
+        let leaveTypeIdForFinalize: string;
+        if (leaveRequest.leaveTypeId instanceof Types.ObjectId) {
+          leaveTypeIdForFinalize = leaveRequest.leaveTypeId.toString();
+        } else if (typeof leaveRequest.leaveTypeId === 'object' && leaveRequest.leaveTypeId !== null) {
+          // Populated object - extract the _id
+          const populatedLeaveType = leaveRequest.leaveTypeId as any;
+          if (populatedLeaveType._id) {
+            leaveTypeIdForFinalize = populatedLeaveType._id instanceof Types.ObjectId 
+              ? populatedLeaveType._id.toString() 
+              : String(populatedLeaveType._id);
+          } else {
+            // Fallback: get original unpopulated document
+            const originalRequest = await this.leaveRequestModel
+              .findById(leaveRequest._id)
+              .select('leaveTypeId')
+              .lean()
+              .exec();
+            if (originalRequest && originalRequest.leaveTypeId) {
+              leaveTypeIdForFinalize = originalRequest.leaveTypeId instanceof Types.ObjectId 
+                ? originalRequest.leaveTypeId.toString() 
+                : String(originalRequest.leaveTypeId);
+            } else {
+              throw new BadRequestException(
+                'Unable to process leave request: Leave type information is missing. Please contact system administrator.'
+              );
+            }
+          }
+        } else {
+          leaveTypeIdForFinalize = String(leaveRequest.leaveTypeId);
+        }
+        
+        // Temporarily set leaveTypeId to ObjectId for finalizeApprovedLeaveRequest
+        const originalLeaveTypeId = leaveRequest.leaveTypeId;
+        leaveRequest.leaveTypeId = new Types.ObjectId(leaveTypeIdForFinalize) as any;
+        
+        try {
+          await this.finalizeApprovedLeaveRequest(leaveRequest);
+        } finally {
+          // Restore original leaveTypeId (populated object)
+          leaveRequest.leaveTypeId = originalLeaveTypeId;
+        }
+      } catch (error) {
+        // Provide user-friendly error message if finalization fails
+        if (error instanceof BadRequestException || error instanceof NotFoundException) {
+          throw error;
+        }
+        throw new BadRequestException(
+          'Unable to finalize leave request: An error occurred while processing the approval. Please try again or contact system administrator.'
+        );
+      }
+      // Notify stakeholders (don't throw if notification fails)
+      try {
+        await this.notifyStakeholders(leaveRequest, 'overridden_approved');
+      } catch (error) {
+        console.error('Failed to send notification for overridden approval:', error);
+        // Continue execution even if notification fails
+      }
     } else {
       leaveRequest.status = LeaveStatus.REJECTED;
-      const entitlement = await this.getLeaveEntitlement(
-        leaveRequest.employeeId.toString(),
-        leaveRequest.leaveTypeId.toString(),
-      );
-      const updated = await this.leaveEntitlementModel
-        .findByIdAndUpdate(
-          entitlement._id,
-          { $inc: { pending: -leaveRequest.durationDays } },
-          { new: true },
-        )
-        .exec();
-      if (updated && updated.pending < 0) {
-        await this.leaveEntitlementModel
-          .findByIdAndUpdate(entitlement._id, { $set: { pending: 0 } })
+      
+      // Extract leaveTypeId correctly - handle both populated object and ObjectId cases
+      let leaveTypeIdValue: string;
+      try {
+        // Get the original unpopulated document to ensure we have the ObjectId
+        const originalRequest = await this.leaveRequestModel
+          .findById(leaveRequest._id)
+          .select('leaveTypeId')
+          .lean()
           .exec();
+        
+        if (!originalRequest || !originalRequest.leaveTypeId) {
+          throw new BadRequestException(
+            'Unable to process leave request: Leave type information is missing. Please contact system administrator.'
+          );
+        }
+        
+        // Extract the ObjectId value
+        if (originalRequest.leaveTypeId instanceof Types.ObjectId) {
+          leaveTypeIdValue = originalRequest.leaveTypeId.toString();
+        } else if (typeof originalRequest.leaveTypeId === 'string') {
+          leaveTypeIdValue = originalRequest.leaveTypeId;
+        } else {
+          // Handle case where it might be an object with _id
+          leaveTypeIdValue = (originalRequest.leaveTypeId as any)?._id?.toString() || String(originalRequest.leaveTypeId);
+        }
+        
+        // Validate leaveTypeId is a valid ObjectId string
+        if (!Types.ObjectId.isValid(leaveTypeIdValue)) {
+          throw new BadRequestException(
+            'Unable to process leave request: Invalid leave type information. Please contact system administrator.'
+          );
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        throw new BadRequestException(
+          'Unable to process leave request: Error reading leave type information. Please contact system administrator.'
+        );
       }
-      await this.notifyStakeholders(leaveRequest, 'overridden_rejected');
+      
+      try {
+        const entitlement = await this.getLeaveEntitlement(
+          leaveRequest.employeeId.toString(),
+          leaveTypeIdValue,
+        );
+        const updated = await this.leaveEntitlementModel
+          .findByIdAndUpdate(
+            entitlement._id,
+            { $inc: { pending: -leaveRequest.durationDays } },
+            { new: true },
+          )
+          .exec();
+        if (updated && updated.pending < 0) {
+          await this.leaveEntitlementModel
+            .findByIdAndUpdate(entitlement._id, { $set: { pending: 0 } })
+            .exec();
+        }
+      } catch (error) {
+        // If getLeaveEntitlement fails, provide user-friendly error
+        if (error instanceof NotFoundException || error instanceof BadRequestException) {
+          throw error;
+        }
+        throw new BadRequestException(
+          'Unable to process leave request rejection: Could not update leave balance. Please contact system administrator.'
+        );
+      }
+      // Notify stakeholders (don't throw if notification fails)
+      try {
+        await this.notifyStakeholders(leaveRequest, 'overridden_rejected');
+      } catch (error) {
+        console.error('Failed to send notification for overridden rejection:', error);
+        // Continue execution even if notification fails
+      }
     }
 
-    return await leaveRequest.save();
+    try {
+      const savedRequest = await leaveRequest.save();
+      // Re-populate after save to ensure leaveTypeId is populated in response
+      const populatedRequest = await this.leaveRequestModel
+        .findById(savedRequest._id)
+        .populate('leaveTypeId', 'name code')
+        .exec();
+      if (!populatedRequest) {
+        throw new NotFoundException(`Failed to retrieve updated leave request with ID ${leaveRequestId}. Please try again.`);
+      }
+      return populatedRequest;
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        'Unable to save leave request override: An error occurred while saving the changes. Please try again or contact system administrator.'
+      );
+    }
   }
 
   // Phase 2: REQ-027 - Process multiple leave requests at once
@@ -2050,17 +2621,52 @@ export class LeavesService {
         .populate('leaveTypeId')
         .exec();
 
-      const mapped = entitlements.map((ent) => ({
-        leaveTypeId: ent.leaveTypeId?._id || ent.leaveTypeId,
-        leaveTypeName: (ent.leaveTypeId as any)?.name || undefined,
-        yearlyEntitlement: ent.yearlyEntitlement,
-        accruedActual: ent.accruedActual,
-        carryForward: ent.carryForward,
-        taken: ent.taken,
-        pending: ent.pending,
-        remaining: ent.remaining,
-        lastAccrualDate: ent.lastAccrualDate,
-      }));
+      // Map entitlements and handle null populate results - only include valid leave types
+      const mapped = (await Promise.all(
+        entitlements.map(async (ent) => {
+          let leaveTypeName = (ent.leaveTypeId as any)?.name;
+          let leaveTypeIdValue = ent.leaveTypeId?._id || ent.leaveTypeId;
+
+          // If populate failed (leaveTypeId is null or doesn't have name), fetch it separately
+          if (!leaveTypeName && ent.leaveTypeId) {
+            const storedLeaveTypeId = ent.leaveTypeId instanceof Types.ObjectId 
+              ? ent.leaveTypeId 
+              : (typeof ent.leaveTypeId === 'string' 
+                  ? new Types.ObjectId(ent.leaveTypeId) 
+                  : (ent.leaveTypeId as any)?._id || ent.leaveTypeId);
+            
+            if (storedLeaveTypeId) {
+              try {
+                const leaveType = await this.leaveTypeModel.findById(storedLeaveTypeId).exec();
+                if (leaveType) {
+                  leaveTypeName = leaveType.name;
+                  leaveTypeIdValue = leaveType._id;
+                } else {
+                  return null; // Filter out deleted leave types
+                }
+              } catch (err) {
+                return null; // Filter out invalid leave types
+              }
+            } else {
+              return null; // Filter out invalid leave types
+            }
+          } else if (!leaveTypeName) {
+            return null; // Filter out invalid leave types
+          }
+
+          return {
+            leaveTypeId: leaveTypeIdValue,
+            leaveTypeName: leaveTypeName,
+            yearlyEntitlement: ent.yearlyEntitlement,
+            accruedActual: ent.accruedActual,
+            carryForward: ent.carryForward,
+            taken: ent.taken,
+            pending: ent.pending,
+            remaining: ent.remaining,
+            lastAccrualDate: ent.lastAccrualDate,
+          };
+        })
+      )).filter(balance => balance !== null);
 
       if (leaveTypeId) {
         return mapped.length ? mapped[0] : null;
@@ -2075,13 +2681,60 @@ export class LeavesService {
   }
 
   // REQ-032: Get past leave requests with filters
+  // Enhanced to support delegates: if userId is a delegate, show requests for the manager they're delegated for
   async getPastLeaveRequests(
     employeeId: string,
     filters?: any,
+    userId?: string, // Optional: the actual user making the request (could be a delegate)
   ): Promise<any[]> {
     try {
-      const query: any = { employeeId: new Types.ObjectId(employeeId) };
+      // Check if userId is a delegate
+      let actualManagerId: string | null = null;
+      let isDelegate = false;
+      
+      if (userId) {
+        const delegatedManagerId = this.getDelegatedManagerId(userId);
+        if (delegatedManagerId) {
+          actualManagerId = delegatedManagerId;
+          isDelegate = true;
+          console.log(`[DELEGATE] User ${userId} is a delegate for manager ${actualManagerId}`);
+        }
+      }
+      
+      // If user is a delegate, get requests for the manager's team members
+      // Otherwise, get requests for the specified employeeId
+      let query: any;
+      
+      if (isDelegate && actualManagerId) {
+        // Delegate: Get all pending requests for the manager's team
+        const manager = await this.employeeProfileModel.findById(actualManagerId).exec();
+        if (!manager || !manager.primaryPositionId) {
+          return []; // Manager not found or has no position
+        }
+        
+        // Find all team members (employees with supervisorPositionId matching manager's primaryPositionId)
+        const teamMembers = await this.employeeProfileModel
+          .find({
+            supervisorPositionId: manager.primaryPositionId,
+            status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+          })
+          .select('_id')
+          .lean()
+          .exec();
+        
+        const teamMemberIds = teamMembers.map((m: any) => m._id);
+        
+        query = { 
+          employeeId: { $in: teamMemberIds },
+        };
+        
+        console.log(`[DELEGATE] Found ${teamMemberIds.length} team members for delegate to review`);
+      } else {
+        // Regular query: get requests for specific employee
+        query = { employeeId: new Types.ObjectId(employeeId) };
+      }
 
+      // Apply date filters
       if (filters?.fromDate || filters?.toDate) {
         query['dates.from'] = {};
         if (filters?.fromDate)
@@ -2092,8 +2745,23 @@ export class LeavesService {
         }
       }
 
-      if (filters?.status) {
-        query.status = filters.status;
+      // Apply status filter - normalize to lowercase to match enum values
+      // Allow filtering for both regular users and delegates
+      if (filters?.status && typeof filters.status === 'string' && filters.status.trim() !== '') {
+        // Normalize status to lowercase to match LeaveStatus enum (pending, approved, rejected, cancelled)
+        const normalizedStatus = filters.status.trim().toLowerCase();
+        // Validate that the status is a valid enum value
+        const validStatuses = ['pending', 'approved', 'rejected', 'cancelled'];
+        if (validStatuses.includes(normalizedStatus)) {
+          query.status = normalizedStatus;
+          console.log(`[getPastLeaveRequests] Filtering by status: ${normalizedStatus}`);
+        } else {
+          console.warn(`[getPastLeaveRequests] Invalid status value: "${filters.status}" (normalized: "${normalizedStatus}"). Valid values are: ${validStatuses.join(', ')}`);
+        }
+      } else if (isDelegate && (!filters?.status || (typeof filters.status === 'string' && filters.status.trim() === ''))) {
+        // For delegates, default to pending if no status filter is provided
+        query.status = LeaveStatus.PENDING;
+        console.log(`[getPastLeaveRequests] Delegate query - defaulting to PENDING status`);
       }
 
       if (filters?.leaveTypeId) {
@@ -2106,22 +2774,79 @@ export class LeavesService {
         .sort({ 'dates.from': -1 })
         .exec();
 
-      return requests.map((req) => ({
-        _id: req._id,
-        employeeId: req.employeeId,
-        leaveTypeId: req.leaveTypeId ? (req.leaveTypeId as any)._id : req.leaveTypeId,
-        leaveTypeName: req.leaveTypeId ? (req.leaveTypeId as any).name : null,
-        dates: req.dates,
-        durationDays: req.durationDays,
-        justification: req.justification,
-        status: req.status,
-        approvalFlow: req.approvalFlow,
-        createdAt: (req as any).createdAt,
-        updatedAt: (req as any).updatedAt,
-      }));
+      // Map requests and handle null populate results
+      const mapped = await Promise.all(
+        requests.map(async (req) => {
+          let leaveTypeName: string | null = null;
+          let leaveTypeIdValue = req.leaveTypeId;
+          
+          try {
+            if (req.leaveTypeId && typeof req.leaveTypeId === 'object' && req.leaveTypeId !== null) {
+              // Safely access name property - check if it exists first
+              const populatedLeaveType = req.leaveTypeId as any;
+              if (populatedLeaveType && populatedLeaveType.name) {
+                leaveTypeName = populatedLeaveType.name;
+                leaveTypeIdValue = populatedLeaveType._id || populatedLeaveType;
+              } else {
+                // Populated but name is missing (leave type was deleted)
+                leaveTypeName = null; // Will be set to 'Deleted Leave Type' below
+                leaveTypeIdValue = populatedLeaveType?._id || populatedLeaveType || req.leaveTypeId;
+              }
+            }
+          } catch (typeError) {
+            console.warn(`[getPastLeaveRequests] Error accessing leaveTypeId for request ${req._id}:`, typeError);
+            leaveTypeName = null;
+          }
+
+          // If populate failed (leaveTypeId is null or doesn't have name), fetch it separately
+          if (!leaveTypeName && req.leaveTypeId) {
+            const storedLeaveTypeId = req.leaveTypeId instanceof Types.ObjectId 
+              ? req.leaveTypeId 
+              : (typeof req.leaveTypeId === 'string' 
+                  ? new Types.ObjectId(req.leaveTypeId) 
+                  : (req.leaveTypeId as any)?._id || req.leaveTypeId);
+            
+            if (storedLeaveTypeId) {
+              try {
+                const leaveType = await this.leaveTypeModel.findById(storedLeaveTypeId).exec();
+                if (leaveType) {
+                  leaveTypeName = leaveType.name;
+                  leaveTypeIdValue = leaveType._id;
+                } else {
+                  leaveTypeName = 'Deleted Leave Type';
+                }
+              } catch (err) {
+                leaveTypeName = 'Unknown Leave Type';
+              }
+            } else {
+              leaveTypeName = 'Unknown Leave Type';
+            }
+          } else if (!leaveTypeName) {
+            leaveTypeName = 'Unknown Leave Type';
+          }
+
+          return {
+            _id: req._id,
+            employeeId: req.employeeId,
+            leaveTypeId: leaveTypeIdValue,
+            leaveTypeName: leaveTypeName,
+            dates: req.dates,
+            durationDays: req.durationDays,
+            justification: req.justification,
+            status: req.status,
+            approvalFlow: req.approvalFlow,
+            createdAt: (req as any).createdAt,
+            updatedAt: (req as any).updatedAt,
+          };
+        })
+      );
+
+      return mapped;
     } catch (error) {
-      throw new Error(
-        `Failed to fetch past leave requests: ${(error as any).message}`,
+      console.error(`[getPastLeaveRequests] Error:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new BadRequestException(
+        `Unable to retrieve leave requests. ${errorMessage.includes('name') ? 'Some leave types may have been deleted. Please contact support if this issue persists.' : 'Please try again or contact support if the problem continues.'}`,
       );
     }
   }
@@ -2145,8 +2870,10 @@ export class LeavesService {
         }
       }
 
-      if (filters.status) {
-        query.status = filters.status;
+      if (filters.status && typeof filters.status === 'string' && filters.status.trim() !== '') {
+        // Normalize status to lowercase to match LeaveStatus enum (pending, approved, rejected, cancelled)
+        query.status = filters.status.trim().toLowerCase();
+        console.log(`[filterLeaveHistory] Filtering by status: ${query.status}`);
       }
 
       let sortObj: any = {};
@@ -2171,19 +2898,61 @@ export class LeavesService {
 
       return {
         total,
-        items: items.map((req) => ({
-          _id: req._id,
-          employeeId: req.employeeId,
-          leaveTypeName: (req.leaveTypeId as any).name,
-          dates: req.dates,
-          durationDays: req.durationDays,
-          status: req.status,
-          createdAt: (req as any).createdAt,
+        items: await Promise.all(items.map(async (req) => {
+          // Safely get leave type name, handling null populate and deleted leave types
+          let leaveTypeName = 'Unknown Leave Type';
+          let leaveTypeIdValue = req.leaveTypeId;
+          
+          try {
+            if (req.leaveTypeId) {
+              if (typeof req.leaveTypeId === 'object' && req.leaveTypeId !== null) {
+                // Check if populated object has name property
+                const populatedLeaveType = req.leaveTypeId as any;
+                if (populatedLeaveType.name) {
+                  leaveTypeName = populatedLeaveType.name;
+                  leaveTypeIdValue = populatedLeaveType._id || populatedLeaveType;
+                } else {
+                  // Populated but name is missing (might be deleted)
+                  leaveTypeName = 'Deleted Leave Type';
+                  leaveTypeIdValue = populatedLeaveType._id || populatedLeaveType;
+                }
+              } else if (typeof req.leaveTypeId === 'string') {
+                // If it's a string ID, try to fetch the leave type
+                try {
+                  const leaveType = await this.leaveTypeModel.findById(req.leaveTypeId).exec();
+                  if (leaveType) {
+                    leaveTypeName = leaveType.name;
+                    leaveTypeIdValue = leaveType._id;
+                  } else {
+                    leaveTypeName = 'Deleted Leave Type';
+                  }
+                } catch (fetchError) {
+                  leaveTypeName = 'Unknown Leave Type';
+                }
+              }
+            }
+          } catch (typeError) {
+            console.warn(`[filterLeaveHistory] Error processing leave type for request ${req._id}:`, typeError);
+            leaveTypeName = 'Unknown Leave Type';
+          }
+          
+          return {
+            _id: req._id,
+            employeeId: req.employeeId,
+            leaveTypeId: leaveTypeIdValue,
+            leaveTypeName,
+            dates: req.dates,
+            durationDays: req.durationDays,
+            status: req.status,
+            createdAt: (req as any).createdAt,
+          };
         })),
       };
     } catch (error) {
-      throw new Error(
-        `Failed to filter leave history: ${(error as any).message}`,
+      console.error(`[filterLeaveHistory] Error:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new BadRequestException(
+        `Unable to filter leave history. ${errorMessage.includes('name') ? 'Some leave types may have been deleted. Please contact support if this issue persists.' : 'Please check your filter criteria and try again.'}`,
       );
     }
   }
@@ -2196,8 +2965,89 @@ export class LeavesService {
     departmentId?: string,
   ): Promise<any> {
     try {
-      // Get team members under manager - placeholder implementation
-      const teamMembers: any[] = [];
+      // Get manager's position
+      const manager = await this.employeeProfileModel.findById(managerId).exec();
+      if (!manager || !manager.primaryPositionId) {
+        return {
+          managerId,
+          teamMembers: [],
+          totalTeamMembers: 0,
+        };
+      }
+
+      // Normalize manager's primaryPositionId to handle both ObjectId and string formats
+      const managerPositionQuery = this.createFlexibleIdQuery('supervisorPositionId', manager.primaryPositionId);
+      if (!managerPositionQuery) {
+        console.warn(`[getTeamLeaveBalances] Invalid manager primaryPositionId: ${manager.primaryPositionId}`);
+        return {
+          managerId,
+          teamMembers: [],
+          totalTeamMembers: 0,
+        };
+      }
+
+      // Get team members where supervisorPositionId matches manager's position
+      const baseQuery: any = {
+        ...managerPositionQuery,
+        status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+      };
+
+      let teamMembers: any[] = [];
+
+      // Filter by department if provided and valid
+      if (departmentId && departmentId.trim()) {
+        const trimmedDeptId = departmentId.trim();
+        const departmentQuery = this.createFlexibleIdQuery('primaryDepartmentId', trimmedDeptId);
+        
+        if (departmentQuery) {
+          console.log(`[getTeamLeaveBalances] Filtering by department: ${trimmedDeptId}`);
+          const finalQuery = {
+            ...baseQuery,
+            ...departmentQuery,
+          };
+          
+          teamMembers = await this.employeeProfileModel
+            .find(finalQuery)
+            .populate('primaryDepartmentId', 'name code')
+            .populate('primaryPositionId', 'title code')
+            .select('_id firstName lastName middleName fullName primaryDepartmentId primaryPositionId')
+            .exec();
+          
+          console.log(`[getTeamLeaveBalances] Found ${teamMembers.length} team members with flexible department query`);
+        } else {
+          console.warn(`[getTeamLeaveBalances] Invalid departmentId format: ${trimmedDeptId}`);
+          // Fallback to base query without department filter
+          teamMembers = await this.employeeProfileModel
+            .find(baseQuery)
+            .populate('primaryDepartmentId', 'name code')
+            .populate('primaryPositionId', 'title code')
+            .select('_id firstName lastName middleName fullName primaryDepartmentId primaryPositionId')
+            .exec();
+        }
+      } else {
+        console.log(`[getTeamLeaveBalances] No department filter applied`);
+        teamMembers = await this.employeeProfileModel
+          .find(baseQuery)
+          .populate('primaryDepartmentId', 'name code')
+          .populate('primaryPositionId', 'title code')
+          .select('_id firstName lastName middleName fullName primaryDepartmentId primaryPositionId')
+          .exec();
+      }
+
+      console.log(`[getTeamLeaveBalances] Total found: ${teamMembers.length} team members`);
+      if (teamMembers.length > 0) {
+        teamMembers.forEach((member, idx) => {
+          const deptId = (member as any).primaryDepartmentId?._id || (member as any).primaryDepartmentId;
+          const deptIdStr = deptId?.toString ? deptId.toString() : (deptId || 'N/A');
+          const deptIdType = deptId instanceof Types.ObjectId ? 'ObjectId' : (deptId ? typeof deptId : 'null/undefined');
+          console.log(`[getTeamLeaveBalances] Member ${idx + 1}: ${(member as any).firstName} ${(member as any).lastName}, Department ID: ${deptIdStr}, Type: ${deptIdType}`);
+          if (departmentId && departmentId.trim()) {
+            const matches = deptIdStr === departmentId.trim() || 
+                           (deptId instanceof Types.ObjectId && deptId.equals(new Types.ObjectId(departmentId.trim())));
+            console.log(`[getTeamLeaveBalances]   - Matches filter (${departmentId.trim()}): ${matches}`);
+          }
+        });
+      }
 
       const balances = await Promise.all(
         teamMembers.map(async (member) => {
@@ -2208,7 +3058,7 @@ export class LeavesService {
 
           let upcomingQuery: any = {
             employeeId: new Types.ObjectId(member._id),
-            status: { $in: [LeaveStatus.APPROVED, LeaveStatus.PENDING] },
+            status: { $in: [LeaveStatus.APPROVED, LeaveStatus.PENDING, LeaveStatus.REJECTED] },
           };
           if (upcomingFromDate || upcomingToDate) {
             upcomingQuery['dates.from'] = {};
@@ -2225,25 +3075,143 @@ export class LeavesService {
             .populate('leaveTypeId')
             .exec();
 
+          // Construct employee name from firstName, lastName, or use fullName if available
+          const memberData = member as any;
+          const employeeName = memberData.fullName || 
+            (memberData.firstName && memberData.lastName 
+              ? `${memberData.firstName}${memberData.middleName ? ' ' + memberData.middleName : ''} ${memberData.lastName}`.trim()
+              : 'N/A');
+
+          // Handle entitlements with fallback for null populate - only include valid leave types
+          const processedEntitlements = (await Promise.all(
+            entitlements.map(async (ent) => {
+              let leaveTypeName = (ent.leaveTypeId as any)?.name;
+              let leaveTypeIdValue = (ent.leaveTypeId as any)?._id;
+
+              // If populate failed, fetch leave type separately
+              if (!leaveTypeName && ent.leaveTypeId) {
+                const storedLeaveTypeId = ent.leaveTypeId instanceof Types.ObjectId 
+                  ? ent.leaveTypeId 
+                  : (typeof ent.leaveTypeId === 'string' 
+                      ? new Types.ObjectId(ent.leaveTypeId) 
+                      : (ent.leaveTypeId as any)?._id || ent.leaveTypeId);
+                
+                if (storedLeaveTypeId) {
+                  try {
+                    const leaveType = await this.leaveTypeModel.findById(storedLeaveTypeId).exec();
+                    if (leaveType) {
+                      leaveTypeName = leaveType.name;
+                      leaveTypeIdValue = leaveType._id;
+                    } else {
+                      return null; // Filter out deleted leave types
+                    }
+                  } catch (err) {
+                    return null; // Filter out invalid leave types
+                  }
+                } else {
+                  return null; // Filter out invalid leave types
+                }
+              } else if (!leaveTypeName) {
+                return null; // Filter out invalid leave types
+              }
+
+              return {
+                leaveTypeId: leaveTypeIdValue,
+                leaveTypeName: leaveTypeName,
+                remaining: ent.remaining,
+                pending: ent.pending,
+                taken: ent.taken,
+              };
+            })
+          )).filter(balance => balance !== null);
+
+          // Group entitlements by leaveTypeId and aggregate values
+          const leaveBalancesMap = new Map<string, {
+            leaveTypeId: any;
+            leaveTypeName: string;
+            remaining: number;
+            pending: number;
+            taken: number;
+          }>();
+
+          processedEntitlements.forEach((balance) => {
+            if (!balance) return;
+            
+            const leaveTypeIdKey = balance.leaveTypeId?.toString() || balance.leaveTypeId;
+            
+            if (leaveBalancesMap.has(leaveTypeIdKey)) {
+              // Aggregate values for duplicate leave types
+              const existing = leaveBalancesMap.get(leaveTypeIdKey)!;
+              existing.remaining += balance.remaining || 0;
+              existing.pending += balance.pending || 0;
+              existing.taken += balance.taken || 0;
+            } else {
+              // First occurrence of this leave type
+              leaveBalancesMap.set(leaveTypeIdKey, {
+                leaveTypeId: balance.leaveTypeId,
+                leaveTypeName: balance.leaveTypeName,
+                remaining: balance.remaining || 0,
+                pending: balance.pending || 0,
+                taken: balance.taken || 0,
+              });
+            }
+          });
+
+          // Convert map to array
+          const leaveBalances = Array.from(leaveBalancesMap.values());
+
+          // Handle upcomingLeaves with fallback for null populate - only include valid leave types
+          const upcomingLeavesMapped = (await Promise.all(
+            upcomingLeaves.map(async (leave) => {
+              let leaveTypeName = (leave.leaveTypeId as any)?.name;
+              let leaveTypeIdValue = (leave.leaveTypeId as any)?._id || leave.leaveTypeId;
+
+              // If populate failed, fetch leave type separately
+              if (!leaveTypeName && leave.leaveTypeId) {
+                const storedLeaveTypeId = leave.leaveTypeId instanceof Types.ObjectId 
+                  ? leave.leaveTypeId 
+                  : (typeof leave.leaveTypeId === 'string' 
+                      ? new Types.ObjectId(leave.leaveTypeId) 
+                      : (leave.leaveTypeId as any)?._id || leave.leaveTypeId);
+                
+                if (storedLeaveTypeId) {
+                  try {
+                    const leaveType = await this.leaveTypeModel.findById(storedLeaveTypeId).exec();
+                    if (leaveType) {
+                      leaveTypeName = leaveType.name;
+                      leaveTypeIdValue = leaveType._id;
+                    } else {
+                      return null; // Filter out deleted leave types
+                    }
+                  } catch (err) {
+                    return null; // Filter out invalid leave types
+                  }
+                } else {
+                  return null; // Filter out invalid leave types
+                }
+              } else if (!leaveTypeName) {
+                return null; // Filter out invalid leave types
+              }
+
+              return {
+                _id: leave._id,
+                leaveTypeId: leaveTypeIdValue,
+                leaveTypeName: leaveTypeName,
+                dates: leave.dates,
+                durationDays: leave.durationDays,
+                status: leave.status,
+                isFlagged: (leave as any).irregularPatternFlag || false,
+              };
+            })
+          )).filter(leave => leave !== null);
+
           return {
             employeeId: member._id,
-            employeeName: member.name,
-            position: member.position,
-            department: member.department,
-            leaveBalances: entitlements.map((ent) => ({
-              leaveTypeId: ent.leaveTypeId._id,
-              leaveTypeName: (ent.leaveTypeId as any).name,
-              remaining: ent.remaining,
-              pending: ent.pending,
-              taken: ent.taken,
-            })),
-            upcomingLeaves: upcomingLeaves.map((leave) => ({
-              _id: leave._id,
-              leaveTypeName: (leave.leaveTypeId as any).name,
-              dates: leave.dates,
-              durationDays: leave.durationDays,
-              status: leave.status,
-            })),
+            employeeName: employeeName,
+            position: (member.primaryPositionId && (member.primaryPositionId as any).title) || 'N/A',
+            department: (member.primaryDepartmentId && (member.primaryDepartmentId as any).name) || 'N/A',
+            leaveBalances: leaveBalances,
+            upcomingLeaves: upcomingLeavesMapped,
           };
         }),
       );
@@ -2263,9 +3231,187 @@ export class LeavesService {
   // REQ-035: Filter and sort team leave data
   async filterTeamLeaveData(managerId: string, filters: any): Promise<any> {
     try {
-      // Get team members - placeholder
-      const teamMembers: any[] = [];
-      const memberIds = teamMembers.map((m) => new Types.ObjectId(m._id));
+      // Get manager's position
+      const manager = await this.employeeProfileModel.findById(managerId).exec();
+      if (!manager || !manager.primaryPositionId) {
+        return {
+          total: 0,
+          filters: {
+            managerId,
+            departmentId: filters.departmentId,
+            leaveTypeId: filters.leaveTypeId,
+            dateRange:
+              filters.fromDate || filters.toDate
+                ? { from: filters.fromDate, to: filters.toDate }
+                : undefined,
+            status: filters.status,
+          },
+          items: [],
+        };
+      }
+
+      // Normalize manager's primaryPositionId to handle both ObjectId and string formats
+      const managerPositionQuery = this.createFlexibleIdQuery('supervisorPositionId', manager.primaryPositionId);
+      if (!managerPositionQuery) {
+        console.warn(`[filterTeamLeaveData] Invalid manager primaryPositionId: ${manager.primaryPositionId}`);
+        return {
+          total: 0,
+          filters: {
+            managerId,
+            departmentId: filters.departmentId,
+            leaveTypeId: filters.leaveTypeId,
+            dateRange:
+              filters.fromDate || filters.toDate
+                ? { from: filters.fromDate, to: filters.toDate }
+                : undefined,
+            status: filters.status,
+          },
+          items: [],
+        };
+      }
+
+      // Get team members where supervisorPositionId matches manager's position
+      const baseQuery: any = {
+        ...managerPositionQuery,
+        status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+      };
+
+      let teamMembers: any[] = [];
+
+      // Filter by department if provided and valid (same logic as getTeamLeaveBalances)
+      if (filters.departmentId && filters.departmentId.trim()) {
+        const trimmedDeptId = filters.departmentId.trim();
+        const departmentQuery = this.createFlexibleIdQuery('primaryDepartmentId', trimmedDeptId);
+        
+        if (departmentQuery) {
+          console.log(`[filterTeamLeaveData] Filtering by department: ${trimmedDeptId}`);
+          const finalQuery = {
+            ...baseQuery,
+            ...departmentQuery,
+          };
+          
+          teamMembers = await this.employeeProfileModel
+            .find(finalQuery)
+            .select('_id primaryDepartmentId')
+            .exec();
+          
+          console.log(`[filterTeamLeaveData] Found ${teamMembers.length} team members with flexible department query`);
+        } else {
+          console.warn(`[filterTeamLeaveData] Invalid departmentId format: ${trimmedDeptId}`);
+          // Fallback to base query without department filter
+          teamMembers = await this.employeeProfileModel
+            .find(baseQuery)
+            .select('_id primaryDepartmentId')
+            .exec();
+        }
+      } else {
+        console.log(`[filterTeamLeaveData] No department filter applied`);
+        teamMembers = await this.employeeProfileModel
+          .find(baseQuery)
+          .select('_id primaryDepartmentId')
+          .exec();
+      }
+      
+      console.log(`[filterTeamLeaveData] Total found: ${teamMembers.length} team members`);
+      if (teamMembers.length > 0 && filters.departmentId) {
+        teamMembers.forEach((member, idx) => {
+          const deptId = (member as any).primaryDepartmentId;
+          const deptIdStr = deptId?.toString ? deptId.toString() : (deptId || 'N/A');
+          const deptIdType = deptId instanceof Types.ObjectId ? 'ObjectId' : (deptId ? typeof deptId : 'null/undefined');
+          console.log(`[filterTeamLeaveData] Member ${idx + 1}: Department ID: ${deptIdStr}, Type: ${deptIdType}`);
+          if (filters.departmentId && filters.departmentId.trim()) {
+            const matches = deptIdStr === filters.departmentId.trim() || 
+                           (deptId instanceof Types.ObjectId && deptId.equals(new Types.ObjectId(filters.departmentId.trim())));
+            console.log(`[filterTeamLeaveData]   - Matches filter (${filters.departmentId.trim()}): ${matches}`);
+          }
+        });
+      }
+      
+      if (teamMembers.length > 0 && filters.departmentId) {
+        const trimmedDeptId = filters.departmentId.trim();
+        console.log(`[filterTeamLeaveData] Sample team members:`, teamMembers.slice(0, 3).map(m => {
+          const deptId = (m as any).primaryDepartmentId;
+          const deptIdStr = deptId?.toString ? deptId.toString() : (deptId || 'N/A');
+          return {
+            employeeId: m._id.toString(),
+            departmentId: deptIdStr,
+            departmentIdType: deptId instanceof Types.ObjectId ? 'ObjectId' : (deptId ? typeof deptId : 'null/undefined'),
+            matchesFilter: deptIdStr === trimmedDeptId || 
+              (deptId instanceof Types.ObjectId && deptId.equals(new Types.ObjectId(trimmedDeptId)))
+          };
+        }));
+      } else if (filters.departmentId && filters.departmentId.trim()) {
+        const trimmedDeptId = filters.departmentId.trim();
+        console.warn(`[filterTeamLeaveData] ⚠️ No team members found for department ${trimmedDeptId}`);
+        console.warn(`[filterTeamLeaveData] Possible reasons:`);
+        console.warn(`  1. No employees in this department have supervisorPositionId matching manager's position`);
+        console.warn(`  2. Employees don't have a department assigned (primaryDepartmentId is null/undefined)`);
+        console.warn(`  3. The department ID format doesn't match (expected ObjectId)`);
+        
+        // Diagnostic: Check if any employees exist in this department at all
+        const diagnosticQuery: any = {
+          primaryDepartmentId: Types.ObjectId.isValid(trimmedDeptId)
+            ? new Types.ObjectId(trimmedDeptId)
+            : trimmedDeptId,
+        };
+        const allEmployeesInDept = await this.employeeProfileModel
+          .find(diagnosticQuery)
+          .select('_id firstName lastName primaryDepartmentId supervisorPositionId')
+          .limit(5)
+          .exec();
+        console.log(`[filterTeamLeaveData] Diagnostic: Found ${allEmployeesInDept.length} total employees in this department`);
+        
+        // Also check team members without department filter to see if they have departments assigned
+        const teamMembersWithoutDeptFilter = await this.employeeProfileModel
+          .find({
+            supervisorPositionId: manager.primaryPositionId,
+            status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+          })
+          .select('_id firstName lastName primaryDepartmentId')
+          .limit(5)
+          .exec();
+        console.log(`[filterTeamLeaveData] Diagnostic: Found ${teamMembersWithoutDeptFilter.length} team members (without dept filter)`);
+        const withoutDept = teamMembersWithoutDeptFilter.filter(m => !(m as any).primaryDepartmentId);
+        if (withoutDept.length > 0) {
+          console.warn(`[filterTeamLeaveData] ⚠️ Found ${withoutDept.length} team members WITHOUT department assigned:`, 
+            withoutDept.map(m => ({
+              id: m._id.toString(),
+              name: `${(m as any).firstName || ''} ${(m as any).lastName || ''}`.trim()
+            }))
+          );
+        }
+        
+        if (allEmployeesInDept.length > 0) {
+          console.log(`[filterTeamLeaveData] Sample employees in department:`, allEmployeesInDept.map(e => ({
+            id: e._id.toString(),
+            name: `${(e as any).firstName || ''} ${(e as any).lastName || ''}`.trim(),
+            deptId: (e as any).primaryDepartmentId?.toString() || (e as any).primaryDepartmentId,
+            supervisorPosId: (e as any).supervisorPositionId?.toString() || (e as any).supervisorPositionId,
+            managerPosId: manager.primaryPositionId?.toString()
+          })));
+        }
+      }
+      
+      const memberIds = teamMembers.map((m) => m._id);
+
+      // If no team members found, return empty results
+      if (memberIds.length === 0) {
+        console.warn('[filterTeamLeaveData] No team members found. Base query:', JSON.stringify(baseQuery));
+        return {
+          total: 0,
+          filters: {
+            managerId,
+            departmentId: filters.departmentId,
+            leaveTypeId: filters.leaveTypeId,
+            dateRange:
+              filters.fromDate || filters.toDate
+                ? { from: filters.fromDate, to: filters.toDate }
+                : undefined,
+            status: filters.status,
+          },
+          items: [],
+        };
+      }
 
       const query: any = { employeeId: { $in: memberIds } };
 
@@ -2283,8 +3429,10 @@ export class LeavesService {
         }
       }
 
-      if (filters.status) {
-        query.status = filters.status;
+      if (filters.status && typeof filters.status === 'string' && filters.status.trim() !== '') {
+        // Normalize status to lowercase to match LeaveStatus enum (pending, approved, rejected, cancelled)
+        query.status = filters.status.trim().toLowerCase();
+        console.log(`[filterTeamLeaveData] Filtering by status: ${query.status}`);
       }
 
       let sortObj: any = {};
@@ -2302,6 +3450,7 @@ export class LeavesService {
       const items = await this.leaveRequestModel
         .find(query)
         .populate('leaveTypeId')
+        .populate('employeeId', 'firstName lastName middleName')
         .sort(sortObj || { 'dates.from': -1 })
         .skip(skip)
         .limit(limit)
@@ -2319,19 +3468,54 @@ export class LeavesService {
               : undefined,
           status: filters.status,
         },
-        items: items.map((req) => ({
-          _id: req._id,
-          employeeId: req.employeeId,
-          leaveTypeName: (req.leaveTypeId as any).name,
-          dates: req.dates,
-          durationDays: req.durationDays,
-          status: req.status,
-          createdAt: (req as any).createdAt,
+        items: await Promise.all(items.map(async (req) => {
+          const employee = req.employeeId as any;
+          const employeeName = employee && typeof employee === 'object'
+            ? `${employee.firstName || ''} ${employee.middleName || ''} ${employee.lastName || ''}`.trim()
+            : undefined;
+          
+          // Safely get leave type name
+          let leaveTypeName = 'Unknown Leave Type';
+          try {
+            if (req.leaveTypeId) {
+              if (typeof req.leaveTypeId === 'object' && req.leaveTypeId !== null) {
+                const populatedLeaveType = req.leaveTypeId as any;
+                if (populatedLeaveType && populatedLeaveType.name) {
+                  leaveTypeName = populatedLeaveType.name;
+                } else {
+                  leaveTypeName = 'Deleted Leave Type';
+                }
+              } else if (typeof req.leaveTypeId === 'string') {
+                try {
+                  const leaveType = await this.leaveTypeModel.findById(req.leaveTypeId).exec();
+                  leaveTypeName = leaveType ? leaveType.name : 'Deleted Leave Type';
+                } catch {
+                  leaveTypeName = 'Unknown Leave Type';
+                }
+              }
+            }
+          } catch (typeError) {
+            console.warn(`[filterTeamLeaveData] Error processing leave type for request ${req._id}:`, typeError);
+            leaveTypeName = 'Unknown Leave Type';
+          }
+          
+          return {
+            _id: req._id.toString(),
+            employeeId: (req.employeeId as any)?._id?.toString() || req.employeeId?.toString() || req.employeeId,
+            employeeName,
+            leaveTypeName,
+            dates: req.dates,
+            durationDays: req.durationDays,
+            status: req.status,
+            createdAt: (req as any).createdAt,
+          };
         })),
       };
     } catch (error) {
-      throw new Error(
-        `Failed to filter team leave data: ${(error as any).message}`,
+      console.error(`[filterTeamLeaveData] Error:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new BadRequestException(
+        `Unable to filter team leave data. ${errorMessage.includes('name') ? 'Some leave types may have been deleted. Please contact support if this issue persists.' : 'Please check your filter criteria and try again.'}`,
       );
     }
   }
@@ -2647,8 +3831,17 @@ export class LeavesService {
     asOfDate?: Date,
     departmentId?: string,
   ): Promise<any> {
+    console.log(`[runCarryForward] ════════════════════════════════════════`);
+    console.log(`[runCarryForward] START - Called with:`, {
+      leaveTypeId,
+      employeeId,
+      asOfDate,
+      departmentId,
+    });
+    
     try {
       const processDate = asOfDate || new Date();
+      console.log(`[runCarryForward] Process date: ${processDate}`);
 
       const query: any = { leaveTypeId: new Types.ObjectId(leaveTypeId) };
 
@@ -2657,75 +3850,210 @@ export class LeavesService {
       }
       // departmentId is currently not used in filtering; you can add it later if needed
 
-      const entitlements = await this.leaveEntitlementModel.find(query).exec();
+      const entitlements = await this.leaveEntitlementModel
+        .find(query)
+        .exec();
+      
+      console.log(`[runCarryForward] Found ${entitlements.length} entitlements to process for leaveTypeId: ${leaveTypeId}`);
+      
       const results: any[] = [];
       let successful = 0;
       let failed = 0;
 
       // Get policy to check maxCarryForward
-      const leavePolicy = await this.leavePolicyModel
+      // Try multiple ways to find the policy in case of ID format issues
+      let leavePolicy = await this.leavePolicyModel
         .findOne({ leaveTypeId: new Types.ObjectId(leaveTypeId) })
         .exec();
+      
+      // If not found, try as string
+      if (!leavePolicy) {
+        leavePolicy = await this.leavePolicyModel
+          .findOne({ leaveTypeId: leaveTypeId })
+          .exec();
+      }
 
       const maxCarryForward = leavePolicy?.maxCarryForward || 0;
+      const carryForwardAllowed = leavePolicy?.carryForwardAllowed || false;
+
+      console.log(`[runCarryForward] Policy check:`, {
+        leaveTypeId,
+        policyFound: !!leavePolicy,
+        maxCarryForward,
+        carryForwardAllowed,
+        entitlementsCount: entitlements.length,
+      });
+
+      // Allow carry forward if either:
+      // 1. carryForwardAllowed is explicitly true, OR
+      // 2. maxCarryForward is set to a positive value (implicitly allows carry forward)
+      const canCarryForward = carryForwardAllowed || maxCarryForward > 0;
+
+      if (!canCarryForward) {
+        console.warn(`[runCarryForward] Carry forward not allowed: carryForwardAllowed=${carryForwardAllowed}, maxCarryForward=${maxCarryForward}`);
+        return {
+          processedDate: processDate,
+          leaveTypeId,
+          successful: 0,
+          failed: 0,
+          total: entitlements.length,
+          details: entitlements.map(ent => ({
+            employeeId: ent.employeeId,
+            status: 'skipped',
+            reason: 'Carry forward not allowed by policy. Please enable "Carry Forward Allowed" or set "Max Carry Forward" to a positive value.',
+            carryForwardAmount: 0,
+            newBalance: ent.remaining,
+          })),
+        };
+      }
+
+      // If maxCarryForward is 0 but carryForwardAllowed is true, use a default
+      const effectiveMaxCarryForward = maxCarryForward > 0 ? maxCarryForward : (carryForwardAllowed ? 999 : 0);
+      
+      if (maxCarryForward === 0 && carryForwardAllowed) {
+        console.warn(`[runCarryForward] maxCarryForward is 0 but carryForwardAllowed is true. Using unlimited carry forward.`);
+      }
 
       for (const entitlement of entitlements) {
         try {
-          // Use maxCarryForward from policy instead of hardcoded 10
+          console.log(`[runCarryForward] Processing entitlement:`, {
+            employeeId: entitlement.employeeId?.toString(),
+            remaining: entitlement.remaining,
+            maxCarryForward: effectiveMaxCarryForward,
+            currentCarryForward: entitlement.carryForward || 0,
+          });
+
+          // Use effectiveMaxCarryForward (handles case where maxCarryForward is 0 but carryForwardAllowed is true)
           const carryForwardAmount = Math.min(
             entitlement.remaining,
-            maxCarryForward,
+            effectiveMaxCarryForward,
           );
+
+          console.log(`[runCarryForward] Calculated carryForwardAmount: ${carryForwardAmount}`);
 
           // Only process if there's something to carry forward
           if (carryForwardAmount <= 0) {
+            console.log(`[runCarryForward] Skipping - carryForwardAmount is ${carryForwardAmount}`);
             results.push({
               employeeId: entitlement.employeeId,
               status: 'skipped',
-              reason: 'No remaining balance to carry forward',
+              reason: effectiveMaxCarryForward === 0 
+                ? 'Max carry forward is 0 in policy' 
+                : 'No remaining balance to carry forward',
               carryForwardAmount: 0,
               newBalance: entitlement.remaining,
             });
             continue;
           }
 
-          // Atomically set carryForward and decrement remaining, and get updated doc back
-          const updated = await this.leaveEntitlementModel
-            .findByIdAndUpdate(
-              entitlement._id,
-              {
-                $set: { carryForward: carryForwardAmount },
-                $inc: { remaining: -carryForwardAmount },
-              },
-              { new: true },
-            )
+          // Record the previous remaining balance and carryForward for reference
+          const previousRemaining = entitlement.remaining;
+          const previousCarryForward = entitlement.carryForward || 0;
+          
+          // Calculate new remaining: subtract the carry forward amount from current remaining
+          // The carryForward field will be set to the amount being carried forward
+          // When carry forward happens, we're moving days FROM remaining TO carryForward
+          // So remaining should decrease by the carry forward amount
+          const newRemaining = previousRemaining - carryForwardAmount;
+          
+          // Ensure remaining doesn't go negative (shouldn't happen if carryForwardAmount <= remaining)
+          if (newRemaining < 0) {
+            throw new Error(`Carry forward amount (${carryForwardAmount}) exceeds remaining balance (${previousRemaining})`);
+          }
+          
+          // Round to 2 decimal places to avoid floating point precision issues
+          const roundedRemaining = Math.round(newRemaining * 100) / 100;
+          const roundedCarryForward = Math.round(carryForwardAmount * 100) / 100;
+
+          // Atomically set carryForward and remaining
+          // Note: We're setting carryForward to the NEW amount (replacing any old value)
+          // and decreasing remaining by that amount
+          console.log(`[runCarryForward] Updating entitlement:`, {
+            entitlementId: entitlement._id.toString(),
+            previousRemaining,
+            previousCarryForward,
+            newRemaining: roundedRemaining,
+            newCarryForward: roundedCarryForward,
+          });
+
+          // Fetch fresh document to ensure we have the latest version
+          const freshEntitlement = await this.leaveEntitlementModel
+            .findById(entitlement._id)
             .exec();
 
-          if (!updated) {
-            throw new Error('Failed to update entitlement');
+          if (!freshEntitlement) {
+            throw new Error(`Entitlement not found: ${entitlement._id}`);
           }
 
-          // Recalculate remaining to ensure consistency
-          updated.remaining = this.calculateRemaining(updated);
-          await updated.save();
+          // Update the fields
+          freshEntitlement.carryForward = roundedCarryForward;
+          freshEntitlement.remaining = roundedRemaining;
+          
+          // Save the document
+          const updated = await freshEntitlement.save();
+
+          if (!updated) {
+            throw new Error('Failed to save entitlement');
+          }
+
+          // Verify the update persisted by fetching again
+          const verification = await this.leaveEntitlementModel
+            .findById(entitlement._id)
+            .select('carryForward remaining')
+            .lean()
+            .exec();
+
+          console.log(`[runCarryForward] ✅ Successfully updated:`, {
+            employeeId: entitlement.employeeId?.toString(),
+            carryForward: updated.carryForward,
+            remaining: updated.remaining,
+            verificationCarryForward: verification?.carryForward,
+            verificationRemaining: verification?.remaining,
+          });
+
+          // Double-check the values were saved correctly
+          if (verification && (
+            Math.abs((verification.carryForward || 0) - roundedCarryForward) > 0.01 ||
+            Math.abs((verification.remaining || 0) - roundedRemaining) > 0.01
+          )) {
+            console.error(`[runCarryForward] ⚠️ WARNING: Values may not have persisted correctly!`, {
+              expectedCarryForward: roundedCarryForward,
+              actualCarryForward: verification.carryForward,
+              expectedRemaining: roundedRemaining,
+              actualRemaining: verification.remaining,
+            });
+            throw new Error(`Update verification failed. Expected carryForward: ${roundedCarryForward}, got: ${verification.carryForward}`);
+          }
 
           results.push({
             employeeId: entitlement.employeeId,
             status: 'success',
-            carryForwardAmount,
+            carryForwardAmount: roundedCarryForward,
             expiringAmount: 0, // you can change this later if you track expired days
             newBalance: updated.remaining,
           });
           successful++;
         } catch (err) {
           failed++;
+          const errorMessage = (err as any).message || String(err);
+          console.error(`[runCarryForward] ❌ Error processing entitlement:`, {
+            employeeId: entitlement.employeeId?.toString(),
+            error: errorMessage,
+            stack: (err as any).stack,
+          });
           results.push({
             employeeId: entitlement.employeeId,
             status: 'failed',
-            error: (err as any).message,
+            error: errorMessage,
           });
         }
       }
+
+      console.log(`[runCarryForward] Final results:`, {
+        successful,
+        failed,
+        total: entitlements.length,
+      });
 
       return {
         processedDate: processDate,
@@ -2756,20 +4084,76 @@ export class LeavesService {
         employeeId,
         leaveTypeId,
       );
-      const previousBalance = entitlement.remaining;
+      // Normalize the starting remaining value to avoid floating point precision issues
+      const previousBalance = Math.round(entitlement.remaining * 100) / 100;
+      entitlement.remaining = previousBalance;
+
+      // Get policy for rounding rule (needed for all adjustment types)
+      // Try multiple ways to find the policy in case of ID format issues
+      let leavePolicy = await this.leavePolicyModel
+        .findOne({ leaveTypeId: new Types.ObjectId(leaveTypeId) })
+        .exec();
+      
+      // If not found, try as string
+      if (!leavePolicy) {
+        leavePolicy = await this.leavePolicyModel
+          .findOne({ leaveTypeId: leaveTypeId })
+          .exec();
+      }
+      
+      // If still not found, try using the entitlement's leaveTypeId
+      if (!leavePolicy && entitlement.leaveTypeId) {
+        const entLeaveTypeId = entitlement.leaveTypeId as any;
+        const entitlementLeaveTypeId = entLeaveTypeId instanceof Types.ObjectId 
+          ? entLeaveTypeId 
+          : new Types.ObjectId(String(entLeaveTypeId));
+        leavePolicy = await this.leavePolicyModel
+          .findOne({ leaveTypeId: entitlementLeaveTypeId })
+          .exec();
+      }
+      
+      const roundingRule = leavePolicy?.roundingRule || RoundingRule.NONE;
+      
+      console.log(`[adjustAccrual] Policy lookup:`, {
+        leaveTypeId,
+        entitlementLeaveTypeId: entitlement.leaveTypeId ? String(entitlement.leaveTypeId) : 'N/A',
+        policyFound: !!leavePolicy,
+        roundingRule: roundingRule,
+        policyRoundingRule: leavePolicy?.roundingRule,
+        adjustmentType: adjustmentType
+      });
 
       switch (adjustmentType) {
         case 'suspension':
           entitlement.accruedActual -= adjustmentAmount;
+          // Round to 2 decimal places to avoid floating point precision issues
+          entitlement.accruedActual = Math.round(entitlement.accruedActual * 100) / 100;
           break;
         case 'reduction':
           entitlement.remaining -= adjustmentAmount;
+          console.log(`[adjustAccrual] Reduction - Before rounding: ${entitlement.remaining}`);
+          // Apply policy rounding rule to remaining
+          entitlement.remaining = this.applyRoundingRule(
+            entitlement.remaining,
+            roundingRule,
+          );
+          console.log(`[adjustAccrual] Reduction - After rounding (${roundingRule}): ${entitlement.remaining}`);
           break;
         case 'adjustment':
           entitlement.remaining += adjustmentAmount;
+          console.log(`[adjustAccrual] Adjustment - Before rounding: ${entitlement.remaining}, Adjustment amount: ${adjustmentAmount}`);
+          // Apply policy rounding rule to remaining
+          const beforeRounding = entitlement.remaining;
+          entitlement.remaining = this.applyRoundingRule(
+            entitlement.remaining,
+            roundingRule,
+          );
+          console.log(`[adjustAccrual] Adjustment - After rounding (${roundingRule}): ${beforeRounding} -> ${entitlement.remaining}`);
           break;
         case 'restoration':
           entitlement.accruedActual += adjustmentAmount;
+          // Round to 2 decimal places to avoid floating point precision issues
+          entitlement.accruedActual = Math.round(entitlement.accruedActual * 100) / 100;
           break;
         default:
           throw new Error('Invalid adjustment type');
@@ -2777,11 +4161,6 @@ export class LeavesService {
 
       // Update accruedRounded if we changed accruedActual
       if (adjustmentType === 'suspension' || adjustmentType === 'restoration') {
-        // Get policy for rounding rule
-        const leavePolicy = await this.leavePolicyModel
-          .findOne({ leaveTypeId: new Types.ObjectId(leaveTypeId) })
-          .exec();
-        const roundingRule = leavePolicy?.roundingRule || RoundingRule.NONE;
         entitlement.accruedRounded = this.applyRoundingRule(
           entitlement.accruedActual,
           roundingRule,
@@ -2789,28 +4168,59 @@ export class LeavesService {
       }
 
       // Save and get the updated doc back
-      const updated = await this.updateLeaveEntitlement(
-        entitlement._id.toString(),
-        {
+      // For reduction/adjustment: directly update remaining without touching accrued fields
+      // For suspension/restoration: update accrued and let remaining be recalculated
+      let updated: LeaveEntitlementDocument;
+      
+      if (adjustmentType === 'reduction' || adjustmentType === 'adjustment') {
+        // Direct remaining change - update directly without going through updateLeaveEntitlement
+        // to avoid any recalculation logic that might interfere
+        // Ensure the rounded value is what we save
+        const roundedRemaining = entitlement.remaining;
+        console.log(`[adjustAccrual] Saving remaining value: ${roundedRemaining} (rounded with rule: ${roundingRule})`);
+        
+        updated = await this.leaveEntitlementModel
+          .findByIdAndUpdate(
+            entitlement._id.toString(),
+            { $set: { remaining: roundedRemaining } },
+            { new: true }
+          )
+          .exec();
+        
+        if (!updated) {
+          throw new Error('Failed to update entitlement');
+        }
+        
+        // Verify the value was saved correctly
+        console.log(`[adjustAccrual] Saved remaining value: ${updated.remaining}, Expected: ${roundedRemaining}`);
+        
+        // Ensure the returned document has the correct rounded value
+        updated.remaining = roundedRemaining;
+      } else {
+        // Suspension/restoration affect accrued, so update accrued fields
+        const updateData: any = {
           accruedActual: entitlement.accruedActual,
           accruedRounded: entitlement.accruedRounded,
-          remaining: adjustmentType === 'reduction' || adjustmentType === 'adjustment'
-            ? entitlement.remaining
-            : undefined, // Will be recalculated below
-        },
-      );
+        };
+        
+        updated = await this.updateLeaveEntitlement(
+          entitlement._id.toString(),
+          updateData,
+        );
 
-      if (!updated) {
-        throw new Error('Failed to update entitlement');
+        if (!updated) {
+          throw new Error('Failed to update entitlement');
+        }
+
+        // Recalculate remaining for suspension/restoration (which affect accrued)
+        updated.remaining = this.calculateRemaining(updated);
+        // Round to 2 decimal places to avoid floating point precision issues
+        updated.remaining = Math.round(updated.remaining * 100) / 100;
+        await updated.save();
       }
-
-      // Recalculate remaining using helper method for consistency
-      updated.remaining = this.calculateRemaining(updated);
       
       // Clamp to avoid negative remaining (optional - depends on business rules)
       // updated.remaining = Math.max(0, updated.remaining);
-      
-      await updated.save();
 
       return {
         success: true,
@@ -2825,7 +4235,7 @@ export class LeavesService {
         notes,
       };
     } catch (error) {
-      throw new Error('Failed to adjust accrual: ${(error as any).message}');
+      throw new Error(`Failed to adjust accrual: ${(error as any).message}`);
     }
   }
 
@@ -3249,5 +4659,431 @@ export class LeavesService {
     leaveRequest.justification = `[Document Rejected: ${rejectionReason}] ${existingJustification}`;
 
     return await leaveRequest.save();
+  }
+
+  // ==================== AUTOMATED SCHEDULED TASKS ====================
+
+  /**
+   * REQ-040: Automatically accrue leave days based on policy settings
+   * Runs daily at 2 AM to check for due accruals
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  async automatedAccrualJob() {
+    console.log('[Automated Accrual] Starting scheduled accrual job...');
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get all active leave policies
+      const policies = await this.leavePolicyModel.find().exec();
+      let totalProcessed = 0;
+      let totalSuccessful = 0;
+      let totalFailed = 0;
+
+      for (const policy of policies) {
+        try {
+          const accrualMethod = policy.accrualMethod;
+          const leaveTypeId = policy.leaveTypeId.toString();
+
+          // Determine if accrual is due based on method
+          let shouldAccrue = false;
+          let accrualAmount = 0;
+
+          if (accrualMethod === AccrualMethod.MONTHLY) {
+            // Check if it's the first day of the month
+            if (today.getDate() === 1) {
+              shouldAccrue = true;
+              accrualAmount = policy.monthlyRate || 0;
+            }
+          } else if (accrualMethod === AccrualMethod.YEARLY) {
+            // Check if it's January 1st
+            if (today.getMonth() === 0 && today.getDate() === 1) {
+              shouldAccrue = true;
+              accrualAmount = policy.yearlyRate || 0;
+            }
+          } else if (accrualMethod === AccrualMethod.PER_TERM) {
+            // For per-term, accrue when reset date is reached
+            // Get all entitlements for this leave type that are due for reset
+            const entitlementsDue = await this.leaveEntitlementModel
+              .find({
+                leaveTypeId: policy.leaveTypeId,
+                nextResetDate: { $lte: today },
+              })
+              .exec();
+
+            if (entitlementsDue.length > 0) {
+              shouldAccrue = true;
+              // For per-term, use yearlyRate as the accrual amount
+              accrualAmount = policy.yearlyRate || 0;
+              
+              // Process per-term accrual for these entitlements
+              for (const entitlement of entitlementsDue) {
+                try {
+                  await this.autoAccrueLeave(
+                    entitlement.employeeId.toString(),
+                    leaveTypeId,
+                    accrualAmount,
+                    accrualMethod,
+                    undefined,
+                    'Automated per-term accrual from scheduled job',
+                  );
+                  totalSuccessful++;
+                  totalProcessed++;
+                } catch (err) {
+                  console.error(
+                    `[Automated Accrual] Failed for employee ${entitlement.employeeId}:`,
+                    (err as any).message,
+                  );
+                  totalFailed++;
+                  totalProcessed++;
+                }
+              }
+            }
+            continue; // Skip the regular accrual processing below
+          }
+
+          if (shouldAccrue && accrualAmount > 0) {
+            console.log(
+              `[Automated Accrual] Processing ${accrualMethod} accrual for leave type ${leaveTypeId}, amount: ${accrualAmount}`,
+            );
+
+            // Get all entitlements for this leave type
+            const entitlements = await this.leaveEntitlementModel
+              .find({ leaveTypeId: policy.leaveTypeId })
+              .exec();
+
+            for (const entitlement of entitlements) {
+              try {
+                // Check if accrual is due (lastAccrualDate should be before today)
+                const lastAccrual = entitlement.lastAccrualDate;
+                let needsAccrual = true;
+
+                if (lastAccrual) {
+                  const lastAccrualDate = new Date(lastAccrual);
+                  lastAccrualDate.setHours(0, 0, 0, 0);
+
+                  if (accrualMethod === AccrualMethod.MONTHLY) {
+                    // For monthly, check if last accrual was in a previous month
+                    needsAccrual =
+                      lastAccrualDate.getMonth() < today.getMonth() ||
+                      lastAccrualDate.getFullYear() < today.getFullYear();
+                  } else if (accrualMethod === AccrualMethod.YEARLY) {
+                    // For yearly, check if last accrual was in a previous year
+                    needsAccrual =
+                      lastAccrualDate.getFullYear() < today.getFullYear();
+                  }
+                }
+
+                if (needsAccrual) {
+                  await this.autoAccrueLeave(
+                    entitlement.employeeId.toString(),
+                    leaveTypeId,
+                    accrualAmount,
+                    accrualMethod,
+                    undefined,
+                    'Automated accrual from scheduled job',
+                  );
+                  totalSuccessful++;
+                }
+                totalProcessed++;
+              } catch (err) {
+                console.error(
+                  `[Automated Accrual] Failed for employee ${entitlement.employeeId}:`,
+                  (err as any).message,
+                );
+                totalFailed++;
+              }
+            }
+          }
+        } catch (err) {
+          console.error(
+            `[Automated Accrual] Error processing policy ${policy._id}:`,
+            (err as any).message,
+          );
+        }
+      }
+
+      console.log(
+        `[Automated Accrual] Completed. Processed: ${totalProcessed}, Successful: ${totalSuccessful}, Failed: ${totalFailed}`,
+      );
+    } catch (error) {
+      console.error(
+        '[Automated Accrual] Fatal error in scheduled job:',
+        (error as any).message,
+      );
+    }
+  }
+
+  /**
+   * REQ-041: Automatically run carry-forward when reset dates are reached
+   * Runs daily at 3 AM to check for due carry-forwards
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  
+  // REQ-023, BR 28: Auto-escalate leave requests pending for > 48 hours
+  @Cron(CronExpression.EVERY_HOUR) // Check every hour for requests pending > 48 hours
+  async autoEscalatePendingRequests() {
+    try {
+      console.log('[AUTO-ESCALATION] Checking for leave requests pending > 48 hours...');
+      
+      const now = new Date();
+      const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+      
+      // Find all pending requests created more than 48 hours ago
+      const pendingRequests = await this.leaveRequestModel
+        .find({
+          status: LeaveStatus.PENDING,
+          createdAt: { $lte: fortyEightHoursAgo },
+        })
+        .populate('employeeId', 'firstName lastName supervisorPositionId')
+        .exec();
+      
+      console.log(`[AUTO-ESCALATION] Found ${pendingRequests.length} requests pending > 48 hours`);
+      
+      for (const request of pendingRequests) {
+        try {
+          const employee = request.employeeId as any;
+          if (!employee || !employee.supervisorPositionId) {
+            console.warn(`[AUTO-ESCALATION] Request ${request._id} has no employee or supervisorPositionId, skipping`);
+            continue;
+          }
+          
+          // Get the manager (department head) - use flexible query to handle both ObjectId and string
+          const primaryPositionQuery = this.createFlexibleIdQuery('primaryPositionId', employee.supervisorPositionId);
+          if (!primaryPositionQuery) {
+            console.warn(`[AUTO-ESCALATION] Invalid supervisorPositionId format: ${employee.supervisorPositionId}`);
+            continue;
+          }
+          
+          const manager = await this.employeeProfileModel
+            .findOne({
+              ...primaryPositionQuery,
+              status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+            })
+            .select('_id employeeNumber firstName lastName')
+            .lean()
+            .exec();
+          
+          if (!manager) {
+            console.warn(`[AUTO-ESCALATION] No manager found for request ${request._id}, skipping`);
+            continue;
+          }
+          
+          const managerId = manager._id.toString();
+          
+          // Check if manager has an active delegate
+          const delegations = this.delegationMap.get(managerId);
+          let hasActiveDelegate = false;
+          let activeDelegateId: string | null = null;
+          
+          if (delegations && delegations.length > 0) {
+            const activeDelegations = delegations.filter(
+              (del) =>
+                del.isActive &&
+                now >= del.startDate &&
+                now <= del.endDate,
+            );
+            
+            if (activeDelegations.length > 0) {
+              hasActiveDelegate = true;
+              activeDelegateId = activeDelegations[0].delegateId;
+            }
+          }
+          
+          // If there's an active delegate, escalate to HR Manager
+          // Otherwise, just log (the request is already with the manager)
+          if (hasActiveDelegate && activeDelegateId) {
+            console.log(`[AUTO-ESCALATION] Request ${request._id} has been pending > 48 hours with active delegate ${activeDelegateId}, escalating to HR Manager`);
+            
+            // Find HR Managers
+            const hrManagerRoles = await this.systemRoleModel
+              .find({
+                roles: { $in: [SystemRole.HR_MANAGER] },
+                isActive: true,
+              })
+              .select('employeeProfileId')
+              .exec();
+            
+            const hrManagerIds = hrManagerRoles
+              .map(role => role.employeeProfileId?.toString())
+              .filter((id): id is string => !!id);
+            
+            // Notify HR Managers about the escalation
+            for (const hrManagerId of hrManagerIds) {
+              await this.notificationLogModel.create({
+                to: new Types.ObjectId(hrManagerId),
+                type: NotificationType.LEAVE_CREATED,
+                message: `⚠️ ESCALATION: Leave request from ${employee.firstName || ''} ${employee.lastName || ''} has been pending for more than 48 hours and requires attention.`,
+              });
+            }
+            
+            // Also notify the delegate
+            await this.notificationLogModel.create({
+              to: new Types.ObjectId(activeDelegateId),
+              type: NotificationType.LEAVE_CREATED,
+              message: `⚠️ URGENT: Leave request from ${employee.firstName || ''} ${employee.lastName || ''} has been pending for more than 48 hours. Please review immediately.`,
+            });
+          } else {
+            console.log(`[AUTO-ESCALATION] Request ${request._id} has been pending > 48 hours (no active delegate), manager should handle`);
+          }
+        } catch (error) {
+          console.error(`[AUTO-ESCALATION] Error processing request ${request._id}:`, error);
+        }
+      }
+      
+      console.log('[AUTO-ESCALATION] Auto-escalation check completed');
+    } catch (error) {
+      console.error('[AUTO-ESCALATION] Error in auto-escalation job:', error);
+    }
+  }
+  
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async automatedCarryForwardJob() {
+    console.log('[Automated Carry-Forward] Starting scheduled carry-forward job...');
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Find all entitlements where nextResetDate is today or has passed
+      const entitlementsDueForReset = await this.leaveEntitlementModel
+        .find({
+          nextResetDate: { $lte: today },
+        })
+        .exec();
+
+      if (entitlementsDueForReset.length === 0) {
+        console.log('[Automated Carry-Forward] No entitlements due for reset');
+        return;
+      }
+
+      // Group by leaveTypeId to process carry-forward per leave type
+      const byLeaveType = new Map<string, string[]>();
+
+      for (const entitlement of entitlementsDueForReset) {
+        const leaveTypeId = entitlement.leaveTypeId.toString();
+        if (!byLeaveType.has(leaveTypeId)) {
+          byLeaveType.set(leaveTypeId, []);
+        }
+        byLeaveType.get(leaveTypeId)?.push(entitlement._id.toString());
+      }
+
+      let totalProcessed = 0;
+      let totalSuccessful = 0;
+      let totalFailed = 0;
+
+      // Process carry-forward for each leave type
+      for (const [leaveTypeId, entitlementIds] of byLeaveType.entries()) {
+        try {
+          console.log(
+            `[Automated Carry-Forward] Processing leave type ${leaveTypeId} for ${entitlementIds.length} employees`,
+          );
+
+          // Process each entitlement individually to ensure we only process those due for reset
+          for (const entitlementId of entitlementIds) {
+            try {
+              const entitlement = await this.leaveEntitlementModel
+                .findById(entitlementId)
+                .exec();
+
+              if (!entitlement) {
+                totalFailed++;
+                continue;
+              }
+
+              // Check if reset date has actually passed
+              const resetDate = entitlement.nextResetDate;
+              if (!resetDate || new Date(resetDate) > today) {
+                continue; // Skip if not yet due
+              }
+
+              // Get policy to check carry-forward settings
+              const leavePolicy = await this.leavePolicyModel
+                .findOne({ leaveTypeId: entitlement.leaveTypeId })
+                .exec();
+
+              if (!leavePolicy?.carryForwardAllowed) {
+                // If carry-forward not allowed, just update reset date
+                const nextReset = new Date(today);
+                nextReset.setFullYear(nextReset.getFullYear() + 1);
+                await this.leaveEntitlementModel
+                  .findByIdAndUpdate(entitlementId, {
+                    $set: { nextResetDate: nextReset },
+                  })
+                  .exec();
+                totalProcessed++;
+                continue;
+              }
+
+              // Calculate carry-forward amount
+              const maxCarryForward = leavePolicy.maxCarryForward || 0;
+              const carryForwardAmount = Math.min(
+                entitlement.remaining,
+                maxCarryForward,
+              );
+
+              if (carryForwardAmount > 0) {
+                // Update entitlement with carry-forward
+                const updated = await this.leaveEntitlementModel
+                  .findByIdAndUpdate(
+                    entitlementId,
+                    {
+                      $set: { carryForward: carryForwardAmount },
+                      $inc: { remaining: -carryForwardAmount },
+                    },
+                    { new: true },
+                  )
+                  .exec();
+
+                if (updated) {
+                  // Recalculate remaining
+                  updated.remaining = this.calculateRemaining(updated);
+                  
+                  // Calculate next reset date (one year from today)
+                  const nextReset = new Date(today);
+                  nextReset.setFullYear(nextReset.getFullYear() + 1);
+                  updated.nextResetDate = nextReset;
+                  
+                  await updated.save();
+                  totalSuccessful++;
+                } else {
+                  totalFailed++;
+                }
+              } else {
+                // No carry-forward needed, just update reset date
+                const nextReset = new Date(today);
+                nextReset.setFullYear(nextReset.getFullYear() + 1);
+                await this.leaveEntitlementModel
+                  .findByIdAndUpdate(entitlementId, {
+                    $set: { nextResetDate: nextReset },
+                  })
+                  .exec();
+                totalSuccessful++;
+              }
+              totalProcessed++;
+            } catch (err) {
+              console.error(
+                `[Automated Carry-Forward] Error processing entitlement ${entitlementId}:`,
+                (err as any).message,
+              );
+              totalFailed++;
+            }
+          }
+        } catch (err) {
+          console.error(
+            `[Automated Carry-Forward] Error processing leave type ${leaveTypeId}:`,
+            (err as any).message,
+          );
+        }
+      }
+
+      console.log(
+        `[Automated Carry-Forward] Completed. Processed: ${totalProcessed}, Successful: ${totalSuccessful}, Failed: ${totalFailed}`,
+      );
+    } catch (error) {
+      console.error(
+        '[Automated Carry-Forward] Fatal error in scheduled job:',
+        (error as any).message,
+      );
+    }
   }
 }

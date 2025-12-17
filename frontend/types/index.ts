@@ -171,6 +171,36 @@ export interface LoginRequest {
   password: string;
 }
 
+// Candidate interface for Talent Pool
+export interface Candidate {
+  _id: string;
+  candidateNumber: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  fullName?: string;
+  personalEmail?: string;
+  mobilePhone?: string;
+  nationalId?: string;
+  gender?: "MALE" | "FEMALE";
+  dateOfBirth?: string;
+  address?: {
+    city?: string;
+    streetAddress?: string;
+    country?: string;
+  };
+  resumeUrl?: string;
+  status: "APPLIED" | "SCREENING" | "INTERVIEW" | "OFFER_SENT" | "OFFER_ACCEPTED" | "HIRED" | "REJECTED" | "WITHDRAWN";
+  applicationDate?: string;
+  notes?: string;
+  departmentId?: string | { _id: string; name: string; code: string };
+  positionId?: string | { _id: string; title: string; code: string };
+  department?: { _id: string; name: string; code: string };
+  position?: { _id: string; title: string; code: string };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface RegisterRequest {
   firstName?: string;
   middleName?: string;

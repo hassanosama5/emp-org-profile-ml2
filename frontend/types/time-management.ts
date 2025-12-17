@@ -44,6 +44,7 @@ export interface AssignShiftToDepartmentDto {
   includePositions?: string[];
   startDate?: Date;
   endDate?: Date;
+  status?: ShiftAssignmentStatus;
 }
 
 export interface AssignShiftToPositionDto {
@@ -51,6 +52,7 @@ export interface AssignShiftToPositionDto {
   shiftId: string;
   startDate?: Date;
   endDate?: Date;
+  status?: ShiftAssignmentStatus;
 }
 
 export interface UpdateShiftAssignmentDto {
@@ -531,3 +533,68 @@ export interface ExportReportResponse {
   generatedAt: Date | string;
 }
  
+
+// ===== ATTENDANCE RECORDS =====
+
+export interface AttendanceRecord {
+  _id?: string;
+  id?: string;
+  employeeId: string;
+  date: Date | string;
+  clockIn?: Date | string;
+  clockOut?: Date | string;
+  totalWorkMinutes?: number;
+  hasMissedPunch?: boolean;
+  status: 'COMPLETE' | 'INCOMPLETE' | 'CORRECTION_PENDING';
+  punches?: Array<{
+    time: Date | string;
+    type: 'IN' | 'OUT';
+    source?: 'BIOMETRIC' | 'WEB' | 'MOBILE' | 'MANUAL';
+    location?: string;
+    deviceId?: string;
+  }>;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface AttendanceStatus {
+  employeeId: string;
+  date: Date | string;
+  isClockedIn: boolean;
+  currentRecord?: AttendanceRecord;
+  clockInTime?: Date | string;
+  elapsedMinutes?: number;
+  message?: string;
+  // BR-TM-11: Punch policy information
+  punchPolicy?: 'MULTIPLE' | 'FIRST_LAST' | 'ONLY_FIRST';
+  shiftName?: string;
+  canClockInMultiple?: boolean;
+  hasClockInToday?: boolean;
+  canClockIn?: boolean;
+}
+
+export interface ClockInRequest {
+  source?: 'WEB' | 'MOBILE' | 'MANUAL';
+  location?: string;
+  gpsCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  ipAddress?: string;
+}
+
+export interface ClockOutRequest {
+  source?: 'WEB' | 'MOBILE' | 'MANUAL';
+  location?: string;
+  gpsCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  ipAddress?: string;
+}
+
+export interface SubmitCorrectionRequest {
+  employeeId: string;
+  attendanceRecord: string;
+  reason: string;
+}

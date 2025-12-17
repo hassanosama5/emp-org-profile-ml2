@@ -34,9 +34,9 @@ import {
 export class PolicyConfigController {
   constructor(private readonly policyConfigService: PolicyConfigService) {}
 
-  // ===== OVERTIME RULES =====
+  // ===== OVERTIME RULES (BR-TM-10: HR Manager only) =====
   @Post('overtime')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async createOvertimeRule(
     @Body() createOvertimeRuleDto: CreateOvertimeRuleDto,
     @CurrentUser() user: any,
@@ -48,12 +48,7 @@ export class PolicyConfigController {
   }
 
   @Get('overtime')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
-  )
+  @Roles(SystemRole.HR_MANAGER)
   async getOvertimeRules(
     @Query() getPoliciesDto: GetPoliciesDto,
     @CurrentUser() user: any,
@@ -65,18 +60,13 @@ export class PolicyConfigController {
   }
 
   @Get('overtime/:id')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
-  )
+  @Roles(SystemRole.HR_MANAGER)
   async getOvertimeRuleById(@Param('id') id: string, @CurrentUser() user: any) {
     return this.policyConfigService.getOvertimeRuleById(id, user.userId);
   }
 
   @Put('overtime/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async updateOvertimeRule(
     @Param('id') id: string,
     @Body() updateOvertimeRuleDto: UpdateOvertimeRuleDto,
@@ -90,7 +80,7 @@ export class PolicyConfigController {
   }
 
   @Delete('overtime/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async deleteOvertimeRule(@Param('id') id: string, @CurrentUser() user: any) {
     return this.policyConfigService.deleteOvertimeRule(id, user.userId);
   }
@@ -204,7 +194,6 @@ export class PolicyConfigController {
   @Post('overtime/validate-preapproval')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.PAYROLL_SPECIALIST,
     SystemRole.DEPARTMENT_HEAD,
@@ -235,7 +224,6 @@ export class PolicyConfigController {
   @Get('overtime/limits/config')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.PAYROLL_SPECIALIST,
   )
@@ -250,7 +238,6 @@ export class PolicyConfigController {
   @Post('overtime/limits/check')
   @Roles(
     SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.PAYROLL_SPECIALIST,
     SystemRole.DEPARTMENT_HEAD,
@@ -293,9 +280,9 @@ export class PolicyConfigController {
     );
   }
 
-  // ===== LATENESS RULES =====
+  // ===== LATENESS RULES (BR-TM-11: HR Manager only) =====
   @Post('lateness')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async createLatenessRule(
     @Body() createLatenessRuleDto: CreateLatenessRuleDto,
     @CurrentUser() user: any,
@@ -307,13 +294,7 @@ export class PolicyConfigController {
   }
 
   @Get('lateness')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
-    SystemRole.DEPARTMENT_HEAD,
-  )
+  @Roles(SystemRole.HR_MANAGER)
   async getLatenessRules(
     @Query() getPoliciesDto: GetPoliciesDto,
     @CurrentUser() user: any,
@@ -325,19 +306,13 @@ export class PolicyConfigController {
   }
 
   @Get('lateness/:id')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.PAYROLL_SPECIALIST,
-    SystemRole.DEPARTMENT_HEAD,
-  )
+  @Roles(SystemRole.HR_MANAGER)
   async getLatenessRuleById(@Param('id') id: string, @CurrentUser() user: any) {
     return this.policyConfigService.getLatenessRuleById(id, user.userId);
   }
 
   @Put('lateness/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async updateLatenessRule(
     @Param('id') id: string,
     @Body() updateLatenessRuleDto: UpdateLatenessRuleDto,
@@ -351,7 +326,7 @@ export class PolicyConfigController {
   }
 
   @Delete('lateness/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER)
   async deleteLatenessRule(@Param('id') id: string, @CurrentUser() user: any) {
     return this.policyConfigService.deleteLatenessRule(id, user.userId);
   }
@@ -569,7 +544,7 @@ export class PolicyConfigController {
   }
 
   @Put('holiday/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async updateHoliday(
     @Param('id') id: string,
     @Body() updateHolidayDto: UpdateHolidayDto,
@@ -583,7 +558,7 @@ export class PolicyConfigController {
   }
 
   @Delete('holiday/:id')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async deleteHoliday(@Param('id') id: string, @CurrentUser() user: any) {
     return this.policyConfigService.deleteHoliday(id, user.userId);
   }

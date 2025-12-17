@@ -21,11 +21,12 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             {label}
           </label>
         )}
+        {/* CHANGED - Added text-gray-900 for visibility */}
         <select
           ref={ref}
           className={`w-full rounded-md border ${
             error ? 'border-red-500' : 'border-gray-300'
-          } px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white ${className}`}
+          } px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white ${className}`}
           {...props}
         >
           {placeholder && (

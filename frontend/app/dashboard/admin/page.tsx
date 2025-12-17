@@ -211,19 +211,25 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow border-2 border-blue-200">
             <CardHeader>
               <CardTitle>Time Management</CardTitle>
               <CardDescription>
-                Manage attendance, schedules, and time tracking
+                Manage attendance, schedules, shifts, and time tracking
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Link
                 href="/dashboard/time-management"
-                className="block w-full text-center bg-gray-600 text-white py-3 px-4 rounded-md hover:bg-gray-700 transition font-medium"
+                className="block w-full text-center bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition font-medium mb-2"
               >
                 Manage Time →
+              </Link>
+              <Link
+                href="/dashboard/time-management/approvals"
+                className="block w-full text-center bg-gray-600 text-white py-3 px-4 rounded-md hover:bg-gray-700 transition font-medium"
+              >
+                Approvals & Reports →
               </Link>
             </CardContent>
           </Card>

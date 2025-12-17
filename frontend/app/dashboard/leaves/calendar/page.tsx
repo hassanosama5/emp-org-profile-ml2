@@ -5,7 +5,9 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { useRequireAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import { leavesApi } from "@/lib/api/leaves/leaves";
+import { policyConfigApi } from "@/lib/api/time-management/policy-config.api";
 import { Calendar, CreateCalendarDto, Holiday, BlockedPeriod } from "@/types/leaves";
+import { HolidayType } from "@/types/time-management";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { Input } from "@/components/shared/ui/Input";
@@ -20,6 +22,8 @@ export default function CalendarPage() {
 
   const [calendar, setCalendar] = useState<Calendar | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingHolidays, setLoadingHolidays] = useState(false);
+  const [systemHolidays, setSystemHolidays] = useState<any[]>([]);
   const [year, setYear] = useState(new Date().getFullYear());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
@@ -42,7 +46,45 @@ export default function CalendarPage() {
 
   useEffect(() => {
     loadCalendar();
+    loadSystemHolidays();
   }, [year]);
+
+  const loadSystemHolidays = async () => {
+    try {
+      setLoadingHolidays(true);
+      // Fetch national and organizational holidays for the selected year
+      const startOfYear = new Date(year, 0, 1);
+      const endOfYear = new Date(year, 11, 31);
+      
+      const [nationalHolidays, orgHolidays] = await Promise.all([
+        policyConfigApi.getHolidays({
+          type: HolidayType.NATIONAL,
+          startDate: startOfYear.toISOString().split('T')[0],
+          active: true,
+        }),
+        policyConfigApi.getHolidays({
+          type: HolidayType.ORGANIZATIONAL,
+          startDate: startOfYear.toISOString().split('T')[0],
+          active: true,
+        }),
+      ]);
+      
+      // Combine and filter by year
+      const allHolidays = [...(nationalHolidays || []), ...(orgHolidays || [])];
+      const yearHolidays = allHolidays.filter((h: any) => {
+        const holidayDate = new Date(h.startDate);
+        return holidayDate.getFullYear() === year && h.active !== false;
+      });
+      
+      setSystemHolidays(yearHolidays);
+    } catch (error: any) {
+      console.error("Failed to load system holidays:", error);
+      // Don't show error toast - just log it, as this is supplementary data
+      setSystemHolidays([]);
+    } finally {
+      setLoadingHolidays(false);
+    }
+  };
 
   const loadCalendar = async () => {
     try {
@@ -295,33 +337,91 @@ export default function CalendarPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {Array.isArray(calendar.holidays) && calendar.holidays.length > 0 ? (
-                <div className="space-y-2">
-                  {calendar.holidays.map((holiday, index) => {
-                    // Holiday should already be in format { name, date, description } from loadCalendar
-                    if (!holiday || typeof holiday !== 'object') return null;
-                    const h = holiday as { name: string; date: string; description?: string };
-                    return (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">{h.name || 'Holiday'}</p>
-                          {h.date && (
-                            <p className="text-sm text-gray-600">
-                              {new Date(h.date).toLocaleDateString()}
+              {/* System Holidays (National & Organizational) */}
+              {loadingHolidays ? (
+                <p className="text-gray-500 text-center py-2 text-sm">Loading system holidays...</p>
+              ) : systemHolidays.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">System Holidays</h4>
+                  <div className="space-y-2">
+                    {systemHolidays.map((holiday: any, index: number) => {
+                      const holidayDate = new Date(holiday.startDate);
+                      const endDate = holiday.endDate ? new Date(holiday.endDate) : null;
+                      const isRange = endDate && endDate.getTime() !== holidayDate.getTime();
+                      
+                      return (
+                        <div
+                          key={`system-${holiday._id || index}`}
+                          className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-blue-900">{holiday.name || 'Holiday'}</p>
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                holiday.type === HolidayType.NATIONAL 
+                                  ? 'bg-blue-100 text-blue-700' 
+                                  : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                {holiday.type === HolidayType.NATIONAL ? 'National' : 'Organizational'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-blue-700 mt-1">
+                              {isRange 
+                                ? `${holidayDate.toLocaleDateString()} - ${endDate?.toLocaleDateString()}`
+                                : holidayDate.toLocaleDateString()}
                             </p>
-                          )}
-                          {h.description && (
-                            <p className="text-sm text-gray-500">{h.description}</p>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              ) : (
+              )}
+              
+              {/* Calendar Holidays (Manual entries) */}
+              {Array.isArray(calendar.holidays) && calendar.holidays.length > 0 ? (
+                <div className={systemHolidays.length > 0 ? "mt-4" : ""}>
+                  {systemHolidays.length > 0 && (
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Manual Holidays</h4>
+                  )}
+                  <div className="space-y-2">
+                    {calendar.holidays.map((holiday, index) => {
+                      // Holiday should already be in format { name, date, description } from loadCalendar
+                      if (!holiday || typeof holiday !== 'object') return null;
+                      const h = holiday as { name: string; date: string; description?: string };
+                      return (
+                        <div
+                          key={`manual-${index}`}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{h.name || 'Holiday'}</p>
+                            {h.date && (
+                              <p className="text-sm text-gray-600">
+                                {new Date(h.date).toLocaleDateString()}
+                              </p>
+                            )}
+                            {h.description && (
+                              <p className="text-sm text-gray-500">{h.description}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemoveHoliday(index)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : systemHolidays.length === 0 && (
+                <p className="text-gray-500 text-center py-4">No holidays configured</p>
+              )}
+              
+              {systemHolidays.length === 0 && (!calendar.holidays || calendar.holidays.length === 0) && (
                 <p className="text-gray-500 text-center py-4">No holidays configured</p>
               )}
             </CardContent>

@@ -8,14 +8,41 @@ import { leavesApi } from "../../../../../lib/api/leaves/leaves";
 import { useRequireAuth } from "../../../../../lib/hooks/use-auth";
 import { SystemRole } from "../../../../../types";
 import { Card } from "../../../../../components/shared/ui/Card";
+import { RoleGuard } from "../../../../../components/auth/role-guard";
+import { useAuthStore } from "../../../../../lib/stores/auth.store";
 
 export default function CreateLeaveRequestPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [successMessage, setSuccessMessage] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Require authentication - employees and department heads can create leave requests
+  // Require authentication - all roles except RECRUITER and JOB_CANDIDATE can create leave requests
   useRequireAuth();
+
+  // All roles except RECRUITER and JOB_CANDIDATE can create leave requests
+  const allowedRoles = [
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.HR_ADMIN,
+  ];
+
+  const accessDeniedFallback = (
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+      <div className="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
+        <p className="text-sm font-medium text-red-800">
+          Access denied: You need one of these roles: {allowedRoles.join(", ")}. Your roles: {user?.roles?.join(", ") || "None"}
+        </p>
+      </div>
+    </div>
+  );
 
   const handleSuccess = () => {
     setSuccessMessage("Leave request created successfully!");
@@ -43,13 +70,14 @@ export default function CreateLeaveRequestPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Create Leave Request</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Submit a new leave request for approval. Please fill in all required fields.
-        </p>
-      </div>
+    <RoleGuard allowedRoles={allowedRoles} fallback={accessDeniedFallback}>
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Create Leave Request</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Submit a new leave request for approval. Please fill in all required fields.
+          </p>
+        </div>
 
       {successMessage && (
         <div className="mb-6 rounded-md bg-green-50 p-4 border border-green-200">
@@ -102,14 +130,15 @@ export default function CreateLeaveRequestPage() {
         </div>
       )}
 
-      <Card className="p-6">
-        <CreateLeaveRequestForm
-          onSubmit={handleSubmit}
-          onSuccess={handleSuccess}
-          onError={handleError}
-        />
-      </Card>
-    </div>
+        <Card className="p-6">
+          <CreateLeaveRequestForm
+            onSubmit={handleSubmit}
+            onSuccess={handleSuccess}
+            onError={handleError}
+          />
+        </Card>
+      </div>
+    </RoleGuard>
   );
 }
 

@@ -9,4 +9,9 @@ export class CreateApplicationDto {
 
 export class UpdateApplicationStatusDto {
   @IsEnum(ApplicationStatus) status: ApplicationStatus; // Must be one of: submitted, in_process, offer, hired, rejected
+
+  // CHANGED - REC-022: Added rejection reason for automated rejection notifications
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string; // Custom rejection message to include in notification email
 }

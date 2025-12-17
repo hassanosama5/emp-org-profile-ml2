@@ -54,12 +54,12 @@ export function ProtectedRoute({
     let hasAccess = true;
 
     // Check user type if required
-    if (requiredUserType && user.userType !== requiredUserType) {
+    if (requiredUserType && user && user.userType !== requiredUserType) {
       hasAccess = false;
     }
 
     // Check roles if required
-    if (allowedRoles && allowedRoles.length > 0) {
+    if (allowedRoles && allowedRoles.length > 0 && user) {
       const userRoles = user.roles || [];
 
       // Convert both arrays to strings for comparison

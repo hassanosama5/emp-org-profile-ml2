@@ -286,6 +286,10 @@ export class AssignShiftToDepartmentDto {
   @Type(() => Date)
   @Validate(IsEndDateAfterStartDateConstraint)
   endDate?: Date;
+
+  @IsOptional()
+  @IsEnum(ShiftAssignmentStatus)
+  status?: ShiftAssignmentStatus;
 }
 
 export class AssignShiftToPositionDto {
@@ -307,6 +311,10 @@ export class AssignShiftToPositionDto {
   @Type(() => Date)
   @Validate(IsEndDateAfterStartDateConstraint)
   endDate?: Date;
+
+  @IsOptional()
+  @IsEnum(ShiftAssignmentStatus)
+  status?: ShiftAssignmentStatus;
 }
 
 // DTO for updating a shift assignment - ALL FIELDS FROM SCHEMA

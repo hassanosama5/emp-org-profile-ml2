@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
+import { RecruitmentNotificationsService } from './services/recruitment-notifications.service';
 import { NotificationLogSchema } from '../time-management/models/notification-log.schema';
 import { ShiftAssignmentSchema } from '../time-management/models/shift-assignment.schema';
 import { EmployeeProfileSchema } from '../employee-profile/models/employee-profile.schema';
@@ -15,11 +16,11 @@ import { EmployeeSystemRoleSchema } from '../employee-profile/models/employee-sy
       { name: 'NotificationLog', schema: NotificationLogSchema },
       { name: 'ShiftAssignment', schema: ShiftAssignmentSchema },
       { name: 'EmployeeProfile', schema: EmployeeProfileSchema },
-      { name: 'EmployeeSystemRole', schema: EmployeeSystemRoleSchema }, // Add this line
+      { name: 'EmployeeSystemRole', schema: EmployeeSystemRoleSchema },
     ]),
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsService],
-  exports: [NotificationsService],
+  providers: [NotificationsService, RecruitmentNotificationsService],
+  exports: [NotificationsService, RecruitmentNotificationsService],
 })
 export class NotificationsModule {}

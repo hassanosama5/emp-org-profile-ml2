@@ -53,6 +53,11 @@ export class CreateEmployeeDto {
   @Matches(/^[0-9]{14}$/, { message: 'National ID must be 14 digits' })
   nationalId: string;
 
+  // ONB-004/ONB-005: HR Manager can specify employee number, or it will be auto-generated
+  @IsOptional()
+  @IsString()
+  employeeNumber?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(8)

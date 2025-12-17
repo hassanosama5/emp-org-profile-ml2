@@ -73,7 +73,13 @@ export class OrganizationStructureController {
    * Employees can view organizational hierarchy
    */
   @Get('departments')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+  )
   async getAllDepartments(
     @CurrentUser() user: any,
     @Query('isActive') isActive?: boolean,
