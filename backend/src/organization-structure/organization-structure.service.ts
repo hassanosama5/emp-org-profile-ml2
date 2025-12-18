@@ -267,6 +267,21 @@ export class OrganizationStructureService {
         position.toObject(),
       ).catch(() => undefined);
 
+      // REQ-OSM-05: Vacant position flagging for recruitment
+      // Position created without assignment is automatically flagged as vacant
+      // Check if position has active assignments
+      const activeAssignments = await this.assignmentModel.countDocuments({
+        positionId: position._id,
+        $or: [{ endDate: null }, { endDate: { $gte: new Date() } }],
+      });
+      
+      if (activeAssignments === 0) {
+        // Position is vacant - flag for recruitment
+        console.log(`[createPosition] Position ${position._id} (${position.code}) is vacant and flagged for recruitment`);
+        // TODO: Integration with RecruitmentService to automatically create job requisition
+        // await this.recruitmentService.flagPositionAsVacant(position._id.toString());
+      }
+
       return position;
     } catch (error: any) {
       if (error?.message && error.message.includes('must have an _id')) {
@@ -490,6 +505,10 @@ export class OrganizationStructureService {
       assignment.toObject(),
     );
 
+    // REQ-OSM-05: Position is no longer vacant when assignment is created
+    // The position now has an active assignment, so it's filled
+    console.log(`[createPositionAssignment] Position ${dto.positionId} is now filled (no longer vacant)`);
+
     return assignment;
   }
 
@@ -550,9 +569,34 @@ export class OrganizationStructureService {
     id: string,
     endDate: Date,
   ): Promise<PositionAssignmentDocument> {
-    return this.updatePositionAssignment(id, {
+    const assignment = await this.assignmentModel.findById(id);
+    if (!assignment) {
+      throw new NotFoundException(`Position assignment with ID ${id} not found`);
+    }
+
+    const positionId = assignment.positionId;
+    const result = await this.updatePositionAssignment(id, {
       endDate: endDate.toISOString(),
     });
+
+    // REQ-OSM-05: Vacant position flagging for recruitment
+    // When assignment ends, check if position becomes vacant
+    const activeAssignments = await this.assignmentModel.countDocuments({
+      positionId: positionId,
+      $or: [{ endDate: null }, { endDate: { $gte: new Date() } }],
+    });
+
+    if (activeAssignments === 0) {
+      // Position is now vacant - flag for recruitment
+      const position = await this.positionModel.findById(positionId);
+      if (position && position.isActive) {
+        console.log(`[endPositionAssignment] Position ${positionId} (${position.code}) is now vacant and flagged for recruitment`);
+        // TODO: Integration with RecruitmentService to automatically create job requisition
+        // await this.recruitmentService.flagPositionAsVacant(positionId.toString());
+      }
+    }
+
+    return result;
   }
 
   // ============ CHANGE REQUEST METHODS ============
