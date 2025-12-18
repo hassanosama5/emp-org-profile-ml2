@@ -10,6 +10,14 @@ import {
   fetchEmployeeAppraisals,
 } from "@/lib/api/performance/Api/performanceAppraisalsApi";
 import {
+  AppraisalDispute,
+  SubmitDisputeInput,
+} from "./performanceDisputes";
+import {
+  submitDisputeApi,
+  fetchDisputesForAppraisal,
+} from "@/lib/api/performance/Api/performanceDisputesApi";
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -157,15 +165,68 @@ function resolvePublishedDate(record: AppraisalRecord): string {
   return d.toLocaleDateString();
 }
 
+// ---- dispute helpers ----
+
+function isWithinDisputeWindow(record: AppraisalRecord): boolean {
+  const r: any = record;
+  const base =
+    r.hrPublishedAt || r.employeeViewedAt || r.managerSubmittedAt;
+  if (!base) return false;
+
+  const published = new Date(base);
+  if (Number.isNaN(published.getTime())) return false;
+
+  const now = new Date();
+  const diffMs = now.getTime() - published.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  // 7-day window after publication
+  return diffDays >= 0 && diffDays <= 7;
+}
+
+function formatDisputeStatus(status?: string): string {
+  if (!status) return "Unknown";
+  switch (status) {
+    case "OPEN":
+      return "Open";
+    case "UNDER_REVIEW":
+      return "Under review";
+    case "ADJUSTED":
+      return "Adjusted";
+    case "REJECTED":
+      return "Rejected";
+    default:
+      return status;
+  }
+}
+
+function formatDisputeDate(value?: string | Date): string {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString();
+}
+
 export const EmployeeAppraisalsPage: React.FC = () => {
   const { user, loading, isAuthenticated } = useAuth();
 
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [appraisals, setAppraisals] = useState<AppraisalRecord[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [employeeProfileId, setEmployeeProfileId] = useState<string | null>(
     null,
   );
+
+  // dispute state
+  const [disputes, setDisputes] = useState<AppraisalDispute[]>([]);
+  const [disputeLoading, setDisputeLoading] = useState(false);
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [disputeSuccess, setDisputeSuccess] = useState<string | null>(null);
+  const [disputeFormOpen, setDisputeFormOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
+  const [disputeDetails, setDisputeDetails] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -189,6 +250,8 @@ export const EmployeeAppraisalsPage: React.FC = () => {
             "Could not determine your employeeProfileId. Please log out and log in again (or contact HR).",
           );
         }
+
+        setEmployeeProfileId(employeeProfileId);
 
         const data = await fetchEmployeeAppraisals(employeeProfileId);
         setAppraisals(data || []);
@@ -215,6 +278,35 @@ export const EmployeeAppraisalsPage: React.FC = () => {
     void load();
   }, [loading, isAuthenticated, user]);
 
+  // load disputes whenever selected appraisal changes
+  useEffect(() => {
+    const loadDisputes = async () => {
+      try {
+        setDisputeError(null);
+        setDisputeSuccess(null);
+
+        if (!selectedId) {
+          setDisputes([]);
+          return;
+        }
+
+        setDisputeLoading(true);
+        const data = await fetchDisputesForAppraisal(selectedId);
+        setDisputes(data || []);
+      } catch (err: any) {
+        console.error(err);
+        setDisputeError(
+          err?.message ??
+            "Could not load dispute information for this appraisal.",
+        );
+      } finally {
+        setDisputeLoading(false);
+      }
+    };
+
+    void loadDisputes();
+  }, [selectedId]);
+
   const selectedRecord: AppraisalRecord | null = useMemo(() => {
     if (!selectedId) return null;
     return (
@@ -226,6 +318,69 @@ export const EmployeeAppraisalsPage: React.FC = () => {
 
   const ratings: RatingEntry[] =
     (selectedRecord?.ratings as RatingEntry[]) || [];
+
+  const primaryDispute: AppraisalDispute | undefined = disputes[0];
+
+  const canRaiseDispute = useMemo(() => {
+    if (!selectedRecord) return false;
+    const status = (selectedRecord as any).status as string | undefined;
+
+    // only allow after HR has published and within 7 days, and if no existing dispute
+    if (status && status !== "HR_PUBLISHED") return false;
+    if (!isWithinDisputeWindow(selectedRecord)) return false;
+    if (primaryDispute) return false;
+    return true;
+  }, [selectedRecord, primaryDispute]);
+
+  const handleSubmitDispute = async () => {
+    if (!selectedRecord) return;
+    if (!employeeProfileId) {
+      setDisputeError(
+        "Could not determine your employee profile. Please log out and in again, or contact HR.",
+      );
+      return;
+    }
+    if (!disputeReason.trim()) {
+      setDisputeError("Please describe your concern before submitting.");
+      return;
+    }
+
+    try {
+      setDisputeSubmitting(true);
+      setDisputeError(null);
+      setDisputeSuccess(null);
+
+      const payload: SubmitDisputeInput = {
+        // adjust fields here if your DTO uses different names
+        reason: disputeReason.trim(),
+        details: disputeDetails.trim() || undefined,
+      } as SubmitDisputeInput;
+
+      const appraisalId = getId(selectedRecord)!;
+
+      const created = await submitDisputeApi(
+        appraisalId,
+        employeeProfileId,
+        payload,
+      );
+
+      setDisputes((prev) => [created, ...prev]);
+      setDisputeFormOpen(false);
+      setDisputeReason("");
+      setDisputeDetails("");
+      setDisputeSuccess(
+        "Your concern has been submitted. HR will review it and respond.",
+      );
+    } catch (err: any) {
+      console.error(err);
+      setDisputeError(
+        err?.message ??
+          "Could not submit your concern. Please try again or contact HR.",
+      );
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -447,6 +602,143 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                             "No improvement areas recorded."}
                         </p>
                       </div>
+                    </div>
+
+                    {/* --- Dispute / concern section --- */}
+                    <div className="mt-4 border-t border-gray-200 pt-3">
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                        Dispute / Concern
+                      </p>
+
+                      {disputeLoading && (
+                        <p className="text-xs text-gray-600">
+                          Checking if you have raised a concern for
+                          this appraisal...
+                        </p>
+                      )}
+
+                      {disputeError && (
+                        <p className="text-xs text-red-600 mb-1">
+                          {disputeError}
+                        </p>
+                      )}
+
+                      {disputeSuccess && (
+                        <p className="text-xs text-green-600 mb-1">
+                          {disputeSuccess}
+                        </p>
+                      )}
+
+                      {primaryDispute ? (
+                        <div className="space-y-1 text-sm text-gray-800">
+                          <p>
+                            Status:{" "}
+                            <span className="font-semibold">
+                              {formatDisputeStatus(
+                                (primaryDispute as any).status,
+                              )}
+                            </span>
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Submitted on:{" "}
+                            {formatDisputeDate(
+                              (primaryDispute as any).createdAt,
+                            )}
+                          </p>
+                          <p className="text-sm text-gray-800 whitespace-pre-line mt-1">
+                            {(primaryDispute as any).reason ||
+                              (primaryDispute as any).details ||
+                              "No description recorded."}
+                          </p>
+                          {(primaryDispute as any)
+                            .resolutionComment && (
+                            <p className="text-xs text-gray-700 whitespace-pre-line mt-2">
+                              <span className="font-semibold">
+                                HR Resolution:
+                              </span>{" "}
+                              {
+                                (primaryDispute as any)
+                                  .resolutionComment
+                              }
+                            </p>
+                          )}
+                        </div>
+                      ) : canRaiseDispute ? (
+                        <div className="space-y-2 text-sm text-gray-800">
+                          {!disputeFormOpen && (
+                            <>
+                              <p className="text-xs text-gray-600">
+                                If you disagree with this rating,
+                                you can raise a concern within 7
+                                days of publication. Your concern
+                                will be logged for HR to review.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setDisputeFormOpen(true)}
+                                className="mt-1 inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                              >
+                                Raise a concern about this rating
+                              </button>
+                            </>
+                          )}
+
+                          {disputeFormOpen && (
+                            <div className="space-y-2">
+                              <textarea
+                                rows={3}
+                                value={disputeReason}
+                                onChange={(e) =>
+                                  setDisputeReason(e.target.value)
+                                }
+                                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                                placeholder="Briefly explain why you disagree with this appraisal outcome."
+                              />
+                              <textarea
+                                rows={3}
+                                value={disputeDetails}
+                                onChange={(e) =>
+                                  setDisputeDetails(e.target.value)
+                                }
+                                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                                placeholder="Optional: share any extra details, examples, or what change you’re requesting."
+                              />
+
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDisputeFormOpen(false);
+                                    setDisputeReason("");
+                                    setDisputeDetails("");
+                                    setDisputeError(null);
+                                  }}
+                                  className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-800 hover:bg-gray-100"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={disputeSubmitting}
+                                  onClick={handleSubmitDispute}
+                                  className="inline-flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                                >
+                                  {disputeSubmitting
+                                    ? "Submitting..."
+                                    : "Submit Concern"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-600">
+                          You cannot raise a dispute for this
+                          appraisal (either the 7-day window has
+                          passed or the rating is not in a
+                          disputable state).
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
