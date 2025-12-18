@@ -1045,7 +1045,13 @@ export class OrganizationStructureService {
   ): Promise<StructureChangeLogDocument[]> {
     const filter: any = {};
     if (entityType) filter.entityType = entityType;
-    if (entityId) filter.entityId = entityId;
+    if (entityId) {
+      // Validate and convert entityId to ObjectId
+      if (!Types.ObjectId.isValid(entityId)) {
+        throw new BadRequestException(`Invalid entityId: ${entityId}`);
+      }
+      filter.entityId = new Types.ObjectId(entityId);
+    }
 
     return this.changeLogModel
       .find(filter)
