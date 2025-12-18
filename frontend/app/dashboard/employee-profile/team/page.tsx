@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/protected-route";
-import { useRequireAuth } from "@/lib/hooks/use-auth";
+import { useRequireAuth, useAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import {
   Card,
@@ -15,11 +15,14 @@ import { Toast, useToast } from "@/components/leaves/Toast";
 import { employeeProfileApi } from "@/lib/api/employee-profile/profile";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/shared/ui/Badge";
+import { Button } from "@/components/shared/ui/Button";
 import {
   CalendarIcon,
   UserIcon,
   BuildingIcon,
   BriefcaseIcon,
+  LayoutGridIcon,
+  ListIcon,
 } from "lucide-react";
 import { formatDate, getStatusColor } from "@/lib/utils";
 
@@ -32,9 +35,12 @@ export default function TeamPage() {
     SystemRole.SYSTEM_ADMIN,
   ]);
 
+  const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"list" | "structure">("list");
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -45,6 +51,14 @@ export default function TeamPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        // Get current user profile
+        try {
+          const profile = await employeeProfileApi.getMyProfile();
+          setCurrentUserProfile(profile);
+        } catch (err) {
+          console.error("Failed to load current user profile:", err);
+        }
+
         // Get team members only
         const members = await employeeProfileApi.getMyTeam();
         setTeam(members);
@@ -82,11 +96,33 @@ export default function TeamPage() {
         />
 
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white-900">My Team</h1>
-          <p className="text-gray-600 mt-2">
-            View and manage your direct reports and team members
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
+            <p className="text-gray-600 mt-2">
+              View and manage your direct reports and team members
+            </p>
+          </div>
+          {team.length > 0 && (
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === "list" ? "primary" : "outline"}
+                onClick={() => setViewMode("list")}
+                size="sm"
+              >
+                <ListIcon className="w-4 h-4 mr-2" />
+                List View
+              </Button>
+              <Button
+                variant={viewMode === "structure" ? "primary" : "outline"}
+                onClick={() => setViewMode("structure")}
+                size="sm"
+              >
+                <LayoutGridIcon className="w-4 h-4 mr-2" />
+                Structure View
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -150,6 +186,111 @@ export default function TeamPage() {
           </Card>
         </div>
 
+        {/* Team Structure View */}
+        {viewMode === "structure" && team.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Team Structure</CardTitle>
+              <CardDescription>
+                Visual hierarchy of your team and reporting structure
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="py-8">
+                {/* Manager (Current User) */}
+                <div className="flex justify-center mb-8">
+                  <div className="relative">
+                    <div className="bg-blue-600 text-white rounded-lg p-6 shadow-lg min-w-[280px]">
+                      <div className="flex items-center space-x-4">
+                        {currentUserProfile?.profilePictureUrl ? (
+                          <img
+                            src={currentUserProfile.profilePictureUrl}
+                            alt={currentUserProfile.fullName || "You"}
+                            className="w-16 h-16 rounded-full border-2 border-white"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center border-2 border-white">
+                            <span className="text-2xl font-bold text-white">
+                              {(currentUserProfile?.fullName || user?.fullName || "You")?.charAt(0)}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-bold text-lg">
+                            {currentUserProfile?.fullName || user?.fullName || "You"}
+                          </p>
+                          <p className="text-sm text-blue-100">
+                            {currentUserProfile?.positionTitle || user?.positionTitle || "Manager"}
+                          </p>
+                          <p className="text-xs text-blue-200 mt-1">
+                            {currentUserProfile?.employeeNumber || user?.employeeNumber || ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {team.length > 0 && (
+                      <div className="absolute left-1/2 transform -translate-x-1/2 top-full w-0.5 h-6 bg-gray-300"></div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Team Members */}
+                {team.length > 0 && (
+                  <div className="relative">
+                    {/* Horizontal connector line */}
+                    {team.length > 1 && (
+                      <div className="absolute left-1/2 transform -translate-x-1/2 top-0 w-px h-6 bg-gray-300"></div>
+                    )}
+                    <div className="flex flex-wrap justify-center gap-6 mt-6">
+                      {team.map((member, index) => (
+                        <div key={member.id || (member as any)._id || member.employeeNumber} className="relative">
+                          {/* Vertical connector line */}
+                          <div className="absolute left-1/2 transform -translate-x-1/2 -top-6 w-px h-6 bg-gray-300"></div>
+                          
+                          {/* Member Card */}
+                          <div className="bg-white border-2 border-gray-200 rounded-lg p-4 shadow-md hover:shadow-lg transition-shadow min-w-[240px]">
+                            <div className="flex items-center space-x-3">
+                              {member.profilePictureUrl ? (
+                                <img
+                                  src={member.profilePictureUrl}
+                                  alt={member.fullName}
+                                  className="w-12 h-12 rounded-full"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                  <span className="text-lg font-medium text-gray-600">
+                                    {member.fullName?.charAt(0)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 truncate">
+                                  {member.fullName}
+                                </p>
+                                <p className="text-sm text-gray-600 truncate">
+                                  {member.positionTitle || "—"}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {member.departmentName || "—"}
+                                </p>
+                                <div className="mt-2">
+                                  <Badge className={getStatusColor(member.status)}>
+                                    {member.status}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Team Table */}
         <Card>
           <CardHeader>
@@ -177,7 +318,7 @@ export default function TeamPage() {
                   You don't have any direct reports yet.
                 </p>
               </div>
-            ) : (
+            ) : viewMode === "list" ? (
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
@@ -259,7 +400,7 @@ export default function TeamPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 

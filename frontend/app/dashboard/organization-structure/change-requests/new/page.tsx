@@ -254,7 +254,7 @@ export default function CreateChangeRequestPage() {
   // System Admin can directly create departments/positions without change requests
   // Department Head can only create department-related requests
   const canCreateRequest = user?.roles?.some((r: string) => 
-    [SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD]
+    [SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD, SystemRole.SYSTEM_ADMIN]
       .includes(r as SystemRole)
   );
   
@@ -263,7 +263,7 @@ export default function CreateChangeRequestPage() {
   );
 
   return (
-    <ProtectedRoute allowedRoles={[SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD]}>
+    <ProtectedRoute allowedRoles={[SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD, SystemRole.SYSTEM_ADMIN]}>
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Info for System Admin */}
         {!canCreateRequest && (
