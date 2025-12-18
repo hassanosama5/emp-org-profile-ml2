@@ -75,6 +75,8 @@ function parseJwtPayload(token?: string | null): any | null {
 
 function extractEmployeeProfileId(user: any): string | null {
   const candidates: any[] = [
+    // Check user.id first (this is the employee profile ID based on ManagerAssignmentsPage)
+    user?.id,
     user?.employeeProfileId,
     user?.employeeProfile?._id,
     user?.employeeProfile?.id,
@@ -88,6 +90,7 @@ function extractEmployeeProfileId(user: any): string | null {
 
   const storedUser = getUserFromStorage();
   candidates.push(
+    storedUser?.id,
     storedUser?.employeeProfileId,
     storedUser?.employeeProfile?._id,
     storedUser?.employeeProfile?.id,
@@ -99,6 +102,7 @@ function extractEmployeeProfileId(user: any): string | null {
   const token = getTokenFromStorage();
   const payload = parseJwtPayload(token);
   candidates.push(
+    payload?.id,
     payload?.employeeProfileId,
     payload?.profileId,
     payload?.employee_profile_id,
@@ -114,6 +118,16 @@ function extractEmployeeProfileId(user: any): string | null {
       found = id!;
       break;
     }
+  }
+
+  // Debug logging if not found (only in development)
+  if (!found && typeof window !== "undefined") {
+    console.warn("[EmployeeAppraisalsPage] Could not extract employeeProfileId", {
+      user,
+      storedUser: getUserFromStorage(),
+      tokenPayload: parseJwtPayload(getTokenFromStorage()),
+      candidates: candidates.map((c) => getId(c)),
+    });
   }
 
   return found;
