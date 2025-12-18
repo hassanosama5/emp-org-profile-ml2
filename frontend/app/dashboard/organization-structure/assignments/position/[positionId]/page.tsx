@@ -185,9 +185,22 @@ export default function PositionAssignmentsPage({
                 This position has no employee assignments.
               </p>
               {positionId && (
-                <p className="text-xs text-gray-400 mt-2 font-mono">
-                  Position ID: {positionId}
-                </p>
+                <>
+                  <p className="text-xs text-gray-400 mt-2 font-mono">
+                    Position ID: {positionId}
+                  </p>
+                  {canManageAssignments && (
+                    <div className="mt-4">
+                      <Link
+                        href={`/dashboard/organization-structure/assignments/new?positionId=${positionId}`}
+                      >
+                        <Button variant="primary">
+                          Create Assignment for This Position
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

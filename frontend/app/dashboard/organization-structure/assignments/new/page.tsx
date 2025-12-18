@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
@@ -23,6 +23,7 @@ import {
 
 export default function NewAssignmentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     createPositionAssignment,
     getDepartments,
@@ -35,11 +36,18 @@ export default function NewAssignmentPage() {
   const [departments, setDepartments] = useState<DepartmentResponseDto[]>([]);
   const [positions, setPositions] = useState<PositionResponseDto[]>([]);
 
+  // Get employeeProfileId and positionId from URL query parameters if provided
+  const employeeIdFromUrl = searchParams?.get("employeeProfileId") || "";
+  const positionIdFromUrl = searchParams?.get("positionId") || "";
+
+  // Set default start date to today
+  const today = new Date().toISOString().split('T')[0];
+
   const [form, setForm] = useState({
-    employeeProfileId: "",
+    employeeProfileId: employeeIdFromUrl,
     departmentId: "",
-    positionId: "",
-    startDate: "",
+    positionId: positionIdFromUrl,
+    startDate: today,
     endDate: "",
     reason: "",
     notes: "",
@@ -55,13 +63,45 @@ export default function NewAssignmentPage() {
           getDepartments({ isActive: true }),
           getPositions({ isActive: true }),
         ]);
-        setDepartments(deps);
-        setPositions(pos);
+        console.log("Loaded departments:", deps?.length || 0);
+        console.log("Loaded positions:", pos?.length || 0);
+        setDepartments(deps || []);
+        setPositions(pos || []);
       } catch (e) {
         console.error("Failed to load departments/positions:", e);
+        setDepartments([]);
+        setPositions([]);
       }
     })();
   }, [getDepartments, getPositions]);
+
+  // Update employeeProfileId and positionId if URL parameters change
+  useEffect(() => {
+    if (employeeIdFromUrl && employeeIdFromUrl !== form.employeeProfileId) {
+      setForm((prev) => ({ ...prev, employeeProfileId: employeeIdFromUrl }));
+    }
+    if (positionIdFromUrl && positionIdFromUrl !== form.positionId) {
+      setForm((prev) => {
+        const updated = { ...prev, positionId: positionIdFromUrl };
+        // If position is pre-filled, try to auto-select its department
+        if (positionIdFromUrl && positions.length > 0) {
+          const position = positions.find((p: any) => {
+            const pid = typeof p._id === "string" ? p._id : (p._id as any)?.toString() || "";
+            return pid === positionIdFromUrl;
+          });
+          if (position && position.departmentId && !updated.departmentId) {
+            const deptId = typeof position.departmentId === "string"
+              ? position.departmentId
+              : (position.departmentId as any)?._id || (position.departmentId as any)?.id || "";
+            if (deptId) {
+              updated.departmentId = deptId;
+            }
+          }
+        }
+        return updated;
+      });
+    }
+  }, [employeeIdFromUrl, positionIdFromUrl, positions, form.employeeProfileId, form.positionId]);
 
   const validate = () => {
     const next: Record<string, string> = {};
@@ -115,15 +155,48 @@ export default function NewAssignmentPage() {
   };
 
   const selectedDeptPositions = useMemo(() => {
-    if (!form.departmentId) return positions;
-    return positions.filter((p: any) => {
-      const dept = (p as any).departmentId;
-      const deptId =
-        typeof dept === "string"
-          ? dept
-          : dept?._id || dept?.id || (dept?.toString ? dept.toString() : "");
-      return deptId === form.departmentId;
+    // If no positions loaded, return empty array
+    if (!positions || positions.length === 0) {
+      return [];
+    }
+    
+    // If no department selected, show all positions
+    if (!form.departmentId) {
+      return positions;
+    }
+    
+    // Filter positions by department
+    const filtered = positions.filter((p: any) => {
+      if (!p.departmentId) {
+        // If position has no department, don't include it when filtering
+        return false;
+      }
+      
+      const dept = p.departmentId;
+      let deptId: string = "";
+      
+      if (typeof dept === "string") {
+        deptId = dept;
+      } else if (dept && typeof dept === "object") {
+        deptId = dept._id || dept.id || (dept.toString ? dept.toString() : "");
+      }
+      
+      // Compare with the selected department ID
+      const selectedDeptId = typeof form.departmentId === "string" 
+        ? form.departmentId 
+        : (form.departmentId as any)?._id || (form.departmentId as any)?.id || "";
+      
+      return deptId === selectedDeptId;
     });
+    
+    // If filtering resulted in no positions, show all positions as fallback
+    // (This handles cases where positions might not have departmentId set)
+    if (filtered.length === 0 && positions.length > 0) {
+      console.warn("No positions found for selected department, showing all positions");
+      return positions;
+    }
+    
+    return filtered;
   }, [form.departmentId, positions]);
 
   return (
@@ -163,13 +236,20 @@ export default function NewAssignmentPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-5">
-              <Input
-                label="Employee Profile ID *"
-                placeholder="MongoDB ObjectId of the employee profile"
-                value={form.employeeProfileId}
-                onChange={(e) => onChange("employeeProfileId", e.target.value)}
-                error={formErrors.employeeProfileId}
-              />
+              <div>
+                <Input
+                  label="Employee Profile ID *"
+                  placeholder="MongoDB ObjectId of the employee profile"
+                  value={form.employeeProfileId}
+                  onChange={(e) => onChange("employeeProfileId", e.target.value)}
+                  error={formErrors.employeeProfileId}
+                />
+                {employeeIdFromUrl && form.employeeProfileId === employeeIdFromUrl && (
+                  <p className="mt-1 text-xs text-green-600">
+                    ✓ Employee ID pre-filled from URL
+                  </p>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -214,13 +294,29 @@ export default function NewAssignmentPage() {
                     onChange={(e) => onChange("positionId", e.target.value)}
                     disabled={loading}
                   >
-                    <option value="">Select position</option>
-                    {selectedDeptPositions.map((p) => (
-                      <option key={p._id} value={p._id}>
-                        {p.title} ({p.code})
-                      </option>
-                    ))}
+                    <option value="">
+                      {loading 
+                        ? "Loading positions..." 
+                        : selectedDeptPositions.length === 0 
+                          ? form.departmentId 
+                            ? "No positions in this department" 
+                            : "Select department first"
+                          : "Select position"}
+                    </option>
+                    {selectedDeptPositions.map((p) => {
+                      const positionId = typeof p._id === "string" ? p._id : (p._id as any)?.toString() || "";
+                      return (
+                        <option key={positionId} value={positionId}>
+                          {p.title} ({p.code || "N/A"})
+                        </option>
+                      );
+                    })}
                   </select>
+                  {positionIdFromUrl && form.positionId === positionIdFromUrl && (
+                    <p className="mt-1 text-xs text-green-600">
+                      ✓ Position pre-filled from URL
+                    </p>
+                  )}
                   {formErrors.positionId && (
                     <p className="mt-1 text-sm text-red-600">
                       {formErrors.positionId}

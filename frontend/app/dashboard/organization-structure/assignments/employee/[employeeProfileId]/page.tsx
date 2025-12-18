@@ -229,9 +229,22 @@ export default function EmployeeAssignmentsPage({
                   : "This employee has no position assignments."}
               </p>
               {employeeProfileId && (
-                <p className="text-xs text-gray-400 mt-2 font-mono">
-                  Employee ID: {employeeProfileId}
-                </p>
+                <>
+                  <p className="text-xs text-gray-400 mt-2 font-mono">
+                    Employee ID: {employeeProfileId}
+                  </p>
+                  {canManageAssignments && (
+                    <div className="mt-4">
+                      <Link
+                        href={`/dashboard/organization-structure/assignments/new?employeeProfileId=${employeeProfileId}`}
+                      >
+                        <Button variant="primary">
+                          Create Assignment for This Employee
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
