@@ -223,20 +223,21 @@ export default function HierarchyDashboardPage() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Dynamically import html2canvas and jsPDF
-      const html2canvas = (await import('html2canvas')).default;
+      const html2canvasModule: any = await import('html2canvas');
+      const html2canvas = html2canvasModule.default || html2canvasModule;
       const jsPDFModule: any = await import('jspdf');
       // Handle both default and named exports
       const jsPDFClass = jsPDFModule.default?.jsPDF || jsPDFModule.jsPDF || jsPDFModule.default || jsPDFModule;
       
       // Capture the export container with options that handle oklch colors better
       const canvas = await html2canvas(exportDiv, {
-        backgroundColor: '#ffffff',
+        background: '#ffffff',
         scale: 1.5,
         logging: false,
         useCORS: true,
         allowTaint: true,
         foreignObjectRendering: false,
-        onclone: (clonedDoc, element) => {
+        onclone: (clonedDoc: Document, element: HTMLElement) => {
           // Inject CSS to override oklch colors
           injectColorFixCSS(clonedDoc);
           
@@ -272,7 +273,7 @@ export default function HierarchyDashboardPage() {
             }
           });
         },
-      });
+      } as any);
 
       const imgData = canvas.toDataURL('image/png', 0.95);
       // Create PDF instance
@@ -383,14 +384,14 @@ export default function HierarchyDashboardPage() {
       
       // Use options that work better with modern CSS
       const canvas = await html2canvas(exportDiv, {
-        backgroundColor: '#ffffff',
+        background: '#ffffff',
         scale: 2,
         logging: false,
         useCORS: true,
         allowTaint: true,
         foreignObjectRendering: false,
         removeContainer: false,
-        onclone: (clonedDoc, element) => {
+        onclone: (clonedDoc: Document, element: HTMLElement) => {
           // Inject CSS to override oklch colors
           injectColorFixCSS(clonedDoc);
           
@@ -426,7 +427,7 @@ export default function HierarchyDashboardPage() {
             }
           });
         },
-      });
+      } as any);
 
       const link = document.createElement('a');
       link.download = `organization-chart-${new Date().toISOString().split('T')[0]}.png`;

@@ -22,6 +22,7 @@ import {
 } from './models/structure-change-request.schema';
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmployeeSystemRole, EmployeeSystemRoleSchema } from '../employee-profile/models/employee-system-role.schema';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
         name: StructureChangeRequest.name,
         schema: StructureChangeRequestSchema,
       },
+      { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
     ]),
     forwardRef(() => EmployeeProfileModule),
     NotificationsModule,

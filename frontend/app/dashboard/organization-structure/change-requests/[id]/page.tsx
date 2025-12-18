@@ -38,6 +38,7 @@ export default function ChangeRequestDetailPage() {
     cancelChangeRequest,
     getStatusDisplay,
     getRequestTypeDisplay,
+    getApprovedRequestFormData,
     loading,
     error,
     clearError,
@@ -45,6 +46,7 @@ export default function ChangeRequestDetailPage() {
 
   const [request, setRequest] =
     useState<StructureChangeRequestResponseDto | null>(null);
+  const [decisionComments, setDecisionComments] = useState("");
   const requestId = (params.id as string) || "";
 
   const roles = user?.roles || [];
@@ -373,6 +375,56 @@ export default function ChangeRequestDetailPage() {
                     </p>
                     <p className="text-xs text-blue-700">
                       This request is waiting for your approval. Use the "View & Manage Approvals" button above to review and make a decision.
+                    </p>
+                  </div>
+                )}
+
+                {/* REQ-OSM-04: System Admin can implement approved requests */}
+                {canApprove && request.status === StructureRequestStatus.APPROVED && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm text-green-800 font-medium mb-2">
+                      Approved - Ready to Implement
+                    </p>
+                    <p className="text-xs text-green-700 mb-3">
+                      This request has been approved. Click below to open the form with pre-filled data to finalize the changes.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const formData = await getApprovedRequestFormData(request._id);
+                          router.push(formData.redirectUrl);
+                        } catch (e) {
+                          console.error("Failed to get form data:", e);
+                          alert("Failed to load form data. Please check the console for details.");
+                        }
+                      }}
+                    >
+                      📝 Open Form to Implement
+                    </Button>
+                  </div>
+                )}
+
+                {/* Status-specific messages */}
+                {request.status === StructureRequestStatus.REJECTED && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-800 font-medium mb-1">
+                      ✗ Request Rejected
+                    </p>
+                    <p className="text-xs text-red-700">
+                      This request has been rejected and will not be implemented.
+                    </p>
+                  </div>
+                )}
+
+                {request.status === StructureRequestStatus.IMPLEMENTED && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
+                    <p className="text-sm text-purple-800 font-medium mb-1">
+                      ✓ Request Implemented
+                    </p>
+                    <p className="text-xs text-purple-700">
+                      The changes from this request have been successfully implemented.
                     </p>
                   </div>
                 )}

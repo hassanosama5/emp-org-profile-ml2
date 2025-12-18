@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
@@ -12,12 +12,10 @@ import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure
 import { useAuth } from "@/lib/hooks/use-auth";
 import { StructureChangeRequestResponseDto, StructureRequestStatus } from "@/types/organization-structure";
 
-export default function SubmitChangeRequestPage({
-  params,
-}: {
-  params: Promise<{ id: string }> | { id: string };
-}) {
+export default function SubmitChangeRequestPage() {
+  const params = useParams();
   const router = useRouter();
+  const requestId = params.id as string;
   const { user } = useAuth();
   const {
     getChangeRequestById,
@@ -29,7 +27,6 @@ export default function SubmitChangeRequestPage({
 
   const [req, setReq] = useState<StructureChangeRequestResponseDto | null>(null);
   const [comments, setComments] = useState("");
-  const [requestId, setRequestId] = useState<string>("");
 
   const roles = user?.roles || [];
   const hasRole = (role: string) =>
@@ -39,17 +36,6 @@ export default function SubmitChangeRequestPage({
     () => hasRole(SystemRole.SYSTEM_ADMIN) || hasRole(SystemRole.HR_ADMIN) || hasRole(SystemRole.HR_MANAGER),
     [user?.roles]
   );
-
-  // Unwrap params if it's a Promise
-  useEffect(() => {
-    if (params && typeof params === 'object' && 'then' in params) {
-      (params as Promise<{ id: string }>).then((resolved) => {
-        setRequestId(resolved.id);
-      });
-    } else {
-      setRequestId((params as { id: string }).id);
-    }
-  }, [params]);
 
   const fetchReq = async () => {
     if (!requestId) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -21,7 +21,7 @@ import {
   PositionResponseDto,
 } from "@/types/organization-structure";
 
-export default function NewAssignmentPage() {
+function NewAssignmentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
@@ -397,4 +397,17 @@ export default function NewAssignmentPage() {
   );
 }
 
+export default function NewAssignmentPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-6 py-8 max-w-3xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <NewAssignmentForm />
+    </Suspense>
+  );
+}
 

@@ -16,6 +16,12 @@ interface DepartmentFormProps {
   error?: string | null;
   isEditMode?: boolean;
   onCancel: () => void;
+  prefillData?: {
+    code?: string;
+    name?: string;
+    description?: string;
+    headPositionId?: string;
+  };
 }
 
 export function DepartmentForm({
@@ -25,6 +31,7 @@ export function DepartmentForm({
   error,
   isEditMode = false,
   onCancel,
+  prefillData,
 }: DepartmentFormProps) {
   const { user } = useAuth();
   
@@ -57,8 +64,16 @@ export function DepartmentForm({
         description: initialData.description || "",
         headPositionId: initialData.headPositionId || "",
       });
+    } else if (prefillData) {
+      // Pre-fill from approved change request
+      setFormData({
+        code: prefillData.code || "",
+        name: prefillData.name || "",
+        description: prefillData.description || "",
+        headPositionId: prefillData.headPositionId || "",
+      });
     }
-  }, [initialData]);
+  }, [initialData, prefillData]);
 
   const validateForm = () => {
     const errors = {

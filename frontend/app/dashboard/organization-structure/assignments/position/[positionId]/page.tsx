@@ -34,7 +34,7 @@ const getEmployeeLabel = (employeeProfileId: any) => {
 export default function PositionAssignmentsPage({
   params,
 }: {
-  params: Promise<{ positionId: string }> | { positionId: string };
+  params: Promise<{ positionId: string }>;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -61,15 +61,13 @@ export default function PositionAssignmentsPage({
     return has(SystemRole.SYSTEM_ADMIN) || has(SystemRole.HR_ADMIN);
   }, [user?.roles]);
 
-  // Unwrap params if it's a Promise
+  // Unwrap params Promise
   useEffect(() => {
-    if (params && typeof params === 'object' && 'then' in params) {
-      (params as Promise<{ positionId: string }>).then((resolved) => {
-        setPositionId(resolved.positionId);
-      });
-    } else {
-      setPositionId((params as { positionId: string }).positionId);
-    }
+    params.then((resolved) => {
+      setPositionId(resolved.positionId);
+    }).catch((error) => {
+      console.error("Failed to resolve params:", error);
+    });
   }, [params]);
 
   const fetchAssignments = async () => {

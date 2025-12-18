@@ -11,7 +11,7 @@ import { Input } from "@/components/shared/ui/Input";
 import { Textarea } from "@/components/shared/ui/Textarea";
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
 import { useAuth } from "@/lib/hooks/use-auth";
-import { ApprovalDecision, StructureApprovalResponseDto } from "@/types/organization-structure";
+import { ApprovalDecision, StructureApprovalResponseDto, StructureRequestStatus } from "@/types/organization-structure";
 
 const shortId = (id?: string) => (id ? `${id.slice(0, 8)}…` : "—");
 
@@ -20,35 +20,44 @@ export default function ApprovalsDashboardPage() {
   const { user } = useAuth();
   const {
     getRequestApprovals,
-    createApproval,
+    getChangeRequestById,
+    getStatusDisplay,
+    getRequestTypeDisplay,
     getDecisionDisplay,
+    getApprovedRequestFormData,
+    approveChangeRequest,
+    rejectChangeRequest,
     loading,
     error,
     clearError,
   } = useOrganizationStructure();
 
   const [changeRequestId, setChangeRequestId] = useState("");
-  const [approverEmployeeId, setApproverEmployeeId] = useState("");
   const [comments, setComments] = useState("");
   const [approvals, setApprovals] = useState<StructureApprovalResponseDto[]>([]);
+  const [changeRequest, setChangeRequest] = useState<any>(null);
+  const [decisionComments, setDecisionComments] = useState("");
 
   const roles = user?.roles || [];
   const hasRole = (role: string) =>
     roles.some((r) => String(r).toLowerCase() === role.toLowerCase());
 
-  const canCreateApproval = useMemo(() => hasRole(SystemRole.SYSTEM_ADMIN), [user?.roles]);
-  const canDecide = useMemo(
-    () => hasRole(SystemRole.SYSTEM_ADMIN) || hasRole(SystemRole.HR_ADMIN),
-    [user?.roles]
-  );
+  // Only System Admin can approve/reject
+  const canApprove = useMemo(() => hasRole(SystemRole.SYSTEM_ADMIN), [user?.roles]);
 
   const fetchApprovals = async (id: string) => {
     if (!id.trim()) return;
     try {
-      const data = await getRequestApprovals(id.trim());
-      setApprovals(data);
+      const [approvalsData, requestData] = await Promise.all([
+        getRequestApprovals(id.trim()).catch(() => []),
+        getChangeRequestById(id.trim()).catch(() => null),
+      ]);
+      setApprovals(approvalsData || []);
+      setChangeRequest(requestData || null);
     } catch (e) {
       console.error("Failed to fetch approvals:", e);
+      setApprovals([]);
+      setChangeRequest(null);
     }
   };
 
@@ -63,20 +72,25 @@ export default function ApprovalsDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCreateApproval = async () => {
-    if (!canCreateApproval) return;
-    if (!changeRequestId.trim() || !approverEmployeeId.trim()) return;
+  const handleApprove = async () => {
+    if (!changeRequestId.trim() || !changeRequest) return;
     try {
-      await createApproval({
-        changeRequestId: changeRequestId.trim(),
-        approverEmployeeId: approverEmployeeId.trim(),
-        comments: comments.trim() || undefined,
-      });
-      setApproverEmployeeId("");
-      setComments("");
+      await approveChangeRequest(changeRequestId.trim(), decisionComments.trim() || undefined);
+      setDecisionComments("");
       await fetchApprovals(changeRequestId);
     } catch (e) {
-      console.error("Failed to create approval:", e);
+      console.error("Failed to approve request:", e);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!changeRequestId.trim() || !changeRequest) return;
+    try {
+      await rejectChangeRequest(changeRequestId.trim(), decisionComments.trim() || undefined);
+      setDecisionComments("");
+      await fetchApprovals(changeRequestId);
+    } catch (e) {
+      console.error("Failed to reject request:", e);
     }
   };
 
@@ -102,15 +116,26 @@ export default function ApprovalsDashboardPage() {
     );
   };
 
-  // REQ-OSM-04: Only System Admin reviews and approves requests
-  const canApprove = useMemo(
-    () => hasRole(SystemRole.SYSTEM_ADMIN),
-    [user?.roles]
-  );
+  const getStatusBadge = (status: string) => {
+    const display = getStatusDisplay(status as any);
+    const colorMap: Record<string, string> = {
+      gray: "bg-gray-100 text-gray-800",
+      blue: "bg-blue-100 text-blue-800",
+      green: "bg-green-100 text-green-800",
+      red: "bg-red-100 text-red-800",
+      yellow: "bg-yellow-100 text-yellow-800",
+      purple: "bg-purple-100 text-purple-800",
+    };
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorMap[display.color] || colorMap.gray}`}>
+        {display.label}
+      </span>
+    );
+  };
 
   return (
     <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN]}>
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Approvals Dashboard</h1>
@@ -120,7 +145,7 @@ export default function ApprovalsDashboardPage() {
           </div>
           <Link
             href="/dashboard/organization-structure/change-requests"
-            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
           >
             ← Back to Change Requests
           </Link>
@@ -137,24 +162,33 @@ export default function ApprovalsDashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Find Approvals</CardTitle>
-              <CardDescription>Search by Change Request ID</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                label="Change Request ID"
-                placeholder="MongoDB ObjectId"
-                value={changeRequestId}
-                onChange={(e) => setChangeRequestId(e.target.value)}
-              />
-              <div className="flex gap-3">
+        {/* Search Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Find Change Request</CardTitle>
+            <CardDescription>Enter a change request ID to view and manage its approvals</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Input
+                  label="Change Request ID"
+                  placeholder="Enter change request ID or request number"
+                  value={changeRequestId}
+                  onChange={(e) => setChangeRequestId(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && changeRequestId.trim()) {
+                      fetchApprovals(changeRequestId);
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex items-end gap-2">
                 <Button
                   variant="primary"
                   onClick={() => fetchApprovals(changeRequestId)}
                   disabled={loading || !changeRequestId.trim()}
+                  isLoading={loading}
                 >
                   Search
                 </Button>
@@ -162,143 +196,217 @@ export default function ApprovalsDashboardPage() {
                   variant="outline"
                   onClick={() => {
                     setApprovals([]);
+                    setChangeRequest(null);
                     setChangeRequestId("");
                   }}
-                  disabled={loading || (!changeRequestId && approvals.length === 0)}
+                  disabled={loading}
                 >
                   Clear
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card className="lg:col-span-2">
+        {/* Change Request Details with Approve/Reject Actions */}
+        {changeRequest && (
+          <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Approvals List</CardTitle>
-              <CardDescription>
-                {changeRequestId.trim()
-                  ? `For change request ${shortId(changeRequestId.trim())}`
-                  : "Search a change request to load approvals"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              {loading ? (
-                <div className="flex justify-center py-10">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-                </div>
-              ) : approvals.length === 0 ? (
-                <div className="py-10 text-center text-gray-600">
-                  No approvals loaded.
-                </div>
-              ) : (
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b">
-                      <th className="py-3 pr-4">Approver</th>
-                      <th className="py-3 pr-4">Decision</th>
-                      <th className="py-3 pr-4">Decided At</th>
-                      <th className="py-3 pr-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {approvals.map((a: any) => (
-                      <tr key={a._id} className="border-b last:border-b-0">
-                        <td className="py-3 pr-4">
-                          {typeof a.approverEmployeeId === "string"
-                            ? shortId(a.approverEmployeeId)
-                            : a.approverEmployeeId?.fullName
-                            ? `${a.approverEmployeeId.fullName} (${a.approverEmployeeId.employeeNumber || ""})`
-                            : shortId(a.approverEmployeeId?._id)}
-                        </td>
-                        <td className="py-3 pr-4">{badge(a.decision)}</td>
-                        <td className="py-3 pr-4">
-                          {a.decidedAt ? new Date(a.decidedAt).toLocaleString() : "—"}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <div className="flex flex-wrap gap-2">
-                            {canDecide && (
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() =>
-                                  router.push(
-                                    `/dashboard/organization-structure/change-requests/approvals/${a._id}`
-                                  )
-                                }
-                              >
-                                Decide
-                              </Button>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                router.push(
-                                  `/dashboard/organization-structure/change-requests?focus=${changeRequestId.trim()}`
-                                )
-                              }
-                            >
-                              View Requests
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {canCreateApproval && (
-          <div className="mt-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Assign Approver (Create Approval)</CardTitle>
-                <CardDescription>
-                  System Admin only. Provide approver employee profile ID.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="Change Request ID *"
-                    value={changeRequestId}
-                    onChange={(e) => setChangeRequestId(e.target.value)}
-                    placeholder="MongoDB ObjectId"
-                  />
-                  <Input
-                    label="Approver Employee Profile ID *"
-                    value={approverEmployeeId}
-                    onChange={(e) => setApproverEmployeeId(e.target.value)}
-                    placeholder="MongoDB ObjectId"
-                  />
-                </div>
+              <div className="flex items-center justify-between">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Comments (optional)
-                  </label>
-                  <Textarea
-                    value={comments}
-                    onChange={(e) => setComments(e.target.value)}
-                    rows={3}
-                    placeholder="Optional note for the approver"
-                  />
+                  <CardTitle className="flex items-center gap-3">
+                    <span>{getRequestTypeDisplay(changeRequest.requestType).icon}</span>
+                    <span>{getRequestTypeDisplay(changeRequest.requestType).label}</span>
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Request #{changeRequest.requestNumber}
+                  </CardDescription>
                 </div>
-                <div className="flex justify-end">
+                {getStatusBadge(changeRequest.status)}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-gray-500">Requested By</p>
+                  <p className="font-medium text-gray-900">
+                    {typeof changeRequest.requestedByEmployeeId === 'object' 
+                      ? `${changeRequest.requestedByEmployeeId?.firstName || ''} ${changeRequest.requestedByEmployeeId?.lastName || ''}`.trim() || changeRequest.requestedByEmployeeId?.employeeNumber || 'Unknown'
+                      : shortId(changeRequest.requestedByEmployeeId)}
+                  </p>
+                </div>
+                {changeRequest.submittedAt && (
+                  <div>
+                    <p className="text-gray-500">Submitted At</p>
+                    <p className="font-medium text-gray-900">
+                      {new Date(changeRequest.submittedAt).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                {changeRequest.reason && (
+                  <div className="md:col-span-2">
+                    <p className="text-gray-500">Reason</p>
+                    <p className="font-medium text-gray-900">{changeRequest.reason}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Approve/Reject Actions - Only for SUBMITTED or UNDER_REVIEW and System Admin */}
+              {canApprove && (changeRequest.status === StructureRequestStatus.SUBMITTED || 
+                changeRequest.status === StructureRequestStatus.UNDER_REVIEW) && (
+                <div className="mt-6 pt-6 border-t space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Comments (optional)
+                    </label>
+                    <Textarea
+                      value={decisionComments}
+                      onChange={(e) => setDecisionComments(e.target.value)}
+                      rows={3}
+                      placeholder="Add comments for your decision..."
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="primary"
+                      onClick={handleApprove}
+                      disabled={loading}
+                      isLoading={loading}
+                      className="flex-1"
+                    >
+                      ✓ Approve Request
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={handleReject}
+                      disabled={loading}
+                      isLoading={loading}
+                      className="flex-1"
+                    >
+                      ✗ Reject Request
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Status-specific messages */}
+              {canApprove && changeRequest.status === StructureRequestStatus.APPROVED && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md mb-3">
+                    <p className="text-sm text-green-800 font-medium mb-1">
+                      ✓ Request Approved
+                    </p>
+                    <p className="text-xs text-green-700">
+                      This request has been approved. Use the button below to open the form and implement the changes.
+                    </p>
+                  </div>
                   <Button
                     variant="primary"
-                    onClick={handleCreateApproval}
-                    isLoading={loading}
-                    disabled={!changeRequestId.trim() || !approverEmployeeId.trim()}
+                    onClick={async () => {
+                      try {
+                        const formData = await getApprovedRequestFormData(changeRequest._id);
+                        router.push(formData.redirectUrl);
+                      } catch (e) {
+                        console.error("Failed to get form data:", e);
+                        alert("Failed to load form data. Please check the console for details.");
+                      }
+                    }}
                   >
-                    Create Approval
+                    📝 Open Form to Implement
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+
+              {changeRequest.status === StructureRequestStatus.REJECTED && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-800 font-medium">
+                      ✗ Request Rejected
+                    </p>
+                    <p className="text-xs text-red-700 mt-1">
+                      This request has been rejected and will not be implemented.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {changeRequest.status === StructureRequestStatus.IMPLEMENTED && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
+                    <p className="text-sm text-purple-800 font-medium">
+                      ✓ Request Implemented
+                    </p>
+                    <p className="text-xs text-purple-700 mt-1">
+                      The changes from this request have been successfully implemented.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/organization-structure/change-requests/${changeRequest._id}`)}
+                >
+                  View Full Details →
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Approval History (if exists) */}
+        {approvals.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Approval History</CardTitle>
+              <CardDescription>
+                Approval record for this change request
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {approvals.map((a: any) => (
+                  <div
+                    key={a._id}
+                    className="p-4 border border-gray-200 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">
+                          {typeof a.approverEmployeeId === "object" && a.approverEmployeeId
+                            ? `${a.approverEmployeeId.firstName || ''} ${a.approverEmployeeId.lastName || ''}`.trim() || a.approverEmployeeId.employeeNumber || 'Unknown'
+                            : typeof a.approverEmployeeId === "string"
+                            ? `Employee ${shortId(a.approverEmployeeId)}`
+                            : "Unknown Approver"}
+                        </p>
+                        {typeof a.approverEmployeeId === "object" && a.approverEmployeeId?.employeeNumber && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {a.approverEmployeeId.employeeNumber}
+                          </p>
+                        )}
+                      </div>
+                      {badge(a.decision)}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      {a.decidedAt ? (
+                        <span>Decided: {new Date(a.decidedAt).toLocaleString()}</span>
+                      ) : (
+                        <span className="text-yellow-600 font-medium">Pending Decision</span>
+                      )}
+                    </div>
+                    {a.comments && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded text-sm text-gray-700">
+                        <p className="font-medium mb-1">Comments:</p>
+                        <p>{a.comments}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </ProtectedRoute>

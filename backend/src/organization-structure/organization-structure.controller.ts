@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { OrganizationStructureService } from './organization-structure.service';
 import {
@@ -37,6 +38,7 @@ import {
 import {
   CreateStructureApprovalDto,
   UpdateApprovalDecisionDto,
+  ApproveRejectChangeRequestDto,
   StructureApprovalResponseDto,
 } from './dto/structure-approval.dto';
 import { StructureRequestStatus } from './enums/organization-structure.enums';
@@ -302,15 +304,27 @@ export class OrganizationStructureController {
 
   /**
    * REQ-OSM-04: View change requests
-   * System Admin reviews all, Managers see their own
+   * System Admin reviews all submitted requests, Managers/HR see only their own
    */
   @Get('change-requests')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD)
   async getAllChangeRequests(
     @CurrentUser() user: any,
     @Query('status') status?: StructureRequestStatus,
   ) {
-    return this.structureService.getAllChangeRequests(status);
+    // System Admin sees all requests (for approval)
+    // Managers/HR/Department Head see only their own requests
+    const isSystemAdmin = user?.roles?.some((r: string) => 
+      String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase()
+    );
+    
+    if (isSystemAdmin) {
+      // System Admin: See all requests (especially SUBMITTED ones for approval)
+      return this.structureService.getAllChangeRequests(status);
+    } else {
+      // Managers/HR/Department Head: See only their own requests
+      return this.structureService.getChangeRequestsByRequester(user?.id || user?.userId, status);
+    }
   }
 
   /**
@@ -336,6 +350,78 @@ export class OrganizationStructureController {
       `[Controller] getChangeRequestById called with id: "${id}" (type: ${typeof id}, length: ${id?.length})`,
     );
     return this.structureService.getChangeRequestById(id);
+  }
+
+  // ============ APPROVAL ENDPOINTS ============
+  // NOTE: These must come BEFORE the more general routes to ensure proper matching
+
+  /**
+   * REQ-OSM-04: System Admin approves a change request directly
+   * Updates request status to APPROVED
+   * System Admin then uses the form to implement changes
+   */
+  @Post('change-requests/:id/approve')
+  @Roles(SystemRole.SYSTEM_ADMIN)
+  async approveChangeRequest(
+    @Param('id') id: string,
+    @Body() dto: ApproveRejectChangeRequestDto,
+    @CurrentUser() user: any,
+  ) {
+    console.log(`[Controller] approveChangeRequest called for ID: ${id}, user: ${user?.userId}`);
+    
+    if (!user?.userId) {
+      console.error(`[Controller] User ID not found. User object:`, user);
+      throw new BadRequestException('User ID not found. Please ensure you are logged in.');
+    }
+    
+    try {
+      const result = await this.structureService.approveChangeRequest(id, user.userId, dto.comments);
+      console.log(`[Controller] Approval successful for request ${id}`);
+      return result;
+    } catch (error: any) {
+      console.error(`[Controller] Error approving request ${id}:`, error?.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * REQ-OSM-04: System Admin rejects a change request directly
+   * Updates request status to REJECTED
+   */
+  @Post('change-requests/:id/reject')
+  @Roles(SystemRole.SYSTEM_ADMIN)
+  async rejectChangeRequest(
+    @Param('id') id: string,
+    @Body() dto: ApproveRejectChangeRequestDto,
+    @CurrentUser() user: any,
+  ) {
+    console.log(`[Controller] rejectChangeRequest called for ID: ${id}, user: ${user?.userId}`);
+    
+    if (!user?.userId) {
+      throw new BadRequestException('User ID not found. Please ensure you are logged in.');
+    }
+    
+    try {
+      const result = await this.structureService.rejectChangeRequest(id, user.userId, dto.comments);
+      console.log(`[Controller] Rejection successful for request ${id}`);
+      return result;
+    } catch (error: any) {
+      console.error(`[Controller] Error rejecting request ${id}:`, error?.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark change request as IMPLEMENTED after System Admin uses form
+   * Called automatically after successful form submission
+   */
+  @Post('change-requests/:id/mark-implemented')
+  @Roles(SystemRole.SYSTEM_ADMIN)
+  async markRequestAsImplemented(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.structureService.markRequestAsImplemented(id);
   }
 
   /**
@@ -377,23 +463,8 @@ export class OrganizationStructureController {
     return this.structureService.cancelChangeRequest(id);
   }
 
-  // ============ APPROVAL ENDPOINTS ============
-
   /**
-   * Create approval (System Admin assigns approvers)
-   * REQ-OSM-04: System Admin assigns approvers for change requests
-   * Note: Approvals are typically auto-created when a request is submitted
-   */
-  @Post('approvals')
-  @Roles(SystemRole.SYSTEM_ADMIN)
-  async createApproval(
-    @Body() dto: CreateStructureApprovalDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.structureService.createApproval(dto);
-  }
-
-  /**
+   * Legacy endpoint - kept for backward compatibility
    * REQ-OSM-04: System Admin makes approval decision
    * BR 36: Approval workflow enforcement
    * REQ-OSM-09: Validation rules applied
@@ -420,6 +491,19 @@ export class OrganizationStructureController {
     @CurrentUser() user: any,
   ) {
     return this.structureService.getRequestApprovals(changeRequestId);
+  }
+
+  /**
+   * Get approved request form data for populating create/update forms
+   * REQ-OSM-04: System Admin uses this to populate forms with approved request data
+   */
+  @Get('change-requests/:id/form-data')
+  @Roles(SystemRole.SYSTEM_ADMIN)
+  async getApprovedRequestFormData(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.structureService.getApprovedRequestFormData(id);
   }
 
   // ============ CHANGE LOG ENDPOINTS ============

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -19,11 +19,18 @@ export default function ApprovalDecisionPage({
 }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { updateApprovalDecision, loading, error, clearError } =
-    useOrganizationStructure();
+  const { 
+    updateApprovalDecision, 
+    getRequestApprovals,
+    getApprovedRequestFormData,
+    loading, 
+    error, 
+    clearError 
+  } = useOrganizationStructure();
 
   const [comments, setComments] = useState("");
   const [decision, setDecision] = useState<ApprovalDecision>(ApprovalDecision.APPROVED);
+  const [changeRequestId, setChangeRequestId] = useState<string | null>(null);
 
   const roles = user?.roles || [];
   const hasRole = (role: string) =>
@@ -33,6 +40,24 @@ export default function ApprovalDecisionPage({
     [user?.roles]
   );
 
+  // Fetch change request ID from approval
+  useEffect(() => {
+    const fetchApproval = async () => {
+      try {
+        // We need to get the approval to find the change request ID
+        // For now, we'll get it from the approvals list or pass it as a query param
+        const url = new URL(window.location.href);
+        const requestId = url.searchParams.get("changeRequestId");
+        if (requestId) {
+          setChangeRequestId(requestId);
+        }
+      } catch (e) {
+        console.error("Failed to fetch approval details:", e);
+      }
+    };
+    fetchApproval();
+  }, []);
+
   const submit = async () => {
     if (!canDecide) return;
     try {
@@ -40,6 +65,20 @@ export default function ApprovalDecisionPage({
         decision,
         comments: comments.trim() || undefined,
       });
+      
+      // If approved, redirect to the appropriate form with pre-filled data
+      if (decision === ApprovalDecision.APPROVED && changeRequestId) {
+        try {
+          const formData = await getApprovedRequestFormData(changeRequestId);
+          // Redirect to the form URL with query parameters
+          router.push(formData.redirectUrl);
+          return;
+        } catch (formError) {
+          console.error("Failed to get form data, redirecting to approvals:", formError);
+        }
+      }
+      
+      // If rejected or form data fetch failed, go back to approvals
       router.push("/dashboard/organization-structure/change-requests/approvals");
     } catch (e) {
       console.error("Failed to update approval decision:", e);

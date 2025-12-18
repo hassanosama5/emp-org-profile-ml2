@@ -343,6 +343,70 @@ export const useOrganizationStructure = () => {
     }
   }, []);
 
+  const getApprovedRequestFormData = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await changeRequestsApi.getApprovedRequestFormData(id);
+      setLoading(false);
+      return response;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to get form data"
+      );
+      setLoading(false);
+      throw err;
+    }
+  }, []);
+
+  const approveChangeRequest = useCallback(async (id: string, comments?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await changeRequestsApi.approveChangeRequest(id, comments);
+      setLoading(false);
+      return response;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to approve change request"
+      );
+      setLoading(false);
+      throw err;
+    }
+  }, []);
+
+  const rejectChangeRequest = useCallback(async (id: string, comments?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await changeRequestsApi.rejectChangeRequest(id, comments);
+      setLoading(false);
+      return response;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to reject change request"
+      );
+      setLoading(false);
+      throw err;
+    }
+  }, []);
+
+  const markRequestAsImplemented = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await changeRequestsApi.markRequestAsImplemented(id);
+      setLoading(false);
+      return response;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to mark request as implemented"
+      );
+      setLoading(false);
+      throw err;
+    }
+  }, []);
+
   // ============ APPROVAL HOOKS ============
   const createApproval = useCallback(
     async (data: CreateStructureApprovalDto) => {
@@ -595,6 +659,10 @@ export const useOrganizationStructure = () => {
     updateChangeRequest,
     submitChangeRequest,
     cancelChangeRequest,
+    getApprovedRequestFormData,
+    approveChangeRequest,
+    rejectChangeRequest,
+    markRequestAsImplemented,
 
     // Approval methods
     createApproval,

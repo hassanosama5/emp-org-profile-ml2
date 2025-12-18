@@ -55,7 +55,7 @@ api.interceptors.response.use(
     if (process.env.NODE_ENV === 'development' && response.data && typeof response.data === 'object') {
       const dataSize = JSON.stringify(response.data).length;
       if (dataSize < 10000) { // Only log if response is less than 10KB
-        console.log('✅ API Response data:', response.data);
+    console.log('✅ API Response data:', response.data);
       }
     }
 
@@ -103,13 +103,13 @@ api.interceptors.response.use(
     if (hasErrorData || hasErrorMessage) {
       // Only log full details in development
       if (process.env.NODE_ENV === 'development') {
-        console.error("API Error:", errorDetails);
-        console.error(
-          `❌ API Error [${error.config?.method?.toUpperCase()} ${
-            error.config?.url
-          }]:`,
-          errorDetails
-        );
+    console.error("API Error:", errorDetails);
+    console.error(
+      `❌ API Error [${error.config?.method?.toUpperCase()} ${
+        error.config?.url
+      }]:`,
+      errorDetails
+    );
       } else {
         // In production, log minimal info
         console.error(
@@ -220,7 +220,7 @@ api.interceptors.response.use(
           errorMessage = `HTTP ${error.response?.status || "Unknown"} error`;
         }
       } else if (Array.isArray(responseData.message)) {
-        // Handle NestJS validation errors (array of messages)
+      // Handle NestJS validation errors (array of messages)
         errorMessage = responseData.message.join(", ");
       } else if (responseData.message) {
         errorMessage = responseData.message;

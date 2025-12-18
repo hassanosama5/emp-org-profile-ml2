@@ -123,11 +123,15 @@ export default function ChangeRequestsPage() {
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Change Requests</h1>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {canApprove ? "Pending Approvals" : "My Change Requests"}
+              </h1>
               <p className="text-gray-600 mt-1">
-                {canCreateRequest 
-                  ? "Submit, review, and approve organizational structure changes"
-                  : "Review and approve organizational structure change requests"}
+                {canApprove 
+                  ? "Review and approve change requests submitted by Managers and HR"
+                  : canCreateRequest
+                  ? "Submit and track your change requests for organizational structure"
+                  : "View your change requests"}
               </p>
             </div>
             {canCreateRequest && (
@@ -203,9 +207,11 @@ export default function ChangeRequestsPage() {
               <p className="text-gray-400 mt-2">
                 {statusFilter
                   ? `No change requests with status "${getStatusDisplay(statusFilter as StructureRequestStatus).label}"`
+                  : canApprove
+                  ? "No change requests are pending review."
                   : canCreateRequest
-                  ? "No change requests have been submitted yet."
-                  : "No change requests are pending review."}
+                  ? "You haven't submitted any change requests yet."
+                  : "No change requests found."}
               </p>
               {canCreateRequest && (
                 <Button
@@ -256,25 +262,31 @@ export default function ChangeRequestsPage() {
                         View Details
                       </Button>
                       
-                      {(request.status === StructureRequestStatus.DRAFT || 
-                        request.status === StructureRequestStatus.SUBMITTED) && (
-                        <Button
-                          onClick={() => router.push(`/dashboard/organization-structure/change-requests/${request._id}/edit`)}
-                          variant="ghost"
-                          size="sm"
-                        >
-                          Edit
-                        </Button>
-                      )}
-                      
-                      {request.status === StructureRequestStatus.DRAFT && (
-                        <Button
-                          onClick={() => router.push(`/dashboard/organization-structure/change-requests/${request._id}/submit`)}
-                          variant="primary"
-                          size="sm"
-                        >
-                          Submit for Approval
-                        </Button>
+                      {/* REQ-OSM-03: Only Managers/HR can edit/submit their own requests */}
+                      {canCreateRequest && (
+                        <>
+                          {(request.status === StructureRequestStatus.DRAFT || 
+                            request.status === StructureRequestStatus.SUBMITTED) && (
+                            <Button
+                              onClick={() => router.push(`/dashboard/organization-structure/change-requests/${request._id}/edit`)}
+                              variant="ghost"
+                              size="sm"
+                              disabled={request.status !== StructureRequestStatus.DRAFT}
+                            >
+                              Edit
+                            </Button>
+                          )}
+                          
+                          {request.status === StructureRequestStatus.DRAFT && (
+                            <Button
+                              onClick={() => router.push(`/dashboard/organization-structure/change-requests/${request._id}/submit`)}
+                              variant="primary"
+                              size="sm"
+                            >
+                              Submit for Approval
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

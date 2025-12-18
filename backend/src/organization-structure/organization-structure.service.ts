@@ -49,6 +49,8 @@ import {
   StructureRequestType,
 } from './enums/organization-structure.enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmployeeSystemRole } from '../employee-profile/models/employee-system-role.schema';
+import { SystemRole } from '../employee-profile/enums/employee-profile.enums';
 
 @Injectable()
 export class OrganizationStructureService {
@@ -65,6 +67,8 @@ export class OrganizationStructureService {
     private approvalModel: Model<StructureApprovalDocument>,
     @InjectModel(StructureChangeLog.name)
     private changeLogModel: Model<StructureChangeLogDocument>,
+    @InjectModel(EmployeeSystemRole.name)
+    private employeeSystemRoleModel: Model<any>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -895,6 +899,34 @@ export class OrganizationStructureService {
       .exec();
   }
 
+  /**
+   * Get change requests created by a specific employee
+   * REQ-OSM-03: Managers/HR see only their own requests
+   */
+  async getChangeRequestsByRequester(
+    employeeId: string,
+    status?: StructureRequestStatus,
+  ): Promise<StructureChangeRequestDocument[]> {
+    if (!Types.ObjectId.isValid(employeeId)) {
+      throw new BadRequestException(`Invalid employee ID: ${employeeId}`);
+    }
+
+    const filter: any = {
+      requestedByEmployeeId: new Types.ObjectId(employeeId),
+    };
+    
+    if (status) {
+      filter.status = status;
+    }
+
+    return this.changeRequestModel
+      .find(filter)
+      .populate('requestedByEmployeeId')
+      .populate('submittedByEmployeeId')
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
   async updateChangeRequest(
     id: string,
     dto: UpdateStructureChangeRequestDto,
@@ -936,6 +968,52 @@ export class OrganizationStructureService {
     );
     request.submittedAt = new Date();
     await request.save();
+
+    // REQ-OSM-04: Auto-create SINGLE approval for System Admin when request is submitted
+    // Only one approval per request - the System Admin who will review it
+    // Status changes to UNDER_REVIEW when approval is created
+    try {
+      const systemAdminRoles = await this.employeeSystemRoleModel
+        .find({
+          roles: { $in: [SystemRole.SYSTEM_ADMIN] },
+          isActive: true,
+        })
+        .select('employeeProfileId')
+        .limit(1)
+        .exec();
+
+      if (systemAdminRoles && systemAdminRoles.length > 0) {
+        const systemAdminId = systemAdminRoles[0].employeeProfileId;
+        
+        // Check if approval already exists (shouldn't happen, but safety check)
+        const existingApproval = await this.approvalModel.findOne({
+          changeRequestId: request._id,
+        });
+        
+        if (!existingApproval) {
+          const newApproval = new this.approvalModel({
+            _id: new Types.ObjectId(),
+            changeRequestId: request._id,
+            approverEmployeeId: systemAdminId,
+            decision: ApprovalDecision.PENDING,
+          });
+          await newApproval.save();
+          
+          // Update status to UNDER_REVIEW when approval is created
+          request.status = StructureRequestStatus.UNDER_REVIEW;
+          await request.save();
+          
+          console.log(`[submitChangeRequest] ✅ Auto-created single approval for System Admin ${systemAdminId}, status set to UNDER_REVIEW`);
+        } else {
+          console.log(`[submitChangeRequest] ⚠️ Approval already exists for this request`);
+        }
+      } else {
+        console.warn(`[submitChangeRequest] ⚠️ No System Admin found to auto-assign approval.`);
+      }
+    } catch (approvalError: any) {
+      // Log but don't fail - System Admin can manually create approval
+      console.error('[submitChangeRequest] Failed to auto-create approval:', approvalError?.message || approvalError);
+    }
 
     // Send notification to System Admin (or relevant approver) that change request was submitted
     // Use case: "Organizational Structure (OS): The request is saved in the pending approval queue, triggering.
@@ -988,12 +1066,35 @@ export class OrganizationStructureService {
   async createApproval(
     dto: CreateStructureApprovalDto,
   ): Promise<StructureApprovalDocument> {
+    if (!dto.approverEmployeeId) {
+      throw new BadRequestException('Approver employee ID is required');
+    }
+
     const request = await this.changeRequestModel.findById(dto.changeRequestId);
     if (!request) {
       throw new NotFoundException(`Change request not found`);
     }
 
-    const approval = await this.approvalModel.create(dto);
+    // Check if approval already exists for this approver and request
+    const existingApproval = await this.approvalModel.findOne({
+      changeRequestId: dto.changeRequestId,
+      approverEmployeeId: dto.approverEmployeeId,
+    });
+
+    if (existingApproval) {
+      throw new ConflictException(
+        `Approval already exists for this approver and change request`,
+      );
+    }
+
+    const approval = new this.approvalModel({
+      _id: new Types.ObjectId(),
+      changeRequestId: dto.changeRequestId,
+      approverEmployeeId: dto.approverEmployeeId,
+      decision: ApprovalDecision.PENDING,
+      comments: dto.comments,
+    });
+    await approval.save();
 
     // Update request status
     if (request.status === StructureRequestStatus.SUBMITTED) {
@@ -1004,10 +1105,180 @@ export class OrganizationStructureService {
     return approval;
   }
 
+  /**
+   * System Admin approves or rejects a change request directly
+   * Updates the approval record and request status accordingly
+   * Note: Only one approval per request, so we find it by changeRequestId only
+   */
+  async approveChangeRequest(
+    changeRequestId: string,
+    approverEmployeeId: string,
+    comments?: string,
+  ): Promise<StructureChangeRequestDocument> {
+    console.log(`[approveChangeRequest] Starting approval for request ${changeRequestId} by approver ${approverEmployeeId}`);
+    
+    if (!changeRequestId || !approverEmployeeId) {
+      throw new BadRequestException('Change request ID and approver employee ID are required');
+    }
+
+    const request = await this.getChangeRequestById(changeRequestId);
+    
+    if (!request) {
+      console.error(`[approveChangeRequest] Request ${changeRequestId} not found`);
+      throw new NotFoundException(`Change request with ID ${changeRequestId} not found`);
+    }
+
+    console.log(`[approveChangeRequest] Request found: ${request.requestNumber}, status: ${request.status}`);
+
+    if (request.status !== StructureRequestStatus.SUBMITTED && 
+        request.status !== StructureRequestStatus.UNDER_REVIEW) {
+      console.error(`[approveChangeRequest] Invalid status: ${request.status}, expected SUBMITTED or UNDER_REVIEW`);
+      throw new BadRequestException(
+        `Can only approve requests with status SUBMITTED or UNDER_REVIEW. Current status: ${request.status}`
+      );
+    }
+
+    // Find the approval record for this request (only one approval per request)
+    let approval = await this.approvalModel.findOne({
+      changeRequestId: request._id,
+    });
+
+    // If no approval exists, create one for the current approver
+    if (!approval) {
+      console.log(`[approveChangeRequest] No approval found, creating one for approver ${approverEmployeeId}`);
+      approval = new this.approvalModel({
+        _id: new Types.ObjectId(),
+        changeRequestId: request._id,
+        approverEmployeeId: new Types.ObjectId(approverEmployeeId),
+        decision: ApprovalDecision.PENDING,
+      });
+      await approval.save();
+    } else {
+      // Update the approver if it's different (shouldn't happen, but handle it)
+      if (approval.approverEmployeeId.toString() !== approverEmployeeId) {
+        console.log(`[approveChangeRequest] Updating approver from ${approval.approverEmployeeId} to ${approverEmployeeId}`);
+        approval.approverEmployeeId = new Types.ObjectId(approverEmployeeId);
+      }
+    }
+
+    if (approval.decision !== ApprovalDecision.PENDING) {
+      throw new BadRequestException('Approval decision already made');
+    }
+
+    // Update approval
+    approval.decision = ApprovalDecision.APPROVED;
+    approval.decidedAt = new Date();
+    if (comments) approval.comments = comments;
+    await approval.save();
+
+    // Update request status to APPROVED
+    request.status = StructureRequestStatus.APPROVED;
+    await request.save();
+
+    console.log(`[approveChangeRequest] ✅ Request ${request.requestNumber} approved by ${approverEmployeeId}`);
+
+    return request;
+  }
+
+  /**
+   * System Admin rejects a change request directly
+   * Note: Only one approval per request, so we find it by changeRequestId only
+   */
+  async rejectChangeRequest(
+    changeRequestId: string,
+    approverEmployeeId: string,
+    comments?: string,
+  ): Promise<StructureChangeRequestDocument> {
+    const request = await this.getChangeRequestById(changeRequestId);
+    
+    if (!request) {
+      throw new NotFoundException(`Change request with ID ${changeRequestId} not found`);
+    }
+
+    if (request.status !== StructureRequestStatus.SUBMITTED && 
+        request.status !== StructureRequestStatus.UNDER_REVIEW) {
+      throw new BadRequestException(
+        `Can only reject requests with status SUBMITTED or UNDER_REVIEW. Current status: ${request.status}`
+      );
+    }
+
+    // Find the approval record for this request (only one approval per request)
+    let approval = await this.approvalModel.findOne({
+      changeRequestId: request._id,
+    });
+
+    // If no approval exists, create one for the current approver
+    if (!approval) {
+      console.log(`[rejectChangeRequest] No approval found, creating one for approver ${approverEmployeeId}`);
+      approval = new this.approvalModel({
+        _id: new Types.ObjectId(),
+        changeRequestId: request._id,
+        approverEmployeeId: new Types.ObjectId(approverEmployeeId),
+        decision: ApprovalDecision.PENDING,
+      });
+      await approval.save();
+    } else {
+      // Update the approver if it's different (shouldn't happen, but handle it)
+      if (approval.approverEmployeeId.toString() !== approverEmployeeId) {
+        console.log(`[rejectChangeRequest] Updating approver from ${approval.approverEmployeeId} to ${approverEmployeeId}`);
+        approval.approverEmployeeId = new Types.ObjectId(approverEmployeeId);
+      }
+    }
+
+    if (approval.decision !== ApprovalDecision.PENDING) {
+      throw new BadRequestException('Approval decision already made');
+    }
+
+    // Update approval
+    approval.decision = ApprovalDecision.REJECTED;
+    approval.decidedAt = new Date();
+    if (comments) approval.comments = comments;
+    await approval.save();
+
+    // Update request status to REJECTED
+    request.status = StructureRequestStatus.REJECTED;
+    await request.save();
+
+    console.log(`[rejectChangeRequest] ❌ Request ${request.requestNumber} rejected by ${approverEmployeeId}`);
+
+    return request;
+  }
+
+  /**
+   * Mark change request as IMPLEMENTED after System Admin uses form to create/update entity
+   */
+  async markRequestAsImplemented(
+    changeRequestId: string,
+  ): Promise<StructureChangeRequestDocument> {
+    const request = await this.getChangeRequestById(changeRequestId);
+    
+    if (!request) {
+      throw new NotFoundException(`Change request with ID ${changeRequestId} not found`);
+    }
+
+    if (request.status !== StructureRequestStatus.APPROVED) {
+      throw new BadRequestException(
+        `Can only mark APPROVED requests as IMPLEMENTED. Current status: ${request.status}`
+      );
+    }
+
+    request.status = StructureRequestStatus.IMPLEMENTED;
+    await request.save();
+
+    console.log(`[markRequestAsImplemented] ✅ Request ${request.requestNumber} marked as IMPLEMENTED`);
+
+    return request;
+  }
+
+  /**
+   * Legacy method - kept for backward compatibility but redirects to new methods
+   */
   async updateApprovalDecision(
     id: string,
     dto: UpdateApprovalDecisionDto,
   ): Promise<StructureApprovalDocument> {
+    console.log(`[updateApprovalDecision] Updating approval ${id} with decision: ${dto.decision}`);
+    
     const approval = await this.approvalModel.findById(id);
     if (!approval) {
       throw new NotFoundException(`Approval with ID ${id} not found`);
@@ -1017,15 +1288,23 @@ export class OrganizationStructureService {
       throw new BadRequestException('Approval decision already made');
     }
 
-    approval.decision = dto.decision;
-    approval.decidedAt = new Date();
-    if (dto.comments) approval.comments = dto.comments;
-    await approval.save();
+    // Use the new direct methods
+    if (dto.decision === ApprovalDecision.APPROVED) {
+      await this.approveChangeRequest(
+        approval.changeRequestId.toString(),
+        approval.approverEmployeeId.toString(),
+        dto.comments,
+      );
+    } else if (dto.decision === ApprovalDecision.REJECTED) {
+      await this.rejectChangeRequest(
+        approval.changeRequestId.toString(),
+        approval.approverEmployeeId.toString(),
+        dto.comments,
+      );
+    }
 
-    // Check if all approvals are complete
-    await this.checkAndUpdateRequestStatus(approval.changeRequestId);
-
-    return approval;
+    // Return updated approval
+    return this.approvalModel.findById(id).exec() as Promise<StructureApprovalDocument>;
   }
 
   async getRequestApprovals(
@@ -1214,25 +1493,166 @@ export class OrganizationStructureService {
   private async checkAndUpdateRequestStatus(
     changeRequestId: Types.ObjectId,
   ): Promise<void> {
+    console.log(`[checkAndUpdateRequestStatus] Checking status for change request ${changeRequestId}`);
+    
     const approvals = await this.approvalModel.find({ changeRequestId });
+    console.log(`[checkAndUpdateRequestStatus] Found ${approvals.length} approval(s)`);
+    
+    if (approvals.length === 0) {
+      console.log(`[checkAndUpdateRequestStatus] No approvals found - skipping status update`);
+      return;
+    }
+
     const allDecided = approvals.every(
       (a) => a.decision !== ApprovalDecision.PENDING,
     );
 
-    if (!allDecided) return;
+    if (!allDecided) {
+      console.log(`[checkAndUpdateRequestStatus] Not all approvals decided yet - waiting`);
+      return;
+    }
 
     const hasRejection = approvals.some(
       (a) => a.decision === ApprovalDecision.REJECTED,
     );
+    
+    const hasApproval = approvals.some(
+      (a) => a.decision === ApprovalDecision.APPROVED,
+    );
+    
+    console.log(`[checkAndUpdateRequestStatus] Has rejection: ${hasRejection}, Has approval: ${hasApproval}`);
+    
     const request = await this.changeRequestModel.findById(changeRequestId);
 
-    if (request) {
-      request.status = hasRejection
-        ? StructureRequestStatus.REJECTED
-        : StructureRequestStatus.APPROVED;
+    if (!request) {
+      console.error(`[checkAndUpdateRequestStatus] Change request ${changeRequestId} not found`);
+      return;
+    }
+
+    if (hasRejection) {
+      console.log(`[checkAndUpdateRequestStatus] Request rejected - setting status to REJECTED`);
+      request.status = StructureRequestStatus.REJECTED;
       await request.save();
+      return;
+    }
+
+    if (!hasApproval) {
+      console.log(`[checkAndUpdateRequestStatus] No approvals found - cannot implement`);
+      return;
+    }
+
+    // At least one approval is APPROVED and no rejections - mark as APPROVED
+    // System Admin will use the existing create/update forms to finalize the changes
+    console.log(`[checkAndUpdateRequestStatus] Request approved - setting status to APPROVED`);
+    console.log(`[checkAndUpdateRequestStatus] System Admin should now use the create/update forms to finalize this change`);
+    request.status = StructureRequestStatus.APPROVED;
+    await request.save();
+    
+    // Store the request data in a way that can be used to populate forms
+    // The request is now APPROVED and ready for System Admin to implement using existing forms
+    console.log(`[checkAndUpdateRequestStatus] Request ${request.requestNumber} is now APPROVED and ready for implementation`);
+  }
+
+  /**
+   * Get approved change request data formatted for form population
+   * REQ-OSM-04: System Admin uses this to populate create/update forms
+   */
+  async getApprovedRequestFormData(
+    changeRequestId: string,
+  ): Promise<{
+    requestType: StructureRequestType;
+    formData: any;
+    redirectUrl: string;
+  }> {
+    const request = await this.getChangeRequestById(changeRequestId);
+    
+    if (request.status !== StructureRequestStatus.APPROVED) {
+      throw new BadRequestException(
+        `Change request must be APPROVED to get form data. Current status: ${request.status}`,
+      );
+    }
+
+    const details = this.parseDetails(request.details);
+
+    switch (request.requestType) {
+      case StructureRequestType.NEW_DEPARTMENT:
+        return {
+          requestType: request.requestType,
+          formData: {
+            code: details.code || '',
+            name: details.name || '',
+            description: details.description || '',
+            headPositionId: details.headPositionId || '',
+          },
+          redirectUrl: `/dashboard/organization-structure/departments/new?fromRequest=${changeRequestId}&code=${encodeURIComponent(details.code || '')}&name=${encodeURIComponent(details.name || '')}&description=${encodeURIComponent(details.description || '')}`,
+        };
+
+      case StructureRequestType.UPDATE_DEPARTMENT:
+        return {
+          requestType: request.requestType,
+          formData: details,
+          redirectUrl: `/dashboard/organization-structure/departments/${request.targetDepartmentId}/edit?fromRequest=${changeRequestId}`,
+        };
+
+      case StructureRequestType.NEW_POSITION:
+        return {
+          requestType: request.requestType,
+          formData: {
+            code: details.code || '',
+            title: details.title || '',
+            description: details.description || '',
+            departmentId: request.targetDepartmentId?.toString() || '',
+            reportsToPositionId: details.reportsToPositionId || '',
+          },
+          redirectUrl: `/dashboard/organization-structure/positions/new?fromRequest=${changeRequestId}&departmentId=${request.targetDepartmentId}&code=${encodeURIComponent(details.code || '')}&title=${encodeURIComponent(details.title || '')}&description=${encodeURIComponent(details.description || '')}`,
+        };
+
+      case StructureRequestType.UPDATE_POSITION:
+        return {
+          requestType: request.requestType,
+          formData: details,
+          redirectUrl: `/dashboard/organization-structure/positions/${request.targetPositionId}/edit?fromRequest=${changeRequestId}`,
+        };
+
+      case StructureRequestType.CLOSE_POSITION:
+        return {
+          requestType: request.requestType,
+          formData: {},
+          redirectUrl: `/dashboard/organization-structure/positions/${request.targetPositionId}?fromRequest=${changeRequestId}&action=deactivate`,
+        };
+
+      default:
+        throw new BadRequestException(`Unknown request type: ${request.requestType}`);
     }
   }
+
+  /**
+   * Parse details field to extract structured data
+   * Expected format: JSON string or key-value pairs
+   */
+  private parseDetails(details?: string): Record<string, any> {
+    if (!details) return {};
+
+    try {
+      // Try parsing as JSON first
+      return JSON.parse(details);
+    } catch {
+      // If not JSON, try parsing as key-value pairs
+      const parsed: Record<string, any> = {};
+      const lines = details.split('\n');
+      for (const line of lines) {
+        const [key, ...valueParts] = line.split(':');
+        if (key && valueParts.length > 0) {
+          parsed[key.trim()] = valueParts.join(':').trim();
+        }
+      }
+      return parsed;
+    }
+  }
+
+  // NOTE: Implementation methods removed - System Admin now uses existing forms
+  // When a request is approved, System Admin is redirected to the appropriate form
+  // with pre-filled data from the request. The form handles the actual creation/update.
 
   async getDepartmentHierarchy(): Promise<any[]> {
     const departments = await this.departmentModel

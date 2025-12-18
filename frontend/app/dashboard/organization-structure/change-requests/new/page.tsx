@@ -25,6 +25,15 @@ export default function CreateChangeRequestPage() {
     targetPositionId: "",
     details: "",
     reason: "",
+    // Structured fields for NEW_DEPARTMENT
+    newDeptCode: "",
+    newDeptName: "",
+    newDeptDescription: "",
+    // Structured fields for NEW_POSITION
+    newPosCode: "",
+    newPosTitle: "",
+    newPosDescription: "",
+    newPosReportsTo: "",
   });
 
   const [formErrors, setFormErrors] = useState({
@@ -33,6 +42,10 @@ export default function CreateChangeRequestPage() {
     targetPositionId: "",
     reason: "",
     details: "",
+    newDeptCode: "",
+    newDeptName: "",
+    newPosCode: "",
+    newPosTitle: "",
   });
 
   const [departments, setDepartments] = useState<any[]>([]);
@@ -60,6 +73,10 @@ export default function CreateChangeRequestPage() {
       targetPositionId: "",
       reason: "",
       details: "",
+      newDeptCode: "",
+      newDeptName: "",
+      newPosCode: "",
+      newPosTitle: "",
     };
     let isValid = true;
 
@@ -75,10 +92,13 @@ export default function CreateChangeRequestPage() {
 
     // Conditional validation based on requestType
     if (formData.requestType === StructureRequestType.NEW_DEPARTMENT) {
-      // NEW_DEPARTMENT doesn't need targetDepartmentId (it's creating a new one)
-      // But details are required to specify the new department information
-      if (!formData.details.trim()) {
-        errors.details = "Details are required for new department (specify name, code, description, etc.)";
+      // NEW_DEPARTMENT: Require code and name (based on CreateDepartmentDto)
+      if (!formData.newDeptCode.trim()) {
+        errors.newDeptCode = "Department code is required";
+        isValid = false;
+      }
+      if (!formData.newDeptName.trim()) {
+        errors.newDeptName = "Department name is required";
         isValid = false;
       }
     } else if (formData.requestType === StructureRequestType.UPDATE_DEPARTMENT) {
@@ -87,14 +107,17 @@ export default function CreateChangeRequestPage() {
         isValid = false;
       }
     } else if (formData.requestType === StructureRequestType.NEW_POSITION) {
-      // NEW_POSITION needs a department to create the position in
+      // NEW_POSITION: Require department, code, and title (based on CreatePositionDto)
       if (!formData.targetDepartmentId) {
         errors.targetDepartmentId = "Department is required for new position";
         isValid = false;
       }
-      // Details are required to specify the new position information
-      if (!formData.details.trim()) {
-        errors.details = "Details are required for new position (specify title, code, description, reporting structure, etc.)";
+      if (!formData.newPosCode.trim()) {
+        errors.newPosCode = "Position code is required";
+        isValid = false;
+      }
+      if (!formData.newPosTitle.trim()) {
+        errors.newPosTitle = "Position title is required";
         isValid = false;
       }
     } else if (
@@ -124,10 +147,42 @@ export default function CreateChangeRequestPage() {
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    // When request type changes, reset structured fields
+    if (name === "requestType") {
+      setFormData((prev) => ({
+        ...prev,
+        requestType: value as StructureRequestType,
+        // Reset structured fields
+        newDeptCode: "",
+        newDeptName: "",
+        newDeptDescription: "",
+        newPosCode: "",
+        newPosTitle: "",
+        newPosDescription: "",
+        newPosReportsTo: "",
+        targetDepartmentId: "",
+        targetPositionId: "",
+        details: "",
+      }));
+      // Reset errors
+      setFormErrors({
+        requestType: "",
+        targetDepartmentId: "",
+        targetPositionId: "",
+        reason: "",
+        details: "",
+        newDeptCode: "",
+        newDeptName: "",
+        newPosCode: "",
+        newPosTitle: "",
+      });
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+    
     if (formErrors[name as keyof typeof formErrors]) {
       setFormErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -149,19 +204,41 @@ export default function CreateChangeRequestPage() {
 
     setSubmitError(null);
     try {
+      // Build structured details JSON for NEW_DEPARTMENT and NEW_POSITION
+      let details: string | undefined = undefined;
+      
+      if (formData.requestType === StructureRequestType.NEW_DEPARTMENT) {
+        details = JSON.stringify({
+          code: formData.newDeptCode.trim(),
+          name: formData.newDeptName.trim(),
+          description: formData.newDeptDescription.trim() || undefined,
+        });
+      } else if (formData.requestType === StructureRequestType.NEW_POSITION) {
+        details = JSON.stringify({
+          code: formData.newPosCode.trim(),
+          title: formData.newPosTitle.trim(),
+          description: formData.newPosDescription.trim() || undefined,
+          reportsToPositionId: formData.newPosReportsTo.trim() || undefined,
+        });
+      } else {
+        // For UPDATE requests, use the free-form details field
+        details = formData.details?.trim() || undefined;
+      }
+
       const payload = {
         requestedByEmployeeId: requesterId,
         requestType: formData.requestType,
         targetDepartmentId: formData.targetDepartmentId?.trim() || undefined,
         targetPositionId: formData.targetPositionId?.trim() || undefined,
-        details: formData.details?.trim() || undefined,
+        details,
         reason: formData.reason?.trim() || undefined,
       };
 
       console.log("Submitting change request payload:", payload);
       const createdRequest = await createChangeRequest(payload);
-      // After creation, redirect to the detail page so user can review and submit
-      router.push(`/dashboard/organization-structure/change-requests/${createdRequest._id}`);
+      // After creation, stay on the list page - HR Managers see their own requests only
+      // System Admin has a separate view for approvals
+      router.push(`/dashboard/organization-structure/change-requests`);
     } catch (err: any) {
       console.error("Change request creation failed:", err);
       const errorMessage = err?.response?.data?.message || err?.message || "Failed to create change request. Please try again.";
@@ -175,9 +252,14 @@ export default function CreateChangeRequestPage() {
 
   // REQ-OSM-03: Only Managers/HR submit change requests
   // System Admin can directly create departments/positions without change requests
+  // Department Head can only create department-related requests
   const canCreateRequest = user?.roles?.some((r: string) => 
     [SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD]
       .includes(r as SystemRole)
+  );
+  
+  const isDepartmentHead = user?.roles?.some((r: string) => 
+    String(r).toLowerCase() === SystemRole.DEPARTMENT_HEAD.toLowerCase()
   );
 
   return (
@@ -277,15 +359,30 @@ export default function CreateChangeRequestPage() {
                         <SelectValue placeholder="Select a request type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.values(StructureRequestType).map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type.replace(/_/g, " ")}
-                          </SelectItem>
-                        ))}
+                        {Object.values(StructureRequestType)
+                          .filter((type) => {
+                            // Department Head can only create department-related requests
+                            if (isDepartmentHead) {
+                              return type === StructureRequestType.NEW_DEPARTMENT || 
+                                     type === StructureRequestType.UPDATE_DEPARTMENT;
+                            }
+                            // HR Manager/Admin can create all types
+                            return true;
+                          })
+                          .map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type.replace(/_/g, " ")}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     {formErrors.requestType && (
                       <p className="text-sm text-red-600">{formErrors.requestType}</p>
+                    )}
+                    {isDepartmentHead && (
+                      <p className="text-xs text-gray-500">
+                        As a Department Head, you can only request department-related changes.
+                      </p>
                     )}
                   </div>
 
@@ -356,52 +453,213 @@ export default function CreateChangeRequestPage() {
                     </div>
                   )}
 
-                  {/* Info for NEW_DEPARTMENT */}
+                  {/* Structured Fields for NEW_DEPARTMENT */}
                   {formData.requestType === StructureRequestType.NEW_DEPARTMENT && (
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                      <p className="text-sm text-blue-800">
-                        <strong>New Department Request:</strong> Use the "Details" field below to specify the new department's name, code, and other information. The department will be created upon approval.
+                    <>
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
+                        <p className="text-sm text-blue-800 font-medium mb-2">
+                          New Department Information
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          Fill in the required fields below. The department will be created upon approval.
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-4 border-t pt-4">
+                        <div className="space-y-2">
+                          <label htmlFor="newDeptCode" className="block text-sm font-medium text-gray-700">
+                            Department Code *
+                          </label>
+                          <Input
+                            id="newDeptCode"
+                            name="newDeptCode"
+                            value={formData.newDeptCode}
+                            onChange={handleChange}
+                            placeholder="e.g., HR, IT, FINANCE"
+                            required
+                            className={formErrors.newDeptCode ? "border-red-300" : ""}
+                            disabled={loading}
+                          />
+                          {formErrors.newDeptCode && (
+                            <p className="text-sm text-red-600">{formErrors.newDeptCode}</p>
+                          )}
+                          <p className="text-xs text-gray-500">
+                            Unique identifier for the department (uppercase letters, numbers, hyphens, underscores)
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="newDeptName" className="block text-sm font-medium text-gray-700">
+                            Department Name *
+                          </label>
+                          <Input
+                            id="newDeptName"
+                            name="newDeptName"
+                            value={formData.newDeptName}
+                            onChange={handleChange}
+                            placeholder="e.g., Human Resources, Information Technology"
+                            required
+                            className={formErrors.newDeptName ? "border-red-300" : ""}
+                            disabled={loading}
+                          />
+                          {formErrors.newDeptName && (
+                            <p className="text-sm text-red-600">{formErrors.newDeptName}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="newDeptDescription" className="block text-sm font-medium text-gray-700">
+                            Description
+                          </label>
+                          <Textarea
+                            id="newDeptDescription"
+                            name="newDeptDescription"
+                            value={formData.newDeptDescription}
+                            onChange={handleChange}
+                            placeholder="Describe the department's purpose and responsibilities..."
+                            rows={3}
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Structured Fields for NEW_POSITION */}
+                  {formData.requestType === StructureRequestType.NEW_POSITION && (
+                    <>
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
+                        <p className="text-sm text-blue-800 font-medium mb-2">
+                          New Position Information
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          Fill in the required fields below. The position will be created in the selected department upon approval.
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-4 border-t pt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label htmlFor="newPosCode" className="block text-sm font-medium text-gray-700">
+                              Position Code *
+                            </label>
+                            <Input
+                              id="newPosCode"
+                              name="newPosCode"
+                              value={formData.newPosCode}
+                              onChange={handleChange}
+                              placeholder="e.g., DEV-001, MGR-001"
+                              required
+                              className={formErrors.newPosCode ? "border-red-300" : ""}
+                              disabled={loading}
+                            />
+                            {formErrors.newPosCode && (
+                              <p className="text-sm text-red-600">{formErrors.newPosCode}</p>
+                            )}
+                            <p className="text-xs text-gray-500">
+                              Unique identifier for the position
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label htmlFor="newPosTitle" className="block text-sm font-medium text-gray-700">
+                              Position Title *
+                            </label>
+                            <Input
+                              id="newPosTitle"
+                              name="newPosTitle"
+                              value={formData.newPosTitle}
+                              onChange={handleChange}
+                              placeholder="e.g., Senior Developer, Manager"
+                              required
+                              className={formErrors.newPosTitle ? "border-red-300" : ""}
+                              disabled={loading}
+                            />
+                            {formErrors.newPosTitle && (
+                              <p className="text-sm text-red-600">{formErrors.newPosTitle}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="newPosDescription" className="block text-sm font-medium text-gray-700">
+                            Description
+                          </label>
+                          <Textarea
+                            id="newPosDescription"
+                            name="newPosDescription"
+                            value={formData.newPosDescription}
+                            onChange={handleChange}
+                            placeholder="Describe the position responsibilities and requirements..."
+                            rows={3}
+                            disabled={loading}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="newPosReportsTo" className="block text-sm font-medium text-gray-700">
+                            Reports To Position (Optional)
+                          </label>
+                          <Select
+                            name="newPosReportsTo"
+                            value={formData.newPosReportsTo}
+                            onValueChange={(value: string) => handleSelectChange("newPosReportsTo", value)}
+                            disabled={loading}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select reporting position (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">No reporting line</SelectItem>
+                              {positions
+                                .filter((pos) => pos.departmentId === formData.targetDepartmentId || !formData.targetDepartmentId)
+                                .map((pos) => (
+                                  <SelectItem key={pos._id} value={pos._id}>
+                                    {pos.title} ({pos.code})
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-gray-500">
+                            Select the position this new position will report to
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Details field for UPDATE requests */}
+                  {(formData.requestType === StructureRequestType.UPDATE_DEPARTMENT ||
+                    formData.requestType === StructureRequestType.UPDATE_POSITION ||
+                    formData.requestType === StructureRequestType.CLOSE_POSITION) && (
+                    <div className="space-y-2">
+                      <label htmlFor="details" className="block text-sm font-medium text-gray-700">
+                        Change Details
+                      </label>
+                      <Textarea
+                        id="details"
+                        name="details"
+                        value={formData.details}
+                        onChange={handleChange}
+                        placeholder={
+                          formData.requestType === StructureRequestType.UPDATE_DEPARTMENT
+                            ? "Specify what to update (e.g., name, description). Use JSON format: {\"name\": \"New Name\", \"description\": \"New Description\"}"
+                            : formData.requestType === StructureRequestType.UPDATE_POSITION
+                            ? "Specify what to update (e.g., title, description). Use JSON format: {\"title\": \"New Title\", \"description\": \"New Description\"}"
+                            : "Provide any additional notes about closing this position..."
+                        }
+                        rows={4}
+                        disabled={loading}
+                        className={formErrors.details ? "border-red-300" : ""}
+                      />
+                      {formErrors.details && (
+                        <p className="text-sm text-red-600">{formErrors.details}</p>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Optional. Specify the changes in JSON format or plain text. For updates, you can include: name, description, code (System Admin only), etc.
                       </p>
                     </div>
                   )}
-
-                  {/* Details */}
-                  <div className="space-y-2">
-                    <label htmlFor="details" className="block text-sm font-medium text-gray-700">
-                      {formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
-                       formData.requestType === StructureRequestType.NEW_POSITION
-                        ? "Change Details *" 
-                        : "Details"}
-                    </label>
-                    <Textarea
-                      id="details"
-                      name="details"
-                      value={formData.details}
-                      onChange={handleChange}
-                      placeholder={
-                        formData.requestType === StructureRequestType.NEW_DEPARTMENT
-                          ? "Specify the new department name, code, description, and any other relevant information..."
-                          : formData.requestType === StructureRequestType.NEW_POSITION
-                          ? "Specify the new position title, code, description, reporting structure, and any other relevant information..."
-                          : "Provide more details about the requested change..."
-                      }
-                      rows={formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
-                            formData.requestType === StructureRequestType.NEW_POSITION ? 6 : 4}
-                      disabled={loading}
-                      required={formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
-                               formData.requestType === StructureRequestType.NEW_POSITION}
-                      className={formErrors.details ? "border-red-300" : ""}
-                    />
-                    {formErrors.details && (
-                      <p className="text-sm text-red-600">{formErrors.details}</p>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      {formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
-                       formData.requestType === StructureRequestType.NEW_POSITION
-                        ? "Required. Provide all necessary information to create the new entity."
-                        : "Optional. Elaborate on the specifics of the change."}
-                    </p>
-                  </div>
 
                   {/* Reason */}
                   <div className="space-y-2">

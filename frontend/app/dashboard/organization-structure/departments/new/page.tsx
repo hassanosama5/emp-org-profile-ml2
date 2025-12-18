@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
@@ -9,9 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
 import { DepartmentForm } from "@/components/organization-structure/DepartmentForm";
 
-export default function CreateDepartmentPage() {
+function CreateDepartmentForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { createDepartment, loading, error, clearError } = useOrganizationStructure();
+  
+  // Get pre-filled data from approved change request
+  const fromRequest = searchParams?.get("fromRequest");
+  const prefillCode = searchParams?.get("code");
+  const prefillName = searchParams?.get("name");
+  const prefillDescription = searchParams?.get("description");
 
   const handleSubmit = async (formData: { code: string; name: string; description: string; headPositionId?: string }) => {
     clearError();
@@ -22,6 +30,18 @@ export default function CreateDepartmentPage() {
         description: formData.description.trim(),
         headPositionId: formData.headPositionId?.trim() || undefined,
       });
+      
+      // If this was from an approved change request, mark it as IMPLEMENTED
+      if (fromRequest) {
+        try {
+          const { markRequestAsImplemented } = await import("@/lib/hooks/use-organization-structure").then(m => m.useOrganizationStructure());
+          await markRequestAsImplemented(fromRequest);
+        } catch (markError) {
+          console.error("Failed to mark request as implemented:", markError);
+          // Don't fail the whole operation if marking fails
+        }
+      }
+      
       router.push("/dashboard/organization-structure/departments");
     } catch (err) {
       console.error("Department creation failed:", err);
@@ -72,11 +92,23 @@ export default function CreateDepartmentPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <Card>
+              {fromRequest && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>Pre-filled from approved change request:</strong> Review and finalize the department details below.
+                  </p>
+                </div>
+              )}
               <DepartmentForm
                 onSubmit={handleSubmit}
                 loading={loading}
                 error={error}
                 onCancel={handleCancel}
+                prefillData={fromRequest ? {
+                  code: prefillCode || undefined,
+                  name: prefillName || undefined,
+                  description: prefillDescription || undefined,
+                } : undefined}
               />
             </Card>
           </div>
@@ -154,5 +186,19 @@ export default function CreateDepartmentPage() {
         </div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function CreateDepartmentPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <CreateDepartmentForm />
+    </Suspense>
   );
 }

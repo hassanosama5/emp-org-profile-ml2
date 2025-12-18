@@ -25,6 +25,12 @@ function NewPositionForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clonePositionId = searchParams.get("clone");
+  const fromRequest = searchParams.get("fromRequest");
+  const prefillCode = searchParams.get("code");
+  const prefillTitle = searchParams.get("title");
+  const prefillDescription = searchParams.get("description");
+  const prefillDepartmentId = searchParams.get("departmentId");
+  const prefillReportsTo = searchParams.get("reportsToPositionId");
 
   const {
     createPosition,
@@ -41,11 +47,11 @@ function NewPositionForm() {
   const [clonedPosition, setClonedPosition] =
     useState<PositionResponseDto | null>(null);
   const [formData, setFormData] = useState<CreatePositionDto>({
-    code: "",
-    title: "",
-    description: "",
-    departmentId: "",
-    reportsToPositionId: "",
+    code: prefillCode || "",
+    title: prefillTitle || "",
+    description: prefillDescription || "",
+    departmentId: prefillDepartmentId || "",
+    reportsToPositionId: prefillReportsTo || "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -59,6 +65,17 @@ function NewPositionForm() {
       loadPositionForCloning();
     }
   }, [clonePositionId]);
+
+  // If pre-filled from approved request, show info banner
+  useEffect(() => {
+    if (fromRequest && (prefillCode || prefillTitle)) {
+      console.log("Position form pre-filled from approved change request:", {
+        code: prefillCode,
+        title: prefillTitle,
+        departmentId: prefillDepartmentId,
+      });
+    }
+  }, [fromRequest, prefillCode, prefillTitle, prefillDepartmentId]);
 
   const fetchInitialData = async () => {
     try {
@@ -117,6 +134,17 @@ function NewPositionForm() {
 
     try {
       await createPosition(formData);
+
+      // If this was from an approved change request, mark it as IMPLEMENTED
+      if (fromRequest) {
+        try {
+          const { markRequestAsImplemented } = await import("@/lib/hooks/use-organization-structure").then(m => m.useOrganizationStructure());
+          await markRequestAsImplemented(fromRequest);
+        } catch (markError) {
+          console.error("Failed to mark request as implemented:", markError);
+          // Don't fail the whole operation if marking fails
+        }
+      }
 
       setSuccessMessage("Position created successfully!");
       setTimeout(() => {
@@ -211,6 +239,14 @@ function NewPositionForm() {
             </div>
           )}
         </div>
+
+        {fromRequest && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-sm text-blue-800">
+              <strong>Pre-filled from approved change request:</strong> Review and finalize the position details below.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
