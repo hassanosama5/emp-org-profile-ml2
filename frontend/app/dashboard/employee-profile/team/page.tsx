@@ -220,7 +220,11 @@ export default function TeamPage() {
                             {currentUserProfile?.fullName || user?.fullName || "You"}
                           </p>
                           <p className="text-sm text-blue-100">
-                            {currentUserProfile?.positionTitle || user?.positionTitle || "Manager"}
+                            {typeof currentUserProfile?.primaryPosition === 'object' && currentUserProfile?.primaryPosition?.title 
+                              ? currentUserProfile.primaryPosition.title 
+                              : typeof currentUserProfile?.primaryPositionId === 'object' && currentUserProfile?.primaryPositionId?.title
+                              ? currentUserProfile.primaryPositionId.title
+                              : "Manager"}
                           </p>
                           <p className="text-xs text-blue-200 mt-1">
                             {currentUserProfile?.employeeNumber || user?.employeeNumber || ""}

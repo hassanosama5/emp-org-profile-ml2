@@ -69,10 +69,12 @@ export default function Header() {
           <div className="flex items-center space-x-6">
             {/* Main Navigation */}
             <nav className="hidden md:flex items-center space-x-6">
-              {/* Dashboard for all users */}
-              <Link href="/dashboard" className={navItemClass("/dashboard")}>
-                Dashboard
-              </Link>
+              {/* Dashboard - only for employees, not candidates */}
+              {user?.userType !== "candidate" && (
+                <Link href="/dashboard" className={navItemClass("/dashboard")}>
+                  Dashboard
+                </Link>
+              )}
 
               {/* Admin Panel for HR Admins */}
               {isHRAdmin && (
@@ -84,8 +86,8 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Notification Bell */}
-              <NotificationBell />
+              {/* Notification Bell - only for employees */}
+              {user?.userType !== "candidate" && <NotificationBell />}
             </nav>
 
             {/* Profile Dropdown */}
@@ -144,18 +146,37 @@ export default function Header() {
                   </div>
 
                   {/* Menu Items */}
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setIsProfileOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <LayoutDashboard className="h-4 w-4 text-gray-500" />
-                    <span>Dashboard</span>
-                  </Link>
+                  {/* Dashboard - only for employees, not candidates */}
+                  {user?.userType !== "candidate" && (
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <LayoutDashboard className="h-4 w-4 text-gray-500" />
+                      <span>Dashboard</span>
+                    </Link>
+                  )}
+                  
+                  {/* Candidate Portal link for candidates */}
+                  {user?.userType === "candidate" && (
+                    <Link
+                      href="/candidate-portal"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <LayoutDashboard className="h-4 w-4 text-gray-500" />
+                      <span>Candidate Portal</span>
+                    </Link>
+                  )}
 
-                  {/* My Profile for all users */}
+                  {/* My Profile for all users - route based on user type */}
                   <Link
-                    href="/dashboard/employee-profile/my-profile"
+                    href={
+                      user?.userType === "candidate"
+                        ? "/dashboard/candidate-profile/my-profile"
+                        : "/dashboard/employee-profile/my-profile"
+                    }
                     onClick={() => setIsProfileOpen(false)}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
                   >

@@ -83,11 +83,58 @@ export class EmployeeProfileController {
     if (!user || !user.userId) {
       throw new UnauthorizedException('User information not found in token');
     }
-    const employee = await this.employeeProfileService.findOne(user.userId);
-    return {
-      message: 'Profile retrieved successfully',
-      data: employee,
-    };
+    
+    // Debug logging
+    console.log('[getMyProfile] User from token:', {
+      userId: user.userId,
+      userType: user.userType,
+      username: user.username,
+    });
+    
+    // Determine user type - check token first, then try to infer
+    let isCandidate = user.userType === 'candidate';
+    
+    // If userType is not set, try to determine by checking if user exists as candidate
+    if (!user.userType) {
+      try {
+        const candidate = await this.employeeProfileService.findCandidateById(user.userId);
+        if (candidate) {
+          isCandidate = true;
+          console.log('[getMyProfile] UserType not in token, but found as candidate');
+        }
+      } catch (error) {
+        // Not a candidate, will try employee
+        console.log('[getMyProfile] UserType not in token, not found as candidate, trying employee');
+      }
+    }
+    
+    // Check if user is a candidate
+    if (isCandidate) {
+      console.log('[getMyProfile] Fetching candidate profile for:', user.userId);
+      try {
+        const candidate = await this.employeeProfileService.findCandidateById(user.userId);
+        return {
+          message: 'Profile retrieved successfully',
+          data: candidate,
+        };
+      } catch (error) {
+        console.error('[getMyProfile] Error fetching candidate:', error);
+        throw error;
+      }
+    }
+    
+    // Otherwise, get employee profile
+    console.log('[getMyProfile] Fetching employee profile for:', user.userId);
+    try {
+      const employee = await this.employeeProfileService.findOne(user.userId);
+      return {
+        message: 'Profile retrieved successfully',
+        data: employee,
+      };
+    } catch (error) {
+      console.error('[getMyProfile] Error fetching employee:', error);
+      throw error;
+    }
   }
 
   @Patch('me')

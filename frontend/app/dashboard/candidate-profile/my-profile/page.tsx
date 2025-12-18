@@ -1,4 +1,4 @@
-// dashboard/employee-profile/my-profile/page.tsx
+// dashboard/candidate-profile/my-profile/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,18 +13,13 @@ import {
 import { Button } from "@/components/shared/ui/Button";
 import Link from "next/link";
 import { employeeProfileApi } from "@/lib/api/employee-profile/profile";
-import type { EmployeeProfile } from "@/types";
+import type { Candidate } from "@/types";
 
-import EducationSection from "@/components/employee-profile/EducationSection";
-import ProfilePhotoUpload from "@/components/employee-profile/ProfilePhotoUpload";
-
-export default function MyProfilePage() {
+export default function CandidateMyProfilePage() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<EmployeeProfile | null>(null);
+  const [profile, setProfile] = useState<Candidate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const canEdit = true;
 
   useEffect(() => {
     loadProfile();
@@ -36,9 +31,10 @@ export default function MyProfilePage() {
       const response = await employeeProfileApi.getMyProfile();
 
       if (response && typeof response === "object") {
-        setProfile(response as EmployeeProfile);
+        // The API returns either EmployeeProfile or Candidate based on user type
+        setProfile(response as unknown as Candidate);
       } else {
-        setProfile(response as EmployeeProfile | null);
+        setProfile(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load profile");
@@ -49,7 +45,7 @@ export default function MyProfilePage() {
 
   if (loading) {
     return (
-      <ProtectedRoute requiredUserType="employee">
+      <ProtectedRoute requiredUserType="candidate">
         <div className="container mx-auto px-6 py-8">
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -61,7 +57,7 @@ export default function MyProfilePage() {
 
   if (error) {
     return (
-      <ProtectedRoute requiredUserType="employee">
+      <ProtectedRoute requiredUserType="candidate">
         <div className="container mx-auto px-6 py-8">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-700">{error}</p>
@@ -75,24 +71,19 @@ export default function MyProfilePage() {
   }
 
   return (
-    <ProtectedRoute requiredUserType="employee">
+    <ProtectedRoute requiredUserType="candidate">
       <div className="container mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white-900">My Profile</h1>
-            <p className="text-white-900 mt-1">
-              Employee ID: {profile?.employeeNumber || user?.employeeNumber}
+            <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+            <p className="text-gray-600 mt-1">
+              Candidate Number: {profile?.candidateNumber || user?.candidateNumber || "N/A"}
             </p>
           </div>
           <div className="flex gap-3 mt-4 md:mt-0">
-            {canEdit && (
-              <Link href="/dashboard/employee-profile/my-profile/edit">
-                <Button variant="primary">Edit Profile</Button>
-              </Link>
-            )}
-            <Link href="/dashboard/employee-profile/change-requests/new">
-              <Button variant="outline">Request Correction</Button>
+            <Link href="/candidate-portal">
+              <Button variant="outline">Back to Portal</Button>
             </Link>
           </div>
         </div>
@@ -114,10 +105,10 @@ export default function MyProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">
-                    Employee Number
+                    Candidate Number
                   </p>
                   <p className="mt-1 font-mono text-black">
-                    {profile?.employeeNumber || user?.employeeNumber || "N/A"}
+                    {profile?.candidateNumber || user?.candidateNumber || "N/A"}
                   </p>
                 </div>
                 <div>
@@ -156,41 +147,32 @@ export default function MyProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Profile Photo */}
+          {/* Application Status */}
           <Card>
             <CardHeader>
-              <CardTitle>Profile Photo</CardTitle>
+              <CardTitle>Application Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <ProfilePhotoUpload
-                currentPhotoUrl={profile?.profilePictureUrl}
-                onPhotoUpdated={(newUrl) => {
-                  if (profile) {
-                    setProfile({ ...profile, profilePictureUrl: newUrl });
-                  }
-                }}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Employment Status */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Employment Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Status</p>
                   <span
                     className={`mt-1 inline-block px-3 py-1 text-sm rounded-full ${
-                      profile?.status === "ACTIVE"
-                        ? "bg-green-100 text-green-800"
-                        : profile?.status === "ON_LEAVE"
+                      profile?.status === "APPLIED"
                         ? "bg-blue-100 text-blue-800"
-                        : profile?.status === "TERMINATED"
+                        : profile?.status === "SCREENING"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : profile?.status === "INTERVIEW"
+                        ? "bg-purple-100 text-purple-800"
+                        : profile?.status === "OFFER_SENT"
+                        ? "bg-green-100 text-green-800"
+                        : profile?.status === "OFFER_ACCEPTED"
+                        ? "bg-green-200 text-green-900"
+                        : profile?.status === "HIRED"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : profile?.status === "REJECTED"
                         ? "bg-red-100 text-red-800"
-                        : profile?.status
+                        : profile?.status === "WITHDRAWN"
                         ? "bg-gray-100 text-gray-800"
                         : "bg-gray-100 text-gray-500"
                     }`}
@@ -198,30 +180,16 @@ export default function MyProfilePage() {
                     {profile?.status || "UNKNOWN"}
                   </span>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Date of Hire
-                  </p>
-                  <p className="mt-1 text-black">
-                    {profile?.dateOfHire
-                      ? new Date(profile.dateOfHire).toLocaleDateString()
-                      : "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Contract Type
-                  </p>
-                  <p className="mt-1 text-black">
-                    {profile?.contractType || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Work Type</p>
-                  <p className="mt-1 text-black">
-                    {profile?.workType || "N/A"}
-                  </p>
-                </div>
+                {profile?.applicationDate && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Application Date
+                    </p>
+                    <p className="mt-1 text-black">
+                      {new Date(profile.applicationDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -233,14 +201,6 @@ export default function MyProfilePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Work Email
-                  </p>
-                  <p className="mt-1 text-black">
-                    {profile?.workEmail || user?.workEmail || "N/A"}
-                  </p>
-                </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">
                     Personal Email
@@ -255,14 +215,6 @@ export default function MyProfilePage() {
                   </p>
                   <p className="mt-1 text-black">
                     {profile?.mobilePhone || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Home Phone
-                  </p>
-                  <p className="mt-1 text-black">
-                    {profile?.homePhone || "N/A"}
                   </p>
                 </div>
                 {profile?.address && (
@@ -286,7 +238,7 @@ export default function MyProfilePage() {
           {/* Position & Department */}
           <Card>
             <CardHeader>
-              <CardTitle>Position & Department</CardTitle>
+              <CardTitle>Application Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -295,15 +247,14 @@ export default function MyProfilePage() {
                   {(() => {
                     // Handle both cases: populated object or string ID
                     if (
-                      profile?.primaryPositionId &&
-                      typeof profile.primaryPositionId === "object"
+                      profile?.positionId &&
+                      typeof profile.positionId === "object"
                     ) {
                       return (
-                        (profile.primaryPositionId as any).title ||
-                        "Not assigned"
+                        (profile.positionId as any).title || "Not assigned"
                       );
                     }
-                    return profile?.primaryPosition?.title || "Not assigned";
+                    return profile?.position?.title || "Not assigned";
                   })()}
                 </p>
               </div>
@@ -313,38 +264,30 @@ export default function MyProfilePage() {
                   {(() => {
                     // Handle both cases: populated object or string ID
                     if (
-                      profile?.primaryDepartmentId &&
-                      typeof profile.primaryDepartmentId === "object"
+                      profile?.departmentId &&
+                      typeof profile.departmentId === "object"
                     ) {
                       return (
-                        (profile.primaryDepartmentId as any).name ||
-                        "Not assigned"
+                        (profile.departmentId as any).name || "Not assigned"
                       );
                     }
-                    return profile?.primaryDepartment?.name || "Not assigned";
+                    return profile?.department?.name || "Not assigned";
                   })()}
                 </p>
               </div>
-              {profile?.supervisor && (
+              {profile?.resumeUrl && (
                 <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Supervisor
-                  </p>
-                  <p className="mt-1 text-black">
-                    {profile.supervisor.fullName}
-                  </p>
+                  <p className="text-sm font-medium text-gray-500">Resume</p>
+                  <a
+                    href={profile.resumeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 text-blue-600 hover:underline"
+                  >
+                    View Resume
+                  </a>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Education & Qualifications */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Education & Qualifications</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EducationSection />
             </CardContent>
           </Card>
         </div>
@@ -355,17 +298,14 @@ export default function MyProfilePage() {
             Quick Actions
           </h2>
           <div className="flex flex-wrap gap-3">
-            <Link href="/dashboard/employee-profile">
-              <Button variant="ghost">← Back to Profile Dashboard</Button>
+            <Link href="/candidate-portal">
+              <Button variant="ghost">← Back to Candidate Portal</Button>
             </Link>
-            <Link href="/dashboard/employee-profile/my-profile/edit">
-              <Button variant="outline">Update Contact Information</Button>
+            <Link href="/dashboard/recruitment/my-applications">
+              <Button variant="outline">View My Applications</Button>
             </Link>
-            <Link href="/dashboard/employee-profile/change-requests/new">
-              <Button variant="outline">Request Data Correction</Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button variant="outline">Go to Main Dashboard</Button>
+            <Link href="/dashboard/recruitment/jobs">
+              <Button variant="outline">Browse Jobs</Button>
             </Link>
           </div>
         </div>

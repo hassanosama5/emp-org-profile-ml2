@@ -214,9 +214,11 @@ export interface Candidate {
   fullName?: string;
   personalEmail?: string;
   mobilePhone?: string;
+  homePhone?: string;
   nationalId?: string;
   gender?: "MALE" | "FEMALE";
   dateOfBirth?: string;
+  maritalStatus?: "SINGLE" | "MARRIED" | "DIVORCED" | "WITHDRAWN";
   address?: {
     city?: string;
     streetAddress?: string;

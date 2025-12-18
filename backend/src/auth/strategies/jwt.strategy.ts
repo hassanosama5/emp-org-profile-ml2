@@ -19,6 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       username: payload.username,
       roles: payload.roles,
       permissions: payload.permissions,
+      userType: payload.userType, // Include userType to distinguish candidates from employees
       // ========================================================================
       // NEW CHANGES FOR OFFBOARDING: Extract employeeNumber from JWT payload
       // Required for OFF-018 (Employee Resignation) and OFF-001 (HR Termination)

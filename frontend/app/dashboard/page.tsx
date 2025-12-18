@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import {
   Card,
   CardHeader,
@@ -11,7 +13,20 @@ import {
 } from "@/components/shared/ui/Card";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  // Redirect candidates to candidate portal
+  useEffect(() => {
+    if (!loading && isAuthenticated && user?.userType === "candidate") {
+      router.replace("/candidate-portal");
+    }
+  }, [loading, isAuthenticated, user, router]);
+
+  // Don't render anything for candidates (they'll be redirected)
+  if (user?.userType === "candidate") {
+    return null;
+  }
 
   const roles = user?.roles ?? [];
 
