@@ -185,11 +185,13 @@ export class EmployeeProfileService {
     const savedEmployee = await employee.save();
 
     // Create default system role
-    await this.systemRoleModel.create({
+    const defaultRole = new this.systemRoleModel({
+      _id: new Types.ObjectId(),
       employeeProfileId: savedEmployee._id,
       roles: [SystemRole.DEPARTMENT_EMPLOYEE],
       isActive: true,
     });
+    await defaultRole.save();
 
     // Update candidate status if candidateId was provided
     if (candidateToUpdate) {
@@ -488,12 +490,15 @@ export class EmployeeProfileService {
       return existingRole.save();
     }
 
-    return this.systemRoleModel.create({
+    const newRole = new this.systemRoleModel({
+      _id: new Types.ObjectId(),
       employeeProfileId: new Types.ObjectId(employeeId),
       roles,
       permissions,
       isActive: true,
     });
+    await newRole.save();
+    return newRole;
   }
 
   async getSystemRoles(employeeId: string): Promise<EmployeeSystemRole | null> {
@@ -1705,11 +1710,13 @@ export class EmployeeProfileService {
     const savedCandidate = await candidate.save();
 
     // Create system role for candidate
-    await this.systemRoleModel.create({
+    const candidateRole = new this.systemRoleModel({
+      _id: new Types.ObjectId(),
       employeeProfileId: savedCandidate._id, // Note: Using candidate ID as employeeProfileId
       roles: [SystemRole.JOB_CANDIDATE],
       isActive: true,
     });
+    await candidateRole.save();
 
     return savedCandidate.toObject();
   }

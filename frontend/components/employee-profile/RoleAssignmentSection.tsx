@@ -23,9 +23,11 @@ export default function RoleAssignmentSection({
   const [currentRoles, setCurrentRoles] = useState<SystemRole[]>([]);
   const [isActive, setIsActive] = useState(true);
 
-  // HR Admin can only assign roles they have (except DEPARTMENT_EMPLOYEE which anyone can assign)
+  // System Admin can assign all roles; HR Admin can only assign roles they have
+  const isSystemAdmin = currentUserRoles.includes(SystemRole.SYSTEM_ADMIN);
   const assignableRoles = Object.values(SystemRole).filter((role) => {
     if (role === SystemRole.JOB_CANDIDATE) return false; // Never for employees
+    if (isSystemAdmin) return true; // System Admin can assign all roles
     if (role === SystemRole.SYSTEM_ADMIN) return false; // HR Admin cannot assign System Admin
     if (currentUserRoles.includes(role)) return true; // Can assign roles they have
     if (role === SystemRole.DEPARTMENT_EMPLOYEE) return true; // Can assign basic employee role
@@ -168,7 +170,7 @@ export default function RoleAssignmentSection({
             const hasRole = currentUserRoles.includes(role);
             const isSelected = currentRoles.includes(role);
             const canAssign =
-              hasRole || role === SystemRole.DEPARTMENT_EMPLOYEE;
+              isSystemAdmin || hasRole || role === SystemRole.DEPARTMENT_EMPLOYEE;
 
             return (
               <button
@@ -184,6 +186,8 @@ export default function RoleAssignmentSection({
                 title={
                   !canAssign
                     ? "You don't have permission to assign this role"
+                    : isSystemAdmin && role === SystemRole.SYSTEM_ADMIN
+                    ? "System Admin can assign System Admin role"
                     : ""
                 }
               >
@@ -202,10 +206,11 @@ export default function RoleAssignmentSection({
                     {role === SystemRole.RECRUITER && "Recruitment"}
                     {role === SystemRole.FINANCE_STAFF && "Finance"}
                     {role === SystemRole.LEGAL_POLICY_ADMIN && "Legal & policy"}
+                    {role === SystemRole.SYSTEM_ADMIN && "Full system access"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!hasRole && role !== SystemRole.DEPARTMENT_EMPLOYEE && (
+                  {!isSystemAdmin && !hasRole && role !== SystemRole.DEPARTMENT_EMPLOYEE && (
                     <span className="text-xs text-amber-600">
                       Requires {role}
                     </span>
@@ -256,9 +261,18 @@ export default function RoleAssignmentSection({
 
       {/* Info Note */}
       <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
-        <p>• HR Admin can only assign roles they personally have</p>
-        <p>• System Admin role is restricted to System Administrators only</p>
-        <p>• All changes are logged for audit purposes</p>
+        {isSystemAdmin ? (
+          <>
+            <p>• System Admin can assign all roles including System Admin</p>
+            <p>• All changes are logged for audit purposes</p>
+          </>
+        ) : (
+          <>
+            <p>• HR Admin can only assign roles they personally have</p>
+            <p>• System Admin role is restricted to System Administrators only</p>
+            <p>• All changes are logged for audit purposes</p>
+          </>
+        )}
       </div>
     </div>
   );

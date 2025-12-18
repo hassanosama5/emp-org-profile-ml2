@@ -38,7 +38,10 @@ export function isHRAdminOrManager(user: User | null): boolean {
   if (!user) return false;
 
   return user.roles.some(
-    (role) => role === SystemRole.HR_ADMIN || role === SystemRole.HR_MANAGER
+    (role) =>
+      role === SystemRole.HR_ADMIN ||
+      role === SystemRole.HR_MANAGER ||
+      role === SystemRole.SYSTEM_ADMIN
   );
 }
 

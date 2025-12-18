@@ -60,7 +60,10 @@ export default function EmployeeManagementPage() {
 
   // Check authorization
   const isAuthorized = user?.roles?.some(
-    (role) => role === SystemRole.HR_ADMIN || role === SystemRole.HR_MANAGER
+    (role) =>
+      role === SystemRole.HR_ADMIN ||
+      role === SystemRole.HR_MANAGER ||
+      role === SystemRole.SYSTEM_ADMIN
   );
 
   // Add to your component state:
@@ -234,24 +237,25 @@ export default function EmployeeManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, departmentFilter, showToast]);
+  }, [searchTerm, statusFilter, departmentFilter]);
+  
   // Initial load - runs once when component mounts
   useEffect(() => {
     if (isAuthorized) {
       loadEmployees();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthorized]); // Only depends on isAuthorized
 
   // Debounced search effect - FIXED VERSION
   useEffect(() => {
+    // Don't run on initial mount (already handled by initial load)
+    if (!isAuthorized) return;
+
     // Clear existing timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
-
-    // Don't search on initial mount (already handled by initial load)
-    const isInitialMount = !searchTerm && !statusFilter && !departmentFilter;
-    if (isInitialMount) return;
 
     // Set new timer
     debounceTimerRef.current = setTimeout(() => {
@@ -264,7 +268,8 @@ export default function EmployeeManagementPage() {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [searchTerm, statusFilter, departmentFilter, loadEmployees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, statusFilter, departmentFilter]);
 
   // Start editing an employee
   const startEdit = (employee: EmployeeProfile) => {
@@ -589,7 +594,7 @@ export default function EmployeeManagementPage() {
       <div className="container mx-auto px-6 py-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-700">
-            Access denied. Only HR Admin and HR Manager can access this page.
+            Access denied. Only HR Admin, HR Manager, and System Admin can access this page.
           </p>
           <Link href="/dashboard/employee-profile">
             <Button className="mt-3">Back to Dashboard</Button>
@@ -600,7 +605,13 @@ export default function EmployeeManagementPage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={[SystemRole.HR_ADMIN, SystemRole.HR_MANAGER]}>
+    <ProtectedRoute
+      allowedRoles={[
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_MANAGER,
+        SystemRole.SYSTEM_ADMIN,
+      ]}
+    >
       <div className="container mx-auto px-6 py-8">
         <Toast
           message={toast.message}
@@ -616,7 +627,7 @@ export default function EmployeeManagementPage() {
               Employee Management System
             </h1>
             <p className="text-gray-300 mt-1">
-              HR Admin/Manager - Search, edit employee profiles
+              HR Admin/Manager/System Admin - Search, edit employee profiles
               {user?.roles?.includes(SystemRole.HR_ADMIN) && (
                 <span className="ml-2 px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
                   HR Admin
@@ -625,6 +636,11 @@ export default function EmployeeManagementPage() {
               {user?.roles?.includes(SystemRole.HR_MANAGER) && (
                 <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
                   HR Manager
+                </span>
+              )}
+              {user?.roles?.includes(SystemRole.SYSTEM_ADMIN) && (
+                <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                  System Admin
                 </span>
               )}
             </p>

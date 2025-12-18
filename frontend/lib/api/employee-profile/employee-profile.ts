@@ -513,7 +513,19 @@ export const employeeProfileApi = {
     );
   },
 
-  // Assign roles to employee
+  // Assign roles to employee (using POST /assign-roles endpoint)
+  assignRoles: (
+    employeeProfileId: string,
+    roles: SystemRole[],
+    permissions?: string[]
+  ) =>
+    api.post(`/employee-profile/assign-roles`, {
+      employeeProfileId,
+      roles,
+      permissions: permissions || [],
+    }),
+
+  // Assign roles to employee (using POST /:employeeId/roles endpoint)
   assignEmployeeRoles: (
     employeeId: string,
     roles: SystemRole[],

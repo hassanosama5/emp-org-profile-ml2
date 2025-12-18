@@ -24,10 +24,13 @@ export default function DashboardPage() {
   );
 
   const canSeeAssignments = isHREmployee || isDepartmentHead;
+  const isSystemAdmin = roles.some(
+    (r) => r.toLowerCase() === "system admin".toLowerCase()
+  );
 
   return (
     <div className="container mx-auto px-6 py-8">
-      <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+      <h1 className="text-3xl font-bold text-white-900">Dashboard</h1>
       <p className="text-gray-600 mt-1">Welcome {user?.fullName}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -79,10 +82,15 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Time Management</CardTitle>
-            <CardDescription>Clock in/out, attendance, and shift management</CardDescription>
+            <CardDescription>
+              Clock in/out, attendance, and shift management
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/dashboard/time-management" className="text-blue-600 hover:underline">
+            <Link
+              href="/dashboard/time-management"
+              className="text-blue-600 hover:underline"
+            >
               Open Time Management
             </Link>
           </CardContent>
@@ -118,7 +126,25 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-       
+        {/* 🔹 System Admin Dashboard – System Admin only */}
+        {isSystemAdmin && (
+          <Card className="border-2 border-blue-200">
+            <CardHeader>
+              <CardTitle>System Administration</CardTitle>
+              <CardDescription>
+                Manage system-wide configurations and access controls
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/dashboard/system-admin"
+                className="text-blue-600 hover:underline font-medium"
+              >
+                System Admin Dashboard
+              </Link>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 🔹 Cycles – HR Employee only */}
         {isHREmployee && (
