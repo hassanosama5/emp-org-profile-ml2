@@ -62,18 +62,18 @@ export function ProtectedRoute({
     if (allowedRoles && allowedRoles.length > 0 && user) {
       const userRoles = user.roles || [];
 
-      // Convert both arrays to strings for comparison
+      // Convert both arrays to lowercase strings for case-insensitive comparison
       const userRoleStrings = userRoles.map((role) =>
-        typeof role === "string" ? role : (role as any).toString()
+        (typeof role === "string" ? role : (role as any).toString()).toLowerCase()
       );
 
       const allowedRoleStrings = allowedRoles.map((role) =>
-        typeof role === "string" ? role : (role as any).toString()
+        (typeof role === "string" ? role : (role as any).toString()).toLowerCase()
       );
 
-      // Check if any user role matches any allowed role
+      // Check if any user role matches any allowed role (case-insensitive)
       const hasRoleAccess = userRoleStrings.some((userRole) =>
-        allowedRoleStrings.includes(userRole)
+        allowedRoleStrings.some((allowedRole) => allowedRole === userRole)
       );
 
       if (!hasRoleAccess) {

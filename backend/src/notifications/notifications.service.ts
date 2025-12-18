@@ -1357,6 +1357,137 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Notify System Admin (or relevant approver) when organization structure change request is submitted
+   * Use case: "Organizational Structure (OS): The request is saved in the pending approval queue, triggering.
+   * Notifications (N): An alert is sent to the System Admin (or relevant approver) that a 'Change request submitted'"
+   * @param submittedByEmployeeId - The ID of the employee who submitted the request
+   * @param changeRequestId - The ID of the change request
+   * @param requestType - Type of change request (NEW_DEPARTMENT, UPDATE_DEPARTMENT, etc.)
+   * @param requestDetails - Optional details about the request
+   */
+  async notifyStructureChangeRequestSubmitted(
+    submittedByEmployeeId: string,
+    changeRequestId: string,
+    requestType: string,
+    requestDetails?: string,
+  ): Promise<{ success: boolean; notificationsSent: number; error?: string }> {
+    try {
+      console.log(
+        `[NOTIFICATION SERVICE] Creating STRUCTURE_CHANGE_REQUEST_SUBMITTED notification for request ${changeRequestId}`,
+      );
+
+      // Find all System Admins and HR Admins who should be notified
+      const adminRoles = [
+        SystemRole.SYSTEM_ADMIN,
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_MANAGER,
+      ];
+
+      const adminUsers = await this.employeeSystemRoleModel
+        .find({
+          role: { $in: adminRoles },
+          status: EmployeeStatus.ACTIVE,
+        })
+        .populate('employeeProfileId', 'firstName lastName email')
+        .exec();
+
+      if (adminUsers.length === 0) {
+        console.warn(
+          'No System Admin or HR Admin users found to notify. Please check employee_system_roles collection.',
+        );
+        return { success: true, notificationsSent: 0 };
+      }
+
+      // Get employee details who submitted the request
+      const submittedByEmployee = await this.employeeProfileModel
+        .findById(submittedByEmployeeId)
+        .select('firstName lastName employeeNumber')
+        .exec();
+
+      const employeeName = submittedByEmployee
+        ? `${submittedByEmployee.firstName} ${submittedByEmployee.lastName}`.trim()
+        : 'Unknown Employee';
+      const employeeNumber = submittedByEmployee?.employeeNumber || 'N/A';
+
+      // Format request type for display
+      const requestTypeLabels: Record<string, string> = {
+        NEW_DEPARTMENT: 'New Department',
+        UPDATE_DEPARTMENT: 'Update Department',
+        NEW_POSITION: 'New Position',
+        UPDATE_POSITION: 'Update Position',
+        CLOSE_POSITION: 'Close Position',
+      };
+
+      const requestTypeLabel =
+        requestTypeLabels[requestType] || requestType;
+
+      const message = `Change request submitted: ${requestTypeLabel} by ${employeeName} (${employeeNumber})`;
+
+      const notifications = [];
+
+      // Create notifications for each admin user
+      for (const adminUser of adminUsers) {
+        try {
+          const employeeProfile = adminUser.employeeProfileId;
+          if (!employeeProfile || !employeeProfile._id) {
+            console.warn(
+              `Skipping admin user ${adminUser._id} - missing employee profile`,
+            );
+            continue;
+          }
+
+          const notification = await this.notificationLogModel.create({
+            to: employeeProfile._id,
+            type: NotificationType.STRUCTURE_CHANGE_REQUEST_SUBMITTED,
+            message,
+            isRead: false,
+            data: {
+              changeRequestId,
+              submittedByEmployeeId,
+              employeeName,
+              employeeNumber,
+              requestType,
+              requestTypeLabel,
+              requestDetails: requestDetails || '',
+              link: `/dashboard/organization-structure/change-requests/${changeRequestId}`,
+              timestamp: new Date(),
+            },
+          });
+          notifications.push(notification);
+          console.log(
+            `Notification created for admin user: ${employeeProfile.email || adminUser._id}`,
+          );
+        } catch (userError) {
+          console.error(
+            `Failed to create notification for admin user ${adminUser._id}:`,
+            userError,
+          );
+          // Continue with other users
+        }
+      }
+
+      console.log(
+        `Successfully created ${notifications.length} notifications for structure change request submission`,
+      );
+      return {
+        success: true,
+        notificationsSent: notifications.length,
+      };
+    } catch (error) {
+      console.error(
+        'Failed to create structure change request submitted notifications:',
+        error,
+      );
+      // Don't throw - notification failure shouldn't block main action
+      return {
+        success: false,
+        notificationsSent: 0,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   // ONB-005: Send Task Reminder Notification
   async notifyOnboardingTaskReminder(
     recipientId: string,

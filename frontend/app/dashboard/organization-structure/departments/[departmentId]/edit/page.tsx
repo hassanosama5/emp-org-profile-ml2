@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -9,11 +9,13 @@ import { Card } from "@/components/shared/ui/Card";
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
 import { DepartmentForm } from "@/components/organization-structure/DepartmentForm";
 import { Button } from "@/components/shared/ui/Button";
+import { useAuth } from "@/lib/hooks/use-auth";
 
 export default function EditDepartmentPage() {
   const router = useRouter();
   const params = useParams();
   const departmentId = params.departmentId as string;
+  const { user } = useAuth();
 
   const {
     getDepartmentById,
@@ -26,6 +28,14 @@ export default function EditDepartmentPage() {
   const [initialData, setInitialData] = useState<any>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Only System Admin can edit codes
+  const canEditCode = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r: string) => 
+      String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase()
+    );
+  }, [user?.roles]);
 
   useEffect(() => {
     const fetchDepartment = async () => {
@@ -50,11 +60,18 @@ export default function EditDepartmentPage() {
   const handleSubmit = async (formData: { code: string; name: string; description: string; headPositionId?: string }) => {
     clearError();
     try {
-      await updateDepartment(departmentId, {
+      const updateData: any = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         headPositionId: formData.headPositionId?.trim() || undefined,
-      });
+      };
+      
+      // Only System Admin can update code
+      if (canEditCode && formData.code.trim()) {
+        updateData.code = formData.code.toUpperCase().trim();
+      }
+      
+      await updateDepartment(departmentId, updateData);
       router.push("/dashboard/organization-structure/departments");
     } catch (err) {
       console.error("Department update failed:", err);

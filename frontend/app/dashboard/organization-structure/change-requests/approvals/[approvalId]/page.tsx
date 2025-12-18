@@ -46,8 +46,30 @@ export default function ApprovalDecisionPage({
     }
   };
 
+  // REQ-OSM-04: Only System Admin can make approval decisions
+  if (!canDecide) {
+    return (
+      <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN]}>
+        <div className="container mx-auto px-6 py-8 max-w-2xl">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-800 font-medium">Access Denied</p>
+            <p className="text-red-700 text-sm mt-1">
+              Only System Admin can make approval decisions. Please contact your System Admin to review this request.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/organization-structure/change-requests"
+            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+          >
+            ← Back to Change Requests
+          </Link>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
   return (
-    <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN]}>
+    <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN]}>
       <div className="container mx-auto px-6 py-8 max-w-2xl">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>

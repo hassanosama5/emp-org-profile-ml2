@@ -51,7 +51,13 @@ api.interceptors.response.use(
         response.status
       } ${response.config.method?.toUpperCase()} ${response.config.url}]`
     );
-    console.log('✅ API Response data:', response.data);
+    // Only log response data in development or if it's not too large
+    if (process.env.NODE_ENV === 'development' && response.data && typeof response.data === 'object') {
+      const dataSize = JSON.stringify(response.data).length;
+      if (dataSize < 10000) { // Only log if response is less than 10KB
+        console.log('✅ API Response data:', response.data);
+      }
+    }
 
     // Return the data property if it exists, otherwise return the full response
     return response.data;
@@ -90,19 +96,41 @@ api.interceptors.response.use(
       },
     };
     
-    console.error("API Error:", errorDetails);
+    // Only log if there's meaningful error data or if we have an error message
+    const hasErrorData = error.response?.data && Object.keys(error.response.data).length > 0;
+    const hasErrorMessage = error.message && error.message.length > 0;
     
-    console.error(
-      `❌ API Error [${error.config?.method?.toUpperCase()} ${
-        error.config?.url
-      }]:`,
-      errorDetails
-    );
-    
-    // CHANGED - Log the full error object for debugging
-    if (!error.response) {
-      console.error('⚠️ No response received - possible network error:', error);
+    if (hasErrorData || hasErrorMessage) {
+      // Only log full details in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("API Error:", errorDetails);
+        console.error(
+          `❌ API Error [${error.config?.method?.toUpperCase()} ${
+            error.config?.url
+          }]:`,
+          errorDetails
+        );
+      } else {
+        // In production, log minimal info
+        console.error(
+          `❌ API Error [${error.config?.method?.toUpperCase()} ${
+            error.config?.url
+          }]: ${error.message || 'Unknown error'}`
+        );
+      }
+    } else if (!error.response) {
+      console.error('⚠️ No response received - possible network error:', error.message || error);
     } else {
+      // Log minimal info for empty responses
+      console.error(
+        `❌ API Error [${error.config?.method?.toUpperCase()} ${
+          error.config?.url
+        }]: Status ${error.response.status} ${error.response.statusText}`
+      );
+    }
+    
+    // CHANGED - Log the full error object for debugging (only if meaningful and in development)
+    if (process.env.NODE_ENV === 'development' && error.response && hasErrorData) {
       console.error('📋 Full error response:', {
         status: error.response.status,
         statusText: error.response.statusText,
@@ -174,9 +202,25 @@ api.interceptors.response.use(
     let errorMessage = "An error occurred";
     
     const responseData = error.response?.data;
+    
+    // First, try to get message from error.response.data (NestJS format)
     if (responseData) {
-      // Handle NestJS validation errors (array of messages)
-      if (Array.isArray(responseData.message)) {
+      // Handle empty object responses - check if it's truly empty or if message is in error object
+      if (typeof responseData === 'object' && Object.keys(responseData).length === 0) {
+        // For empty responses, try to extract from error.message or use status-based messages
+        if (error.message && error.message.includes('not found')) {
+          errorMessage = error.message;
+        } else if (error.response?.status === 404) {
+          errorMessage = `Resource not found`;
+        } else if (error.response?.status === 401) {
+          errorMessage = "Unauthorized - Please log in again";
+        } else if (error.response?.status === 403) {
+          errorMessage = "Forbidden - Insufficient permissions";
+        } else {
+          errorMessage = `HTTP ${error.response?.status || "Unknown"} error`;
+        }
+      } else if (Array.isArray(responseData.message)) {
+        // Handle NestJS validation errors (array of messages)
         errorMessage = responseData.message.join(", ");
       } else if (responseData.message) {
         errorMessage = responseData.message;
@@ -185,11 +229,14 @@ api.interceptors.response.use(
       } else if (typeof responseData === 'string') {
         errorMessage = responseData;
       } else {
-        errorMessage = JSON.stringify(responseData);
+        // If responseData exists but no message, try to stringify or use error.message
+        errorMessage = error.message || JSON.stringify(responseData);
       }
     } else if (error.message) {
+      // Fallback to error.message if no response data
       errorMessage = error.message;
     } else {
+      // Last resort: status-based message
       errorMessage = `HTTP ${error.response?.status || "Unknown"} error`;
     }
     

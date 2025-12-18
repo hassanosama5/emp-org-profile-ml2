@@ -177,7 +177,7 @@ export default function NewAssignmentPage() {
                     Department *
                   </label>
                   <select
-                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                    className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 bg-white ${
                       formErrors.departmentId
                         ? "border-red-300"
                         : "border-gray-300"
@@ -205,7 +205,7 @@ export default function NewAssignmentPage() {
                     Position *
                   </label>
                   <select
-                    className={`w-full rounded-md border px-3 py-2 text-sm ${
+                    className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 bg-white ${
                       formErrors.positionId
                         ? "border-red-300"
                         : "border-gray-300"

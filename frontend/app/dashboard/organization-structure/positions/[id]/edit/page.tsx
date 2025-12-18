@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -15,6 +15,7 @@ import {
 } from "@/components/shared/ui/Card";
 import { Input } from "@/components/shared/ui/Input";
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
+import { useAuth } from "@/lib/hooks/use-auth";
 import {
   UpdatePositionDto,
   DepartmentResponseDto,
@@ -25,6 +26,7 @@ export default function EditPositionPage() {
   const params = useParams();
   const router = useRouter();
   const positionId = params.id as string;
+  const { user } = useAuth();
 
   const {
     getPositionById,
@@ -35,6 +37,14 @@ export default function EditPositionPage() {
     error,
     clearError,
   } = useOrganizationStructure();
+
+  // Only System Admin can edit codes
+  const canEditCode = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r: string) => 
+      String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase()
+    );
+  }, [user?.roles]);
 
   const [position, setPosition] = useState<PositionResponseDto | null>(null);
   const [departments, setDepartments] = useState<DepartmentResponseDto[]>([]);
@@ -111,15 +121,19 @@ export default function EditPositionPage() {
     clearError();
 
     try {
-      // TEST: Send complete data instead of partial updates
+      // Only System Admin can update code
       const updateData: UpdatePositionDto = {
-        code: formData.code,
         title: formData.title,
         description: formData.description || undefined,
         departmentId: formData.departmentId,
         reportsToPositionId: formData.reportsToPositionId || undefined,
         isActive: formData.isActive,
       };
+
+      // Only System Admin can update code
+      if (canEditCode && formData.code.trim()) {
+        updateData.code = formData.code.toUpperCase().trim();
+      }
 
       console.log("Sending UPDATE data:", JSON.stringify(updateData, null, 2));
 
@@ -321,15 +335,21 @@ export default function EditPositionPage() {
                 <CardContent className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Position Code
+                      Position Code {!canEditCode && <span className="text-xs text-gray-500">(System Admin only)</span>}
                     </label>
                     <Input
                       name="code"
                       value={formData.code}
                       onChange={handleInputChange}
                       required
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !canEditCode}
+                      readOnly={!canEditCode}
                     />
+                    {!canEditCode && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Position codes can only be changed by System Admin.
+                      </p>
+                    )}
                   </div>
 
                   <div>

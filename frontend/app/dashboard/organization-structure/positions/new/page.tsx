@@ -307,7 +307,7 @@ function NewPositionForm() {
                       value={formData.departmentId}
                       onChange={handleInputChange}
                       required
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                       disabled={isSubmitting || loading}
                     >
                       <option value="">Select a department</option>
@@ -334,7 +334,7 @@ function NewPositionForm() {
                       name="reportsToPositionId"
                       value={formData.reportsToPositionId}
                       onChange={handleInputChange}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                       disabled={isSubmitting || loading}
                     >
                       <option value="">

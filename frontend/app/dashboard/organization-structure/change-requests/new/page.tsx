@@ -32,6 +32,7 @@ export default function CreateChangeRequestPage() {
     targetDepartmentId: "",
     targetPositionId: "",
     reason: "",
+    details: "",
   });
 
   const [departments, setDepartments] = useState<any[]>([]);
@@ -58,6 +59,7 @@ export default function CreateChangeRequestPage() {
       targetDepartmentId: "",
       targetPositionId: "",
       reason: "",
+      details: "",
     };
     let isValid = true;
 
@@ -72,16 +74,30 @@ export default function CreateChangeRequestPage() {
     }
 
     // Conditional validation based on requestType
-    if (
-      formData.requestType === StructureRequestType.UPDATE_DEPARTMENT
-    ) {
+    if (formData.requestType === StructureRequestType.NEW_DEPARTMENT) {
+      // NEW_DEPARTMENT doesn't need targetDepartmentId (it's creating a new one)
+      // But details are required to specify the new department information
+      if (!formData.details.trim()) {
+        errors.details = "Details are required for new department (specify name, code, description, etc.)";
+        isValid = false;
+      }
+    } else if (formData.requestType === StructureRequestType.UPDATE_DEPARTMENT) {
       if (!formData.targetDepartmentId) {
         errors.targetDepartmentId = "Target department is required";
         isValid = false;
       }
-    }
-
-    if (
+    } else if (formData.requestType === StructureRequestType.NEW_POSITION) {
+      // NEW_POSITION needs a department to create the position in
+      if (!formData.targetDepartmentId) {
+        errors.targetDepartmentId = "Department is required for new position";
+        isValid = false;
+      }
+      // Details are required to specify the new position information
+      if (!formData.details.trim()) {
+        errors.details = "Details are required for new position (specify title, code, description, reporting structure, etc.)";
+        isValid = false;
+      }
+    } else if (
       formData.requestType === StructureRequestType.UPDATE_POSITION ||
       formData.requestType === StructureRequestType.CLOSE_POSITION
     ) {
@@ -143,8 +159,9 @@ export default function CreateChangeRequestPage() {
       };
 
       console.log("Submitting change request payload:", payload);
-      await createChangeRequest(payload);
-      router.push("/dashboard/organization-structure/change-requests");
+      const createdRequest = await createChangeRequest(payload);
+      // After creation, redirect to the detail page so user can review and submit
+      router.push(`/dashboard/organization-structure/change-requests/${createdRequest._id}`);
     } catch (err: any) {
       console.error("Change request creation failed:", err);
       const errorMessage = err?.response?.data?.message || err?.message || "Failed to create change request. Please try again.";
@@ -156,9 +173,26 @@ export default function CreateChangeRequestPage() {
     router.push("/dashboard/organization-structure/change-requests");
   };
 
+  // REQ-OSM-03: Only Managers/HR submit change requests
+  // System Admin can directly create departments/positions without change requests
+  const canCreateRequest = user?.roles?.some((r: string) => 
+    [SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD]
+      .includes(r as SystemRole)
+  );
+
   return (
-    <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER]}>
+    <ProtectedRoute allowedRoles={[SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD]}>
       <div className="container mx-auto px-4 py-8 max-w-3xl">
+        {/* Info for System Admin */}
+        {!canCreateRequest && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-blue-800 text-sm">
+              <strong>Note:</strong> As a System Admin, you can directly create departments and positions without submitting change requests. 
+              Change requests are for Managers and HR to propose changes that require approval.
+            </p>
+          </div>
+        )}
+
         {/* Header with breadcrumb */}
         <div className="mb-8">
           <nav className="flex items-center text-sm text-gray-600 mb-4">
@@ -256,10 +290,13 @@ export default function CreateChangeRequestPage() {
                   </div>
 
                   {/* Target Department (Conditional) */}
-                  {formData.requestType === StructureRequestType.UPDATE_DEPARTMENT && (
+                  {(formData.requestType === StructureRequestType.UPDATE_DEPARTMENT || 
+                    formData.requestType === StructureRequestType.NEW_POSITION) && (
                     <div className="space-y-2">
                       <label htmlFor="targetDepartmentId" className="block text-sm font-medium text-gray-700">
-                        Target Department *
+                        {formData.requestType === StructureRequestType.NEW_POSITION 
+                          ? "Department for New Position *" 
+                          : "Target Department *"}
                       </label>
                       <Select
                         name="targetDepartmentId"
@@ -281,11 +318,17 @@ export default function CreateChangeRequestPage() {
                       {formErrors.targetDepartmentId && (
                         <p className="text-sm text-red-600">{formErrors.targetDepartmentId}</p>
                       )}
+                      {formData.requestType === StructureRequestType.NEW_POSITION && (
+                        <p className="text-xs text-gray-500">
+                          Select the department where the new position will be created.
+                        </p>
+                      )}
                     </div>
                   )}
 
                   {/* Target Position (Conditional) */}
-                  {(formData.requestType === StructureRequestType.UPDATE_POSITION || formData.requestType === StructureRequestType.CLOSE_POSITION) && (
+                  {(formData.requestType === StructureRequestType.UPDATE_POSITION || 
+                    formData.requestType === StructureRequestType.CLOSE_POSITION) && (
                     <div className="space-y-2">
                       <label htmlFor="targetPositionId" className="block text-sm font-medium text-gray-700">
                         Target Position *
@@ -313,22 +356,50 @@ export default function CreateChangeRequestPage() {
                     </div>
                   )}
 
+                  {/* Info for NEW_DEPARTMENT */}
+                  {formData.requestType === StructureRequestType.NEW_DEPARTMENT && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm text-blue-800">
+                        <strong>New Department Request:</strong> Use the "Details" field below to specify the new department's name, code, and other information. The department will be created upon approval.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Details */}
                   <div className="space-y-2">
                     <label htmlFor="details" className="block text-sm font-medium text-gray-700">
-                      Details
+                      {formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
+                       formData.requestType === StructureRequestType.NEW_POSITION
+                        ? "Change Details *" 
+                        : "Details"}
                     </label>
                     <Textarea
                       id="details"
                       name="details"
                       value={formData.details}
                       onChange={handleChange}
-                      placeholder="Provide more details about the requested change..."
-                      rows={4}
+                      placeholder={
+                        formData.requestType === StructureRequestType.NEW_DEPARTMENT
+                          ? "Specify the new department name, code, description, and any other relevant information..."
+                          : formData.requestType === StructureRequestType.NEW_POSITION
+                          ? "Specify the new position title, code, description, reporting structure, and any other relevant information..."
+                          : "Provide more details about the requested change..."
+                      }
+                      rows={formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
+                            formData.requestType === StructureRequestType.NEW_POSITION ? 6 : 4}
                       disabled={loading}
+                      required={formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
+                               formData.requestType === StructureRequestType.NEW_POSITION}
+                      className={formErrors.details ? "border-red-300" : ""}
                     />
+                    {formErrors.details && (
+                      <p className="text-sm text-red-600">{formErrors.details}</p>
+                    )}
                     <p className="text-xs text-gray-500">
-                      Optional. Elaborate on the specifics of the change.
+                      {formData.requestType === StructureRequestType.NEW_DEPARTMENT || 
+                       formData.requestType === StructureRequestType.NEW_POSITION
+                        ? "Required. Provide all necessary information to create the new entity."
+                        : "Optional. Elaborate on the specifics of the change."}
                     </p>
                   </div>
 
@@ -387,10 +458,32 @@ export default function CreateChangeRequestPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-gray-600">
-                <p>1. Be clear and concise in your reason and details.</p>
-                <p>2. Provide all necessary information for reviewers.</p>
-                <p>3. Ensure the request type matches the proposed change.</p>
-                <p>4. All requests go through an approval workflow.</p>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-2">Workflow:</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-600">
+                    <li>Managers/HR submit change requests</li>
+                    <li>System Admin reviews and approves</li>
+                    <li>Changes are implemented upon approval</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-2">Request Types:</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-600">
+                    <li><strong>New Department:</strong> Create a new department</li>
+                    <li><strong>Update Department:</strong> Modify existing department</li>
+                    <li><strong>New Position:</strong> Create a new position</li>
+                    <li><strong>Update Position:</strong> Modify existing position</li>
+                    <li><strong>Close Position:</strong> Deactivate a position</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-2">Tips:</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-600">
+                    <li>Be clear and concise in your reason</li>
+                    <li>Provide all necessary information</li>
+                    <li>Ensure request type matches the change</li>
+                  </ul>
+                </div>
               </CardContent>
             </Card>
           </div>

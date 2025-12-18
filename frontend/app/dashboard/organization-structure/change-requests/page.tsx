@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -8,6 +8,7 @@ import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/Card";
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
+import { useAuth } from "@/lib/hooks/use-auth";
 import { StructureChangeRequestResponseDto, StructureRequestStatus } from "@/types/organization-structure";
 
 // Simple badge component since we don't have one
@@ -30,9 +31,28 @@ const Badge = ({ children, color = 'gray' }: { children: React.ReactNode, color?
 
 export default function ChangeRequestsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const { getChangeRequests, getStatusDisplay, getRequestTypeDisplay, loading, error } = useOrganizationStructure();
   const [changeRequests, setChangeRequests] = useState<StructureChangeRequestResponseDto[]>([]);
   const [statusFilter, setStatusFilter] = useState<StructureRequestStatus | "">("");
+
+  // REQ-OSM-03: Only Managers/HR submit change requests
+  // System Admin can directly create departments/positions without change requests
+  const canCreateRequest = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r: string) => 
+      [SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD]
+        .includes(r as SystemRole)
+    );
+  }, [user?.roles]);
+
+  // REQ-OSM-04: Only System Admin can approve requests
+  const canApprove = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r: string) => 
+      String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase()
+    );
+  }, [user?.roles]);
 
   useEffect(() => {
     fetchChangeRequests();
@@ -105,15 +125,35 @@ export default function ChangeRequestsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Change Requests</h1>
               <p className="text-gray-600 mt-1">
-                Submit, review, and approve organizational structure changes
+                {canCreateRequest 
+                  ? "Submit, review, and approve organizational structure changes"
+                  : "Review and approve organizational structure change requests"}
               </p>
             </div>
-            <Button
-              onClick={() => router.push("/dashboard/organization-structure/change-requests/new")}
-              variant="primary"
-            >
-              Submit New Request
-            </Button>
+            {canCreateRequest && (
+              <Button
+                onClick={() => router.push("/dashboard/organization-structure/change-requests/new")}
+                variant="primary"
+              >
+                Submit New Request
+              </Button>
+            )}
+            {!canCreateRequest && (
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => router.push("/dashboard/organization-structure/departments/new")}
+                  variant="outline"
+                >
+                  Create Department
+                </Button>
+                <Button
+                  onClick={() => router.push("/dashboard/organization-structure/positions/new")}
+                  variant="outline"
+                >
+                  Create Position
+                </Button>
+              </div>
+            )}
           </div>
           
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -163,15 +203,19 @@ export default function ChangeRequestsPage() {
               <p className="text-gray-400 mt-2">
                 {statusFilter
                   ? `No change requests with status "${getStatusDisplay(statusFilter as StructureRequestStatus).label}"`
-                  : "No change requests have been submitted yet."}
+                  : canCreateRequest
+                  ? "No change requests have been submitted yet."
+                  : "No change requests are pending review."}
               </p>
-              <Button
-                onClick={() => router.push("/dashboard/organization-structure/change-requests/new")}
-                variant="primary"
-                className="mt-4"
-              >
-                Submit Your First Request
-              </Button>
+              {canCreateRequest && (
+                <Button
+                  onClick={() => router.push("/dashboard/organization-structure/change-requests/new")}
+                  variant="primary"
+                  className="mt-4"
+                >
+                  Submit Your First Request
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -247,12 +291,14 @@ export default function ChangeRequestsPage() {
               Showing {changeRequests.length} change request{changeRequests.length !== 1 ? "s" : ""}
               {statusFilter && ` with status "${getStatusDisplay(statusFilter as StructureRequestStatus).label}"`}
             </p>
-            <Link
-              href="/dashboard/organization-structure/change-requests/approvals"
-              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-            >
-              View Approvals Dashboard →
-            </Link>
+            {canApprove && (
+              <Link
+                href="/dashboard/organization-structure/change-requests/approvals"
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                View Approvals Dashboard →
+              </Link>
+            )}
           </div>
         </div>
       </div>

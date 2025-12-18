@@ -80,8 +80,9 @@ export default function SubmitChangeRequestPage({
 
     try {
       await submitChangeRequest(requestId, { submittedByEmployeeId });
-      // comments are not part of submit DTO; keep them here for UX only
-      router.push(`/dashboard/organization-structure/change-requests/${requestId}`);
+      // After submission, redirect to change requests list
+      // System Admin will see it in the list and can approve it
+      router.push(`/dashboard/organization-structure/change-requests`);
     } catch (e) {
       console.error("Failed to submit change request:", e);
     }

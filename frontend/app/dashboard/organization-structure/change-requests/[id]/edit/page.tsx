@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
@@ -19,12 +19,10 @@ import {
 import { StructureRequestType } from "@/types/enums";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shared/ui/Select";
 
-export default function EditChangeRequestPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function EditChangeRequestPage() {
+  const params = useParams();
   const router = useRouter();
+  const id = params.id as string;
   const { user } = useAuth();
   const {
     getChangeRequestById,
@@ -68,7 +66,7 @@ export default function EditChangeRequestPage({
   const load = async () => {
     try {
       const [r, deps, pos] = await Promise.all([
-        getChangeRequestById(params.id),
+        getChangeRequestById(id),
         getDepartments({ isActive: true }),
         getPositions({ isActive: true }),
       ]);
@@ -92,7 +90,7 @@ export default function EditChangeRequestPage({
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id]);
+  }, [id]);
 
   const validate = () => {
     const next: Record<string, string> = {};
@@ -116,24 +114,30 @@ export default function EditChangeRequestPage({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit) return;
+    if (!isEditable) {
+      alert("This request cannot be edited. Only DRAFT requests can be modified.");
+      return;
+    }
     if (!validate()) return;
     try {
-      await updateChangeRequest(params.id, {
+      await updateChangeRequest(id, {
         requestType: form.requestType,
         targetDepartmentId: form.targetDepartmentId || undefined,
         targetPositionId: form.targetPositionId || undefined,
         details: form.details.trim() || undefined,
         reason: form.reason.trim(),
       });
-      router.push(`/dashboard/organization-structure/change-requests/${params.id}`);
-    } catch (e2) {
+      router.push(`/dashboard/organization-structure/change-requests/${id}`);
+    } catch (e2: any) {
       console.error("Failed to update change request:", e2);
+      // Show user-friendly error message
+      const errorMessage = e2?.message || e2?.response?.data?.message || "Failed to update change request";
+      alert(errorMessage);
     }
   };
 
-  const isEditable =
-    req?.status === StructureRequestStatus.DRAFT ||
-    req?.status === StructureRequestStatus.SUBMITTED;
+  // Only DRAFT requests can be edited (per REQ-OSM-03: Manager modifies draft request)
+  const isEditable = req?.status === StructureRequestStatus.DRAFT;
 
   return (
     <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER]}>
@@ -142,11 +146,11 @@ export default function EditChangeRequestPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Edit Change Request</h1>
             <p className="text-gray-600 mt-1">
-              ID: <span className="font-mono">{params.id}</span>
+              ID: <span className="font-mono">{id}</span>
             </p>
           </div>
           <Link
-            href={`/dashboard/organization-structure/change-requests/${params.id}`}
+            href={`/dashboard/organization-structure/change-requests/${id}`}
             className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
           >
             ← Back
@@ -173,7 +177,12 @@ export default function EditChangeRequestPage({
         {req && !isEditable && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
             <p className="text-amber-800 text-sm">
-              This request is <b>{req.status}</b> and cannot be edited.
+              This request is <b>{req.status}</b> and cannot be edited. Only <b>DRAFT</b> requests can be modified.
+              {req.status === StructureRequestStatus.SUBMITTED && (
+                <span className="block mt-2">
+                  This request has been submitted and is pending approval. To make changes, you may need to cancel and recreate it, or wait for it to be rejected.
+                </span>
+              )}
             </p>
           </div>
         )}
@@ -304,7 +313,7 @@ export default function EditChangeRequestPage({
                   type="button"
                   variant="outline"
                   onClick={() =>
-                    router.push(`/dashboard/organization-structure/change-requests/${params.id}`)
+                    router.push(`/dashboard/organization-structure/change-requests/${id}`)
                   }
                   disabled={loading}
                 >

@@ -102,16 +102,20 @@ export default function ApprovalsDashboardPage() {
     );
   };
 
+  // REQ-OSM-04: Only System Admin reviews and approves requests
+  const canApprove = useMemo(
+    () => hasRole(SystemRole.SYSTEM_ADMIN),
+    [user?.roles]
+  );
+
   return (
-    <ProtectedRoute
-      allowedRoles={[SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER]}
-    >
+    <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN]}>
       <div className="container mx-auto px-6 py-8">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Approvals</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Approvals Dashboard</h1>
             <p className="text-gray-600 mt-1">
-              View approvals for a change request, assign approvers, and record decisions.
+              Review and approve change requests submitted by Managers and HR.
             </p>
           </div>
           <Link

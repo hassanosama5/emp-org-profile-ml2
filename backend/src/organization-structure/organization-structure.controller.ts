@@ -94,10 +94,7 @@ export class OrganizationStructureController {
    */
   @Get('departments/:id')
   @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
-  async getDepartmentById(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async getDepartmentById(@Param('id') id: string, @CurrentUser() user: any) {
     return this.structureService.getDepartmentById(id);
   }
 
@@ -174,10 +171,7 @@ export class OrganizationStructureController {
    */
   @Get('positions/:id')
   @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
-  async getPositionById(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async getPositionById(@Param('id') id: string, @CurrentUser() user: any) {
     return this.structureService.getPositionById(id);
   }
 
@@ -201,10 +195,7 @@ export class OrganizationStructureController {
    */
   @Delete('positions/:id')
   @Roles(SystemRole.SYSTEM_ADMIN)
-  async deactivatePosition(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async deactivatePosition(@Param('id') id: string, @CurrentUser() user: any) {
     return this.structureService.deactivatePosition(id);
   }
 
@@ -295,12 +286,13 @@ export class OrganizationStructureController {
   // ============ CHANGE REQUEST ENDPOINTS ============
 
   /**
-   * REQ-OSM-03: Manager submits change request
+   * REQ-OSM-03: Manager/HR submits change request
    * Action: Receive a Request for a new Position in the Department
    * BR 36: All changes via workflow approval
+   * Note: System Admin can directly create departments/positions, but can also use this for workflow tracking
    */
   @Post('change-requests')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.DEPARTMENT_HEAD)
   async createChangeRequest(
     @Body() dto: CreateStructureChangeRequestDto,
     @CurrentUser() user: any,
@@ -322,6 +314,16 @@ export class OrganizationStructureController {
   }
 
   /**
+   * Debug endpoint to check if change request exists (Admin only)
+   * NOTE: This must come before the /:id route to ensure proper matching
+   */
+  @Get('change-requests/:id/debug')
+  @Roles(SystemRole.SYSTEM_ADMIN)
+  async debugChangeRequest(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.structureService.debugChangeRequest(id);
+  }
+
+  /**
    * View specific change request
    */
   @Get('change-requests/:id')
@@ -330,6 +332,9 @@ export class OrganizationStructureController {
     @Param('id') id: string,
     @CurrentUser() user: any,
   ) {
+    console.log(
+      `[Controller] getChangeRequestById called with id: "${id}" (type: ${typeof id}, length: ${id?.length})`,
+    );
     return this.structureService.getChangeRequestById(id);
   }
 
@@ -368,18 +373,16 @@ export class OrganizationStructureController {
   @Post('change-requests/:id/cancel')
   @HttpCode(HttpStatus.OK)
   @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
-  async cancelChangeRequest(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async cancelChangeRequest(@Param('id') id: string, @CurrentUser() user: any) {
     return this.structureService.cancelChangeRequest(id);
   }
 
   // ============ APPROVAL ENDPOINTS ============
 
   /**
-   * Create approval (System creates on submission)
-   * System Admin assigns approvers
+   * Create approval (System Admin assigns approvers)
+   * REQ-OSM-04: System Admin assigns approvers for change requests
+   * Note: Approvals are typically auto-created when a request is submitted
    */
   @Post('approvals')
   @Roles(SystemRole.SYSTEM_ADMIN)
@@ -394,9 +397,10 @@ export class OrganizationStructureController {
    * REQ-OSM-04: System Admin makes approval decision
    * BR 36: Approval workflow enforcement
    * REQ-OSM-09: Validation rules applied
+   * Note: Only System Admin can approve/reject change requests
    */
   @Patch('approvals/:id/decision')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  @Roles(SystemRole.SYSTEM_ADMIN)
   async updateApprovalDecision(
     @Param('id') id: string,
     @Body() dto: UpdateApprovalDecisionDto,
@@ -407,9 +411,10 @@ export class OrganizationStructureController {
 
   /**
    * Get approvals for a change request
+   * REQ-OSM-04: Only System Admin can view approvals for decision-making
    */
   @Get('approvals/change-request/:changeRequestId')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(SystemRole.SYSTEM_ADMIN)
   async getRequestApprovals(
     @Param('changeRequestId') changeRequestId: string,
     @CurrentUser() user: any,

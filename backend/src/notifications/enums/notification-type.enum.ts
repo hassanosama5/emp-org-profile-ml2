@@ -89,4 +89,9 @@ export enum NotificationType {
   PROFILE_CHANGE_APPROVED = 'profile_change_approved',
   PROFILE_CHANGE_REJECTED = 'profile_change_rejected',
   PROFILE_UPDATED = 'profile_updated',
+
+  // Organization Structure Module Notifications
+  STRUCTURE_CHANGE_REQUEST_SUBMITTED = 'structure_change_request_submitted',
+  STRUCTURE_CHANGE_REQUEST_APPROVED = 'structure_change_request_approved',
+  STRUCTURE_CHANGE_REQUEST_REJECTED = 'structure_change_request_rejected',
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
+import { useAuth } from "@/lib/hooks/use-auth";
 import {
   Card,
   CardContent,
@@ -187,9 +188,23 @@ export default function PositionsPage() {
     return "Reporting: Unknown";
   };
 
+  // REQ-SANV-01, REQ-SANV-02: Department Heads can view positions (read-only)
+  // REQ-OSM-01, REQ-OSM-02: Only System Admin/HR Admin can manage
+  const { user } = useAuth();
+  const canManage = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r: string) => 
+      [SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN].includes(r as SystemRole)
+    );
+  }, [user?.roles]);
+
   return (
     <ProtectedRoute
       allowedRoles={[
+        SystemRole.SYSTEM_ADMIN,
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_MANAGER,
+        SystemRole.DEPARTMENT_HEAD,
         SystemRole.SYSTEM_ADMIN,
         SystemRole.HR_ADMIN,
         SystemRole.HR_MANAGER,
@@ -200,19 +215,21 @@ export default function PositionsPage() {
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-white-900">Positions</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Positions</h1>
               <p className="text-gray-600 mt-1">
                 Manage job positions and organizational roles
               </p>
             </div>
-            <Button
-              onClick={() =>
-                router.push("/dashboard/organization-structure/positions/new")
-              }
-              variant="primary"
-            >
-              + Create New Position
-            </Button>
+            {canManage && (
+              <Button
+                onClick={() =>
+                  router.push("/dashboard/organization-structure/positions/new")
+                }
+                variant="primary"
+              >
+                + Create New Position
+              </Button>
+            )}
           </div>
 
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -414,7 +431,7 @@ export default function PositionsPage() {
                         View
                       </Button>
 
-                      {position.isActive && (
+                      {position.isActive && canManage && (
                         <>
                           <Button
                             onClick={() =>
