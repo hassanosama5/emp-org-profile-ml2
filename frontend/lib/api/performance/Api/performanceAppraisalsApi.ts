@@ -8,44 +8,69 @@ import {
 
 const APPRAISALS_BASE_PATH = "/performance/appraisals";
 const ASSIGNMENTS_BASE_PATH = "/performance/assignments";
+const EMPLOYEE_APPRAISALS_BASE_PATH = `${APPRAISALS_BASE_PATH}/employee`;
 
 // Get single appraisal record by id
-export async function fetchAppraisalById(id: string): Promise<AppraisalRecord> {
-  const data = (await api.get(
-    `${APPRAISALS_BASE_PATH}/${id}`
-  )) as unknown as AppraisalRecord;
-  return data;
+export async function fetchAppraisalById(
+  id: string,
+): Promise<AppraisalRecord> {
+  const raw = await api.get(`${APPRAISALS_BASE_PATH}/${id}`);
+  return raw as unknown as AppraisalRecord;
 }
 
-// Save or update draft for a given assignment
+// Get ALL appraisals for the *current logged-in employee*
+// lib/api/performance/Api/performanceAppraisalsApi.ts
+export async function fetchMyAppraisals(): Promise<AppraisalRecord[]> {
+  const raw: any = await api.get(`${EMPLOYEE_APPRAISALS_BASE_PATH}/me`);
+
+  const list =
+    Array.isArray(raw) ? raw :
+    Array.isArray(raw?.data) ? raw.data :
+    Array.isArray(raw?.items) ? raw.items :
+    Array.isArray(raw?.results) ? raw.results :
+    [];
+
+  return list as AppraisalRecord[];
+}
+
+
+// Get appraisals for a specific employee profile (admin / HR view)
+export async function fetchEmployeeAppraisals(
+  employeeProfileId: string,
+): Promise<AppraisalRecord[]> {
+  const raw = await api.get(
+    `${EMPLOYEE_APPRAISALS_BASE_PATH}/${employeeProfileId}`,
+  );
+  return raw as unknown as AppraisalRecord[];
+}
+
+// Save or update draft for a given assignment (manager fills form)
 export async function upsertAppraisalRecordApi(
   assignmentId: string,
   managerProfileId: string,
-  input: UpsertAppraisalRecordInput
+  input: UpsertAppraisalRecordInput,
 ): Promise<AppraisalRecord> {
-  const data = (await api.post(
+  const raw = await api.post(
     `${ASSIGNMENTS_BASE_PATH}/${assignmentId}/records`,
     input,
     {
       params: { managerProfileId },
-    }
-  )) as unknown as AppraisalRecord;
-
-  return data;
+    },
+  );
+  return raw as unknown as AppraisalRecord;
 }
 
 // Submit completed appraisal (manager → HR)
 export async function submitAppraisalRecordApi(
   recordId: string,
-  managerProfileId: string
+  managerProfileId: string,
 ): Promise<AppraisalRecord> {
-  const data = (await api.patch(
+  const raw = await api.patch(
     `${APPRAISALS_BASE_PATH}/${recordId}/submit`,
     null,
     {
       params: { managerProfileId },
-    }
-  )) as unknown as AppraisalRecord;
-
-  return data;
+    },
+  );
+  return raw as unknown as AppraisalRecord;
 }

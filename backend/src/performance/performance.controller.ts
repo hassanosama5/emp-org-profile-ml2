@@ -174,25 +174,7 @@ export class PerformanceController {
   // ============================================================
   // REQ-PP-05, REQ-PP-13
 
-  // For HR/manager to query assignments for a specific manager
-  @Get('assignments/manager/:managerProfileId')
-  @Roles(
-    SystemRole.DEPARTMENT_HEAD,
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_EMPLOYEE,
-    SystemRole.HR_ADMIN,
-  )
-  getAssignmentsForManager(
-    @Param('managerProfileId') managerProfileId: string,
-    @Query('cycleId') cycleId?: string,
-  ) {
-    return this.performanceService.getAssignmentsForManager(
-      managerProfileId,
-      cycleId,
-    );
-  }
-
-  // Convenience endpoint for “current” manager
+  // Convenience endpoint for “current” manager (must be before :managerProfileId)
   @Get('assignments/manager/me')
   @Roles(
     SystemRole.DEPARTMENT_HEAD,
@@ -211,26 +193,25 @@ export class PerformanceController {
     );
   }
 
-  // For HR / employee to query assignments of a specific employee
-  @Get('assignments/employee/:employeeProfileId')
+  // For HR/manager to query assignments for a specific manager
+  @Get('assignments/manager/:managerProfileId')
   @Roles(
-    SystemRole.DEPARTMENT_EMPLOYEE,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
   )
-  getAssignmentsForEmployee(
-    @Param('employeeProfileId') employeeProfileId: string,
+  getAssignmentsForManager(
+    @Param('managerProfileId') managerProfileId: string,
     @Query('cycleId') cycleId?: string,
   ) {
-    return this.performanceService.getAssignmentsForEmployee(
-      employeeProfileId,
+    return this.performanceService.getAssignmentsForManager(
+      managerProfileId,
       cycleId,
     );
   }
 
-  // Convenience endpoint: current logged-in employee
+  // Convenience endpoint: current logged-in employee (must be before :employeeProfileId)
   @Get('assignments/employee/me')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
@@ -244,6 +225,25 @@ export class PerformanceController {
     @Query('cycleId') cycleId?: string,
   ) {
     const employeeProfileId = req.user?.employeeProfileId;
+    return this.performanceService.getAssignmentsForEmployee(
+      employeeProfileId,
+      cycleId,
+    );
+  }
+
+  // For HR / employee to query assignments of a specific employee
+  @Get('assignments/employee/:employeeProfileId')
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+  )
+  getAssignmentsForEmployee(
+    @Param('employeeProfileId') employeeProfileId: string,
+    @Query('cycleId') cycleId?: string,
+  ) {
     return this.performanceService.getAssignmentsForEmployee(
       employeeProfileId,
       cycleId,
@@ -307,6 +307,22 @@ export class PerformanceController {
     return this.performanceService.getAppraisalById(id);
   }
 
+  // Convenience endpoint: current logged-in employee’s history (must be before :employeeProfileId)
+  @Get('appraisals/employee/me')
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+  )
+  getCurrentEmployeeAppraisals(@Req() req: any) {
+    const employeeProfileId = req.user?.employeeProfileId;
+    return this.performanceService.getEmployeeAppraisals(
+      employeeProfileId,
+    );
+  }
+
   // Employee view of their whole history (REQ-OD-01, REQ-OD-08)
   @Get('appraisals/employee/:employeeProfileId')
   @Roles(
@@ -319,22 +335,6 @@ export class PerformanceController {
   getEmployeeAppraisals(
     @Param('employeeProfileId') employeeProfileId: string,
   ) {
-    return this.performanceService.getEmployeeAppraisals(
-      employeeProfileId,
-    );
-  }
-
-  // Convenience endpoint: current logged-in employee’s history
-  @Get('appraisals/employee/me')
-  @Roles(
-    SystemRole.DEPARTMENT_EMPLOYEE,
-    SystemRole.DEPARTMENT_HEAD,
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_EMPLOYEE,
-    SystemRole.HR_ADMIN,
-  )
-  getCurrentEmployeeAppraisals(@Req() req: any) {
-    const employeeProfileId = req.user?.employeeProfileId;
     return this.performanceService.getEmployeeAppraisals(
       employeeProfileId,
     );
