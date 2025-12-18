@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shared/ui/Tabs";
 import { Input } from "@/components/shared/ui/Input";
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
+import { useAuth } from "@/lib/hooks/use-auth";
 import { DepartmentResponseDto, PositionResponseDto } from "@/types/organization-structure";
+import { employeeProfileApi } from "@/lib/api/employee-profile/profile";
 
 // Helper function to get top-level positions (positions that don't report to anyone)
 const getTopLevelPositions = (positions: PositionResponseDto[]) => {
@@ -29,19 +31,58 @@ const getSubordinatePositions = (positions: PositionResponseDto[], parentPositio
 
 export default function HierarchyDashboardPage() {
   const router = useRouter();
-  const { getDepartments, getPositions, loading, error } = useOrganizationStructure();
+  const { user } = useAuth();
+  const { getDepartments, getPositions, getPositionAssignments, loading, error } = useOrganizationStructure();
   
   const [viewType, setViewType] = useState<"chart" | "list" | "tree">("chart");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [departments, setDepartments] = useState<DepartmentResponseDto[]>([]);
   const [positions, setPositions] = useState<PositionResponseDto[]>([]);
+  const [allDepartments, setAllDepartments] = useState<DepartmentResponseDto[]>([]);
+  const [allPositions, setAllPositions] = useState<PositionResponseDto[]>([]);
+  const [positionAssignments, setPositionAssignments] = useState<Record<string, any[]>>({});
+  const [userProfile, setUserProfile] = useState<any>(null);
   const exportContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Determine user role and permissions
+  const hasRole = (role: SystemRole | string): boolean => {
+    if (!user?.roles) return false;
+    return user.roles.some((userRole) => {
+      if (typeof userRole === "string" && typeof role === "string") {
+        return userRole.toLowerCase() === role.toLowerCase();
+      }
+      return userRole === role;
+    });
+  };
+  
+  const isSystemAdmin = hasRole(SystemRole.SYSTEM_ADMIN);
+  const isHRAdmin = hasRole(SystemRole.HR_ADMIN);
+  const isHRManager = hasRole(SystemRole.HR_MANAGER);
+  const isDepartmentHead = hasRole(SystemRole.DEPARTMENT_HEAD);
+  const isEmployee = hasRole(SystemRole.DEPARTMENT_EMPLOYEE);
+  
+  // BR 41: Role-based access - determine what data user can see
+  const canSeeFullStructure = isSystemAdmin || isHRAdmin;
+  const canSeeTeamStructure = isHRManager || isDepartmentHead;
+  const canSeeLimitedView = isEmployee;
 
   useEffect(() => {
+    fetchUserProfile();
     fetchHierarchyData();
     fetchPositions();
-  }, []);
+    fetchAllDataForStats();
+  }, [user]);
+  
+  const fetchUserProfile = async () => {
+    if (!user?.userId && !user?.id) return;
+    try {
+      const profile = await employeeProfileApi.getMyProfile();
+      setUserProfile(profile);
+    } catch (err) {
+      console.error("Failed to fetch user profile:", err);
+    }
+  };
 
   const fetchHierarchyData = async () => {
     try {
@@ -53,19 +94,52 @@ export default function HierarchyDashboardPage() {
     }
   };
 
+  const fetchAllDataForStats = async () => {
+    try {
+      // Fetch all departments (active and inactive) for accurate statistics
+      const allDepts = await getDepartments();
+      setAllDepartments(allDepts || []);
+      
+      // Fetch all positions (active and inactive) for accurate statistics
+      const allPos = await getPositions();
+      setAllPositions(allPos || []);
+    } catch (err) {
+      console.error("Failed to fetch all data for statistics:", err);
+      // Fallback to active data if fetching all fails
+      setAllDepartments(departments);
+      setAllPositions(positions);
+    }
+  };
+
   const fetchPositions = async () => {
     try {
       const data = await getPositions({ isActive: true });
       setPositions(data || []);
+      
+      // Fetch assignments for all positions
+      const assignmentsMap: Record<string, any[]> = {};
+      for (const pos of data || []) {
+        const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
+        try {
+          const assignments = await getPositionAssignments(posId);
+          const activeAssignments = assignments.filter((a: any) => !a.endDate || new Date(a.endDate) > new Date());
+          if (activeAssignments.length > 0) {
+            assignmentsMap[posId] = activeAssignments;
+          }
+        } catch (err) {
+          console.error(`Failed to fetch assignments for position ${posId}:`, err);
+        }
+      }
+      setPositionAssignments(assignmentsMap);
     } catch (err) {
       console.error("Failed to fetch positions:", err);
       setPositions([]);
     }
   };
 
-  // Helper function to get positions for a department
+  // Helper function to get positions for a department (using role-filtered positions)
   const getPositionsForDepartment = (departmentId: string) => {
-    return positions.filter(pos => {
+    return roleFilteredPositions.filter(pos => {
       const deptId = typeof pos.departmentId === 'string' 
         ? pos.departmentId 
         : (pos.departmentId as any)?._id || (pos.departmentId as any)?.id;
@@ -78,7 +152,158 @@ export default function HierarchyDashboardPage() {
     return typeof dept._id === 'string' ? dept._id : (dept._id as any)?.toString() || '';
   };
 
-  const filteredDepartments = departments.filter((dept) => {
+  // BR 41: Role-based filtering - filter departments based on user role
+  const roleFilteredDepartments = useMemo(() => {
+    if (canSeeFullStructure) {
+      // System Admin and HR Admin see all departments
+      return departments;
+    }
+    
+    if (canSeeTeamStructure && userProfile?.primaryDepartmentId) {
+      // Managers and Department Heads see their department and team structure
+      const userDeptId = typeof userProfile.primaryDepartmentId === 'string' 
+        ? userProfile.primaryDepartmentId 
+        : (userProfile.primaryDepartmentId as any)?._id?.toString() || 
+          (userProfile.primaryDepartmentId as any)?.toString() || '';
+      
+      // Get user's position to find team structure
+      const userPositionId = typeof userProfile?.primaryPositionId === 'string'
+        ? userProfile.primaryPositionId
+        : (userProfile?.primaryPositionId as any)?._id?.toString() ||
+          (userProfile?.primaryPositionId as any)?.toString() || '';
+      
+      // Find positions that report to user's position (team members)
+      const teamPositionIds = new Set<string>();
+      if (userPositionId) {
+        positions.forEach(pos => {
+          const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
+          const reportsToId = typeof pos.reportsToPositionId === 'string'
+            ? pos.reportsToPositionId
+            : (pos.reportsToPositionId as any)?._id?.toString() || '';
+          
+          if (reportsToId === userPositionId) {
+            teamPositionIds.add(posId);
+          }
+        });
+      }
+      
+      // Include departments that contain user's position or team positions
+      return departments.filter(dept => {
+        const deptId = getDepartmentId(dept);
+        
+        // Include user's own department
+        if (deptId === userDeptId) {
+          return true;
+        }
+        
+        // Include departments that have positions reporting to user
+        // Use raw positions array to avoid circular dependency
+        const deptPositions = positions.filter(pos => {
+          const posDeptId = typeof pos.departmentId === 'string' 
+            ? pos.departmentId 
+            : (pos.departmentId as any)?._id?.toString() || 
+              (pos.departmentId as any)?.id || '';
+          return posDeptId === deptId;
+        });
+        
+        return deptPositions.some(pos => {
+          const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
+          return teamPositionIds.has(posId);
+        });
+      });
+    }
+    
+    if (canSeeLimitedView && userProfile?.primaryDepartmentId) {
+      // Employees see only their own department
+      const userDeptId = typeof userProfile.primaryDepartmentId === 'string' 
+        ? userProfile.primaryDepartmentId 
+        : (userProfile.primaryDepartmentId as any)?._id?.toString() || 
+          (userProfile.primaryDepartmentId as any)?.toString() || '';
+      
+      return departments.filter(dept => {
+        const deptId = getDepartmentId(dept);
+        return deptId === userDeptId;
+      });
+    }
+    
+    // Default: return empty array if no access
+    return [];
+  }, [departments, positions, canSeeFullStructure, canSeeTeamStructure, canSeeLimitedView, userProfile]);
+  
+  // BR 41: Role-based filtering - filter positions based on user role
+  const roleFilteredPositions = useMemo(() => {
+    if (canSeeFullStructure) {
+      // System Admin and HR Admin see all positions
+      return positions;
+    }
+    
+    if (canSeeTeamStructure && userProfile?.primaryDepartmentId) {
+      // Managers and Department Heads see positions in their department and team structure
+      const userDeptId = typeof userProfile.primaryDepartmentId === 'string' 
+        ? userProfile.primaryDepartmentId 
+        : (userProfile.primaryDepartmentId as any)?._id?.toString() || 
+          (userProfile.primaryDepartmentId as any)?.toString() || '';
+      
+      // Get user's position to find team structure
+      const userPositionId = typeof userProfile?.primaryPositionId === 'string'
+        ? userProfile.primaryPositionId
+        : (userProfile?.primaryPositionId as any)?._id?.toString() ||
+          (userProfile?.primaryPositionId as any)?.toString() || '';
+      
+      return positions.filter(pos => {
+        const deptId = typeof pos.departmentId === 'string' 
+          ? pos.departmentId 
+          : (pos.departmentId as any)?._id?.toString() || 
+            (pos.departmentId as any)?.id || '';
+        
+        // Include positions in user's department
+        if (deptId === userDeptId) {
+          return true;
+        }
+        
+        // Include positions that report to user's position (team members)
+        if (userPositionId) {
+          const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
+          const reportsToId = typeof pos.reportsToPositionId === 'string'
+            ? pos.reportsToPositionId
+            : (pos.reportsToPositionId as any)?._id?.toString() || '';
+          
+          // Include if position reports to user's position
+          if (reportsToId === userPositionId) {
+            return true;
+          }
+          
+          // Include if position is user's own position
+          if (posId === userPositionId) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+    }
+    
+    if (canSeeLimitedView && userProfile?.primaryDepartmentId) {
+      // Employees see positions in their department only
+      const userDeptId = typeof userProfile.primaryDepartmentId === 'string' 
+        ? userProfile.primaryDepartmentId 
+        : (userProfile.primaryDepartmentId as any)?._id?.toString() || 
+          (userProfile.primaryDepartmentId as any)?.toString() || '';
+      
+      return positions.filter(pos => {
+        const deptId = typeof pos.departmentId === 'string' 
+          ? pos.departmentId 
+          : (pos.departmentId as any)?._id?.toString() || 
+            (pos.departmentId as any)?.id || '';
+        return deptId === userDeptId;
+      });
+    }
+    
+    // Default: return empty array if no access
+    return [];
+  }, [positions, canSeeFullStructure, canSeeTeamStructure, canSeeLimitedView, userProfile]);
+  
+  const filteredDepartments = roleFilteredDepartments.filter((dept) => {
     const name = dept.name?.toLowerCase() || '';
     const code = dept.code?.toLowerCase() || '';
     const query = searchQuery.toLowerCase();
@@ -157,6 +382,264 @@ export default function HierarchyDashboardPage() {
     doc.head.appendChild(style);
   };
 
+  // Build visual organizational chart for export (uses role-filtered data)
+  const buildTreeStructure = () => {
+    const lines: string[] = [];
+    
+    // CSS Styles
+    lines.push(`
+      <style>
+        .org-chart-container {
+          font-family: Arial, sans-serif;
+          padding: 40px;
+          background: #ffffff;
+        }
+        .org-level {
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          margin-bottom: 60px;
+          position: relative;
+        }
+        .org-box {
+          background: #e5e7eb;
+          border: 3px solid #000000;
+          border-radius: 4px;
+          padding: 20px 30px;
+          text-align: center;
+          font-weight: bold;
+          color: #000000;
+          min-width: 180px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .org-box.ceo {
+          background: #d1d5db;
+          font-size: 24px;
+          padding: 30px 40px;
+          min-width: 250px;
+        }
+        .org-box.department {
+          background: #e5e7eb;
+          font-size: 18px;
+          padding: 20px 30px;
+        }
+        .org-box.position {
+          background: #f3f4f6;
+          font-size: 16px;
+          padding: 15px 25px;
+          min-width: 150px;
+        }
+        .org-connector {
+          position: absolute;
+          background: #000000;
+        }
+        .org-connector.vertical {
+          width: 3px;
+          height: 40px;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        .org-connector.horizontal {
+          height: 3px;
+          width: 100%;
+          top: 50%;
+          transform: translateY(-50%);
+        }
+        .org-level-wrapper {
+          position: relative;
+          display: flex;
+          gap: 40px;
+          align-items: flex-start;
+        }
+        .org-box-wrapper {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .org-box-wrapper.has-children::after {
+          content: '';
+          position: absolute;
+          width: 3px;
+          height: 40px;
+          background: #000000;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        .org-box-wrapper.has-children::before {
+          content: '';
+          position: absolute;
+          width: 100%;
+          height: 3px;
+          background: #000000;
+          top: calc(100% + 40px);
+          left: 0;
+        }
+        .org-box-wrapper:first-child::before {
+          left: 50%;
+          width: 50%;
+        }
+        .org-box-wrapper:last-child::before {
+          width: 50%;
+        }
+        .org-box-wrapper:only-child::before {
+          display: none;
+        }
+        .org-box-wrapper:only-child::after {
+          display: none;
+        }
+        .employee-name {
+          font-size: 14px;
+          font-weight: normal;
+          color: #4b5563;
+          margin-top: 8px;
+          font-style: italic;
+        }
+        .vacant {
+          color: #9ca3af;
+        }
+      </style>
+    `);
+    
+    lines.push('<div class="org-chart-container">');
+    lines.push('<h1 style="text-align: center; font-size: 32px; margin-bottom: 50px; color: #111827;">Organizational Structure</h1>');
+    
+    // Get top-level positions (CEO or top managers) - use role-filtered positions
+    const topLevelPositions = getTopLevelPositions(roleFilteredPositions);
+    
+    if (topLevelPositions.length === 0 || roleFilteredDepartments.length === 0) {
+      lines.push('<p style="text-align: center; color: #6b7280;">No organizational structure data available.</p>');
+      lines.push('</div>');
+      return lines.join('');
+    }
+    
+    // Use the first top-level position as CEO (or create a virtual CEO if needed)
+    const ceoPosition = topLevelPositions[0];
+    const ceoPosId = typeof ceoPosition._id === 'string' ? ceoPosition._id : (ceoPosition._id as any)?.toString() || '';
+    const ceoAssignments = positionAssignments[ceoPosId] || [];
+    const ceoEmployeeName = ceoAssignments.length > 0 
+      ? (ceoAssignments[0].employeeProfileId as any)?.fullName || 
+        (ceoAssignments[0].employeeProfileId as any)?.firstName + ' ' + 
+        (ceoAssignments[0].employeeProfileId as any)?.lastName || 
+        null
+      : null;
+    
+    // 1st Level: CEO (centered at top)
+    lines.push(`
+      <div style="display: flex; justify-content: center; margin-bottom: 60px; position: relative;">
+        <div style="position: relative;">
+          <div class="org-box ceo" style="background: #d1d5db; border: 3px solid #000000; padding: 30px 50px; text-align: center; font-weight: bold; font-size: 24px; min-width: 200px;">
+            ${ceoPosition.title || 'CEO'}
+            ${ceoEmployeeName ? `<div style="font-size: 16px; font-weight: normal; color: #4b5563; margin-top: 8px;">${ceoEmployeeName}</div>` : ''}
+          </div>
+          <div style="position: absolute; left: 50%; top: 100%; transform: translateX(-50%); width: 3px; height: 50px; background: #000000;"></div>
+        </div>
+      </div>
+    `);
+    
+    // 2nd Level: Departments - use role-filtered departments
+    const departmentsWithPositions = roleFilteredDepartments.filter(dept => {
+      const deptId = getDepartmentId(dept);
+      const deptPositions = getPositionsForDepartment(deptId);
+      return deptPositions.length > 0;
+    });
+    
+    if (departmentsWithPositions.length > 0) {
+      // Horizontal connector line
+      const deptCount = departmentsWithPositions.length;
+      const connectorWidth = deptCount > 1 ? `${(deptCount - 1) * 220}px` : '0px';
+      
+      lines.push(`
+        <div style="display: flex; justify-content: center; margin-bottom: 60px; position: relative;">
+          <div style="position: relative; display: flex; gap: 40px; align-items: flex-start;">
+            ${departmentsWithPositions.map((dept, deptIndex) => {
+              const deptId = getDepartmentId(dept);
+              const deptPositions = getPositionsForDepartment(deptId);
+              const isLast = deptIndex === departmentsWithPositions.length - 1;
+              
+              return `
+                <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+                  ${deptIndex === 0 ? `
+                    <div style="position: absolute; left: 50%; top: -50px; transform: translateX(-50%); width: 3px; height: 50px; background: #000000;"></div>
+                    <div style="position: absolute; left: 50%; top: -50px; width: ${deptCount > 1 ? '50%' : '0'}; height: 3px; background: #000000;"></div>
+                  ` : ''}
+                  ${!isLast && deptCount > 1 ? `
+                    <div style="position: absolute; left: 50%; top: -50px; width: 50%; height: 3px; background: #000000;"></div>
+                  ` : ''}
+                  ${deptIndex > 0 && deptIndex < deptCount - 1 ? `
+                    <div style="position: absolute; left: 50%; top: -50px; transform: translateX(-50%); width: 3px; height: 50px; background: #000000;"></div>
+                  ` : ''}
+                  ${isLast && deptCount > 1 ? `
+                    <div style="position: absolute; right: 50%; top: -50px; width: 50%; height: 3px; background: #000000;"></div>
+                    <div style="position: absolute; left: 50%; top: -50px; transform: translateX(-50%); width: 3px; height: 50px; background: #000000;"></div>
+                  ` : ''}
+                  
+                  <div class="org-box department" style="background: #e5e7eb; border: 3px solid #000000; padding: 20px 30px; text-align: center; font-weight: bold; font-size: 18px; min-width: 180px;">
+                    ${dept.name}
+                    ${dept.code ? `<div style="font-size: 14px; font-weight: normal; color: #6b7280; margin-top: 5px;">${dept.code}</div>` : ''}
+                  </div>
+                  
+                  ${deptPositions.length > 0 ? `
+                    <div style="position: absolute; left: 50%; top: 100%; transform: translateX(-50%); width: 3px; height: 50px; background: #000000;"></div>
+                    ${deptPositions.length > 1 ? `
+                      <div style="position: absolute; left: 50%; top: calc(100% + 50px); width: ${(deptPositions.length - 1) * 180}px; height: 3px; background: #000000; transform: translateX(-50%);"></div>
+                    ` : ''}
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `);
+      
+      // 3rd Level: Positions/Jobs under each department
+      lines.push(`
+        <div style="display: flex; justify-content: center; position: relative;">
+          <div style="position: relative; display: flex; gap: 40px; align-items: flex-start;">
+            ${departmentsWithPositions.map((dept, deptIndex) => {
+              const deptId = getDepartmentId(dept);
+              const deptPositions = getPositionsForDepartment(deptId);
+              
+              return `
+                <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+                  ${deptPositions.map((pos, posIndex) => {
+                    const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
+                    const assignments = positionAssignments[posId] || [];
+                    const employeeName = assignments.length > 0 
+                      ? (assignments[0].employeeProfileId as any)?.fullName || 
+                        (assignments[0].employeeProfileId as any)?.firstName + ' ' + 
+                        (assignments[0].employeeProfileId as any)?.lastName || 
+                        null
+                      : null;
+                    
+                    return `
+                      <div style="position: relative;">
+                        ${posIndex === 0 ? `
+                          <div style="position: absolute; left: 50%; top: -50px; transform: translateX(-50%); width: 3px; height: 50px; background: #000000;"></div>
+                        ` : ''}
+                        <div class="org-box position" style="background: #f3f4f6; border: 3px solid #000000; padding: 15px 25px; text-align: center; font-weight: bold; font-size: 16px; min-width: 150px;">
+                          ${pos.title}
+                          ${pos.code ? `<div style="font-size: 12px; font-weight: normal; color: #6b7280; margin-top: 4px;">${pos.code}</div>` : ''}
+                          ${employeeName ? `<div style="font-size: 14px; font-weight: normal; color: #4b5563; margin-top: 8px; font-style: italic;">${employeeName}</div>` : '<div style="font-size: 14px; font-weight: normal; color: #9ca3af; margin-top: 8px; font-style: italic;">Vacant</div>'}
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `);
+    }
+    
+    lines.push('</div>');
+    
+    return lines.join('');
+  };
+
   // Export functions
   const exportAsPDF = async () => {
     try {
@@ -175,47 +658,13 @@ export default function HierarchyDashboardPage() {
       header.innerHTML = `
         <h1 style="font-size: 32px; font-weight: bold; color: #111827; margin-bottom: 10px;">Organization Chart</h1>
         <p style="color: #6b7280; font-size: 14px; margin-bottom: 5px;">Generated on: ${new Date().toLocaleString()}</p>
-        <p style="color: #9ca3af; font-size: 12px; margin-bottom: 30px;">View: ${viewType === 'chart' ? 'Chart View' : viewType === 'list' ? 'List View' : 'Tree View'}</p>
       `;
       exportDiv.appendChild(header);
       
-      // Clone the current view content
-      const contentArea = document.querySelector('.export-content') || document.querySelector('[class*="space-y-8"]');
-      if (contentArea) {
-        const clonedContent = contentArea.cloneNode(true) as HTMLElement;
-        // Remove buttons and controls from clone
-        clonedContent.querySelectorAll('button, input, select, .export-header').forEach(el => el.remove());
-        exportDiv.appendChild(clonedContent);
-      }
-      
-      // Add statistics summary
-      const stats = document.createElement('div');
-      stats.style.marginTop = '30px';
-      stats.style.padding = '20px';
-      stats.style.backgroundColor = '#f9fafb';
-      stats.style.borderRadius = '8px';
-      stats.innerHTML = `
-        <h2 style="font-size: 20px; font-weight: bold; color: #111827; margin-bottom: 15px;">Summary Statistics</h2>
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #2563eb; margin-bottom: 5px;">${departments.length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Total Departments</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #16a34a; margin-bottom: 5px;">${positions.length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Total Positions</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #9333ea; margin-bottom: 5px;">${positions.filter(p => p.isActive).length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Active Positions</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #d97706; margin-bottom: 5px;">${departments.filter(d => d.isActive).length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Active Departments</div>
-          </div>
-        </div>
-      `;
-      exportDiv.appendChild(stats);
+      // Add tree structure
+      const treeContent = document.createElement('div');
+      treeContent.innerHTML = buildTreeStructure();
+      exportDiv.appendChild(treeContent);
       
       document.body.appendChild(exportDiv);
       
@@ -332,47 +781,13 @@ export default function HierarchyDashboardPage() {
       header.innerHTML = `
         <h1 style="font-size: 32px; font-weight: bold; color: #111827; margin-bottom: 10px;">Organization Chart</h1>
         <p style="color: #6b7280; font-size: 14px; margin-bottom: 5px;">Generated on: ${new Date().toLocaleString()}</p>
-        <p style="color: #9ca3af; font-size: 12px; margin-bottom: 30px;">View: ${viewType === 'chart' ? 'Chart View' : viewType === 'list' ? 'List View' : 'Tree View'}</p>
       `;
       exportDiv.appendChild(header);
       
-      // Clone the current view content
-      const contentArea = document.querySelector('.export-content') || document.querySelector('[class*="space-y-8"]');
-      if (contentArea) {
-        const clonedContent = contentArea.cloneNode(true) as HTMLElement;
-        // Remove buttons and controls from clone
-        clonedContent.querySelectorAll('button, input, select, .export-header').forEach(el => el.remove());
-        exportDiv.appendChild(clonedContent);
-      }
-      
-      // Add statistics summary
-      const stats = document.createElement('div');
-      stats.style.marginTop = '30px';
-      stats.style.padding = '20px';
-      stats.style.backgroundColor = '#f9fafb';
-      stats.style.borderRadius = '8px';
-      stats.innerHTML = `
-        <h2 style="font-size: 20px; font-weight: bold; color: #111827; margin-bottom: 15px;">Summary Statistics</h2>
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #2563eb; margin-bottom: 5px;">${departments.length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Total Departments</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #16a34a; margin-bottom: 5px;">${positions.length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Total Positions</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #9333ea; margin-bottom: 5px;">${positions.filter(p => p.isActive).length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Active Positions</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: bold; color: #d97706; margin-bottom: 5px;">${departments.filter(d => d.isActive).length}</div>
-            <div style="font-size: 12px; color: #6b7280;">Active Departments</div>
-          </div>
-        </div>
-      `;
-      exportDiv.appendChild(stats);
+      // Add tree structure
+      const treeContent = document.createElement('div');
+      treeContent.innerHTML = buildTreeStructure();
+      exportDiv.appendChild(treeContent);
       
       document.body.appendChild(exportDiv);
       
@@ -492,7 +907,7 @@ export default function HierarchyDashboardPage() {
         totalPositions: positions.length,
         activePositions: positions.filter(p => p.isActive).length,
       },
-      departments: departments.map(dept => {
+      departments: roleFilteredDepartments.map(dept => {
         const deptId = getDepartmentId(dept);
         const deptPositions = getPositionsForDepartment(deptId);
         return {
@@ -507,13 +922,13 @@ export default function HierarchyDashboardPage() {
           })),
         };
       }),
-      positions: positions.map(pos => {
+      positions: roleFilteredPositions.map(pos => {
         const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
         const reportsToId = typeof pos.reportsToPositionId === 'string' 
           ? pos.reportsToPositionId 
           : (pos.reportsToPositionId as any)?._id?.toString() || '';
         const reportsTo = reportsToId 
-          ? positions.find(p => {
+          ? roleFilteredPositions.find(p => {
               const pId = typeof p._id === 'string' ? p._id : (p._id as any)?.toString() || '';
               return pId === reportsToId;
             })?.title || 'N/A'
@@ -556,6 +971,37 @@ export default function HierarchyDashboardPage() {
               <p className="text-gray-600 mt-1">
                 Visualize your organizational structure and reporting lines
               </p>
+              {/* BR 41: Role-based view indicator */}
+              {!canSeeFullStructure && (
+                <div className="mt-2">
+                  {canSeeTeamStructure && (
+                    <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      Viewing: Team Structure Only
+                    </div>
+                  )}
+                  {canSeeLimitedView && (
+                    <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      Viewing: Limited View (Your Department Only)
+                    </div>
+                  )}
+                </div>
+              )}
+              {canSeeFullStructure && (
+                <div className="mt-2">
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Viewing: Full Organizational Structure
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex gap-3">
               <Button
@@ -857,9 +1303,9 @@ export default function HierarchyDashboardPage() {
                         )}
 
                         {/* Department-based Tree */}
-                        {departments.length > 0 && (
+                        {roleFilteredDepartments.length > 0 && (
                           <div className="space-y-8">
-                            {departments.map((dept) => {
+                            {roleFilteredDepartments.map((dept) => {
                               const deptId = getDepartmentId(dept);
                               const deptPositions = getPositionsForDepartment(deptId);
                               const topLevelDeptPositions = deptPositions.filter(p => !p.reportsToPositionId);
@@ -874,7 +1320,7 @@ export default function HierarchyDashboardPage() {
                                   <div className="space-y-3">
                                     {topLevelDeptPositions.map((pos) => {
                                       const posId = typeof pos._id === 'string' ? pos._id : (pos._id as any)?.toString() || '';
-                                      const subordinates = getSubordinatePositions(positions, posId);
+                                      const subordinates = getSubordinatePositions(roleFilteredPositions, posId);
                                       return (
                                         <div key={posId} className="bg-white rounded-lg p-4 border border-gray-200">
                                           <div className="flex items-center gap-2 mb-2">
@@ -910,9 +1356,11 @@ export default function HierarchyDashboardPage() {
                           </div>
                         )}
 
-                        {getTopLevelPositions(positions).length === 0 && departments.length === 0 && (
+                        {getTopLevelPositions(roleFilteredPositions).length === 0 && roleFilteredDepartments.length === 0 && (
                           <div className="text-center py-12 text-gray-500">
-                            No organizational structure data available.
+                            {canSeeLimitedView || canSeeTeamStructure 
+                              ? "No organizational structure data available for your role." 
+                              : "No organizational structure data available."}
                         </div>
                         )}
                       </>
@@ -928,25 +1376,29 @@ export default function HierarchyDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="text-center">
                     <div className="text-3xl font-bold text-blue-600">
-                      {departments.length}
+                      {allDepartments.length > 0 ? allDepartments.length : departments.length}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">Total Departments</div>
                   </div>
                   <div className="text-center">
                     <div className="text-3xl font-bold text-green-600">
-                      {positions.length}
+                      {allPositions.length > 0 ? allPositions.length : positions.length}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">Total Positions</div>
                   </div>
                   <div className="text-center">
                     <div className="text-3xl font-bold text-purple-600">
-                      {positions.filter(p => p.isActive).length}
+                      {allPositions.length > 0 
+                        ? allPositions.filter(p => p.isActive !== false).length 
+                        : positions.filter(p => p.isActive !== false).length}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">Active Positions</div>
                   </div>
                   <div className="text-center">
                     <div className="text-3xl font-bold text-amber-600">
-                      {departments.filter(d => d.isActive).length}
+                      {allDepartments.length > 0 
+                        ? allDepartments.filter(d => d.isActive !== false).length 
+                        : departments.filter(d => d.isActive !== false).length}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">Active Departments</div>
                   </div>
