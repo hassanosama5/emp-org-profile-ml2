@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/shared/ui/Input";
 import { Textarea } from "@/components/leaves/Textarea";
 import { Button } from "@/components/shared/ui/Button";
 import { CardContent, CardHeader, CardTitle, CardDescription } from "@/components/shared/ui/Card";
 import { DepartmentResponseDto } from "@/types/organization-structure";
+import { useAuth } from "@/lib/hooks/use-auth";
+import { SystemRole } from "@/types";
 
 interface DepartmentFormProps {
   initialData?: DepartmentResponseDto;
@@ -24,6 +26,16 @@ export function DepartmentForm({
   isEditMode = false,
   onCancel,
 }: DepartmentFormProps) {
+  const { user } = useAuth();
+  
+  // Only System Admin can edit codes
+  const canEditCode = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r: string) => 
+      String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase()
+    );
+  }, [user?.roles]);
+
   const [formData, setFormData] = useState({
     code: "",
     name: "",
@@ -120,7 +132,7 @@ export function DepartmentForm({
 
           <div className="space-y-2">
             <label htmlFor="code" className="block text-sm font-medium text-gray-700">
-              Department Code *
+              Department Code * {!canEditCode && isEditMode && <span className="text-xs text-gray-500">(System Admin only)</span>}
             </label>
             <Input
               id="code"
@@ -129,12 +141,15 @@ export function DepartmentForm({
               onChange={handleChange}
               placeholder="e.g., HR, IT, FINANCE"
               className={`w-full ${formErrors.code ? "border-red-300" : ""}`}
-              disabled={loading || isEditMode}
+              disabled={loading || (isEditMode && !canEditCode)}
               required
+              readOnly={isEditMode && !canEditCode}
             />
             {formErrors.code && <p className="text-sm text-red-600">{formErrors.code}</p>}
             <p className="text-xs text-gray-500">
-              Unique identifier for the department. Use uppercase letters, numbers, hyphens, or underscores.
+              {isEditMode && !canEditCode 
+                ? "Department codes can only be changed by System Admin."
+                : "Unique identifier for the department. Use uppercase letters, numbers, hyphens, or underscores."}
             </p>
           </div>
 

@@ -367,6 +367,88 @@ export const employeeProfileApi = {
     }
   },
 
+  // ============================================
+  // CANDIDATES (Talent Pool) 
+  //zawedt dol
+  // ============================================
+  
+  // Get all candidates with optional filters
+  getAllCandidates: async (params?: {
+    status?: string;
+    departmentId?: string;
+    positionId?: string;
+    search?: string;
+  }) => {
+    try {
+      console.log("🔍 getAllCandidates called with params:", params);
+      const response = await api.get("/employee-profile/candidate", { params });
+      console.log("✅ getAllCandidates response:", response);
+      console.log("✅ getAllCandidates response type:", typeof response);
+      console.log("✅ getAllCandidates response keys:", response && typeof response === "object" ? Object.keys(response) : "N/A");
+      
+      // The API interceptor already extracts response.data, so response is the backend's response.data
+      // Backend returns: { message: 'Candidates retrieved successfully', data: candidates[] }
+      // After interceptor: response = { message: '...', data: candidates[] }
+      let data = response;
+      
+      if (response && typeof response === "object") {
+        // If response has a 'data' property, extract it
+        if ("data" in response) {
+          data = response.data;
+          console.log("✅ Extracted data from response.data:", data);
+          console.log("✅ Data is array:", Array.isArray(data));
+        } else if (Array.isArray(response)) {
+          // If response is already an array, use it directly
+          data = response;
+          console.log("✅ Response is already an array");
+        }
+      }
+      
+      const candidates = Array.isArray(data) ? data : [];
+      console.log(`✅ getAllCandidates returning ${candidates.length} candidates`);
+      if (candidates.length > 0) {
+        console.log("✅ First candidate sample:", candidates[0]);
+      }
+      return candidates;
+    } catch (error: any) {
+      // Enhanced error logging
+      console.error("❌ Error in getAllCandidates - Full Error Object:", error);
+      console.error("❌ Error message:", error?.message);
+      console.error("❌ Error status:", error?.status);
+      console.error("❌ Error response status:", error?.response?.status || error?.originalError?.response?.status);
+      console.error("❌ Error response data:", error?.responseData || error?.response?.data || error?.originalError?.response?.data);
+      console.error("❌ Error response headers:", error?.response?.headers || error?.originalError?.response?.headers);
+      console.error("❌ Error config:", error?.config || error?.originalError?.config);
+      console.error("❌ Error stack:", error?.stack);
+      
+      // Check for specific error types
+      const status = error?.status || error?.response?.status || error?.originalError?.response?.status;
+      if (status === 401) {
+        console.error("❌ Authentication failed - token may be invalid or expired");
+        console.error("   Please check if you are logged in and your token is valid");
+      } else if (status === 403) {
+        console.error("❌ Permission denied - user may not have required role");
+        console.error("   Required roles: HR_EMPLOYEE, HR_MANAGER, SYSTEM_ADMIN, or RECRUITER");
+      } else if (status === 404) {
+        console.error("❌ Endpoint not found - check if backend route exists");
+        console.error("   Expected endpoint: GET /api/v1/employee-profile/candidate");
+      } else if (status === 500) {
+        console.error("❌ Server error - check backend logs");
+      } else if (!status && !error?.response && !error?.originalError?.response) {
+        console.error("❌ Network error - backend may be down or unreachable");
+        console.error("   Check if backend is running on:", process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1");
+      }
+      
+      // Re-throw with more context for UI
+      throw error;
+    }
+  },
+
+  // Get candidate by ID
+  getCandidateById: async (id: string) => {
+    const response = await api.get(`/employee-profile/candidate/${id}`);
+    return extractData(response) || response;
+  },
   // ==================== QUALIFICATION METHODS ====================
 
   // Get my qualifications

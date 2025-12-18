@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
@@ -66,19 +66,17 @@ const HierNode = ({
   );
 };
 
-export default function PositionHierarchyPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function PositionHierarchyPage() {
+  const params = useParams();
   const router = useRouter();
   const { getPositionHierarchy, loading, error, clearError } =
     useOrganizationStructure();
   const [tree, setTree] = useState<Node | null>(null);
+  const id = params.id as string;
 
   const fetchTree = async () => {
     try {
-      const data = await getPositionHierarchy(params.id);
+      const data = await getPositionHierarchy(id);
       setTree(data as any);
     } catch (e) {
       console.error("Failed to fetch position hierarchy:", e);
@@ -88,7 +86,7 @@ export default function PositionHierarchyPage({
   useEffect(() => {
     fetchTree();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id]);
+  }, [id]);
 
   return (
     <ProtectedRoute

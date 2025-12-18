@@ -34,9 +34,9 @@ export default function OverrideDecisionDialog({
   const [loadingDetails, setLoadingDetails] = useState(!leaveRequest);
   const { user } = useAuthStore();
 
-  // ENHANCED: Fetch full leave request details if not provided
+  // ENHANCED: Always fetch full leave request details to ensure populated leaveTypeId
   useEffect(() => {
-    if (!leaveRequest && leaveRequestId) {
+    if (leaveRequestId) {
       const fetchDetails = async () => {
         try {
           setLoadingDetails(true);
@@ -44,20 +44,27 @@ export default function OverrideDecisionDialog({
           setRequestDetails(details);
         } catch (error: any) {
           console.error("Error fetching leave request details:", error);
-          // Don't show error to user, just proceed without full details
+          // Fallback to provided leaveRequest if fetch fails
+          if (leaveRequest) {
+            setRequestDetails(leaveRequest);
+          }
         } finally {
           setLoadingDetails(false);
         }
       };
       fetchDetails();
+    } else if (leaveRequest) {
+      // If no leaveRequestId but leaveRequest is provided, use it
+      setRequestDetails(leaveRequest);
+      setLoadingDetails(false);
     }
-  }, [leaveRequest, leaveRequestId]);
+  }, [leaveRequestId, leaveRequest]);
 
   const handleOverride = async () => {
-    // ENHANCED: Validate override reason is provided
-    if (!overrideReason.trim()) {
+    // Validate override reason is provided (required but no character limit)
+    if (!overrideReason || !overrideReason.trim()) {
       if (onError) {
-        onError("Please provide a reason for overriding the decision");
+        onError("Please provide a justification for overriding the decision");
       }
       return;
     }
@@ -74,7 +81,7 @@ export default function OverrideDecisionDialog({
 
     setIsLoading(true);
     try {
-      // NEW CODE: Call override API endpoint
+      // NEW CODE: Call override API endpoint (overrideReason is required)
       await leavesApi.overrideDecision(
         leaveRequestId,
         hrUserId,
@@ -180,16 +187,31 @@ export default function OverrideDecisionDialog({
                   </p>
                 </div>
                 
-                {requestDetails.leaveTypeId && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase">Leave Type</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {typeof requestDetails.leaveTypeId === "object" 
-                        ? requestDetails.leaveTypeId.name 
-                        : "N/A"}
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase">Leave Type</label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {(() => {
+                      // First check if leaveTypeName is directly provided (from backend mapping)
+                      if (requestDetails.leaveTypeName) {
+                        return requestDetails.leaveTypeName;
+                      }
+                      
+                      const leaveTypeId = requestDetails.leaveTypeId;
+                      if (!leaveTypeId) {
+                        return "N/A";
+                      }
+                      // If populated object with name
+                      if (typeof leaveTypeId === "object" && leaveTypeId !== null) {
+                        return (leaveTypeId as any).name || "Unknown Leave Type";
+                      }
+                      // If string ID (shouldn't happen after backend fix, but handle gracefully)
+                      if (typeof leaveTypeId === "string") {
+                        return "Unknown Leave Type";
+                      }
+                      return "N/A";
+                    })()}
+                  </p>
+                </div>
                 
                 {requestDetails.attachmentId && (
                   <div>
@@ -269,7 +291,7 @@ export default function OverrideDecisionDialog({
             <textarea
               value={overrideReason}
               onChange={(e) => setOverrideReason(e.target.value)}
-              placeholder="Please provide a justification explaining why this override is necessary due to policy exceptions or special circumstances..."
+              placeholder="Provide a justification explaining why this override is necessary due to policy exceptions or special circumstances..."
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               rows={5}
               disabled={isLoading}

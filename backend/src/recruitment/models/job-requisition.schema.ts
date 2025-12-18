@@ -15,8 +15,8 @@ export class JobRequisition {
   @Prop()
   location: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  hiringManagerId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+  hiringManagerId?: Types.ObjectId;
 
   @Prop({
     enum: ['draft', 'published', 'closed'],

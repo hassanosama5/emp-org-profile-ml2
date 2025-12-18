@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsEnum, IsDate, IsIn, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 import { LeaveStatus } from '../enums/leave-status.enum';
 
 export class FilterLeaveHistoryDto {
@@ -10,16 +11,18 @@ export class FilterLeaveHistoryDto {
   leaveTypeId?: string;
 
   @IsOptional()
+  @Type(() => Date)
   @IsDate()
   fromDate?: Date;
 
   @IsOptional()
+  @Type(() => Date)
   @IsDate()
   toDate?: Date;
 
   @IsOptional()
-  @IsEnum(LeaveStatus)
-  status?: LeaveStatus;
+  @IsString()
+  status?: string; // Accept as string, will be normalized in controller/service
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

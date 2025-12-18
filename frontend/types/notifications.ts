@@ -16,6 +16,29 @@ export enum NotificationType {
   MISSED_PUNCH = 'missed_punch',
   MISSED_PUNCH_EMPLOYEE_ALERT = 'MISSED_PUNCH_EMPLOYEE_ALERT',
   MISSED_PUNCH_MANAGER_ALERT = 'MISSED_PUNCH_MANAGER_ALERT',
+
+  // Recruitment Module Notifications - Interview Panel
+  INTERVIEW_PANEL_INVITATION = 'INTERVIEW_PANEL_INVITATION',
+  INTERVIEW_SCHEDULED = 'INTERVIEW_SCHEDULED',
+  INTERVIEW_CANCELLED = 'INTERVIEW_CANCELLED',
+  INTERVIEW_RESCHEDULED = 'INTERVIEW_RESCHEDULED',
+
+  // Recruitment Module Notifications - Hiring Decision (HR Employee notifications)
+  CANDIDATE_HIRED = 'CANDIDATE_HIRED',
+  CANDIDATE_REJECTED = 'CANDIDATE_REJECTED',
+  CANDIDATE_OFFER_CREATED = 'CANDIDATE_OFFER_CREATED',
+
+  // Recruitment Module Notifications - Offer Flow
+  // Sent to candidate when HR Manager creates an offer
+  OFFER_RECEIVED = 'OFFER_RECEIVED',
+  // Sent to HR when candidate accepts the offer
+  OFFER_RESPONSE_ACCEPTED = 'OFFER_RESPONSE_ACCEPTED',
+  // Sent to HR when candidate rejects the offer
+  OFFER_RESPONSE_REJECTED = 'OFFER_RESPONSE_REJECTED',
+
+  // Recruitment Module Notifications - Candidate notifications
+  APPLICATION_ACCEPTED = 'APPLICATION_ACCEPTED',
+  APPLICATION_REJECTED = 'APPLICATION_REJECTED',
 }
 
 export interface Notification {
@@ -27,6 +50,8 @@ export interface Notification {
   createdAt: Date;
   updatedAt?: Date;
   source?: 'unified' | 'time-management'; // Track which module created it
+  title?: string; // Optional notification title
+  data?: Record<string, any>; // Additional notification data (interview details, etc.)
 }
 
 export interface CreateNotificationDto {

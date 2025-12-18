@@ -225,7 +225,7 @@ export class ShiftScheduleService {
       shiftId: new Types.ObjectId(dto.shiftId),
       startDate: dto.startDate || new Date(),
       endDate: dto.endDate,
-      status: ShiftAssignmentStatus.APPROVED,
+      status: dto.status || ShiftAssignmentStatus.PENDING,
       createdBy: currentUserId,
       updatedBy: currentUserId,
     });
@@ -249,7 +249,7 @@ export class ShiftScheduleService {
       shiftId: new Types.ObjectId(dto.shiftId),
       startDate: dto.startDate || new Date(),
       endDate: dto.endDate,
-      status: ShiftAssignmentStatus.APPROVED,
+      status: dto.status || ShiftAssignmentStatus.PENDING,
       createdBy: currentUserId,
       updatedBy: currentUserId,
     });

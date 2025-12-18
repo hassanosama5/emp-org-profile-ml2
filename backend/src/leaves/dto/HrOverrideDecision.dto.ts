@@ -1,4 +1,4 @@
-import { IsString, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsBoolean } from 'class-validator';
 
 export class HrOverrideDecisionDto {
   @IsString()
@@ -8,10 +8,9 @@ export class HrOverrideDecisionDto {
   hrUserId: string;
 
   @IsBoolean()
-  overrideToApproved: boolean;  //not sure
+  overrideToApproved: boolean;
 
-  @IsOptional()
   @IsString()
-  overrideReason?: string;   //not sure
+  overrideReason: string;  // Required but no character limit
 }
 

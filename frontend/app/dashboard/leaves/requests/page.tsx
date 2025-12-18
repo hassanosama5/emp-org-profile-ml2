@@ -8,9 +8,11 @@ import { authApi } from "@/lib/api/auth/auth";
 import { LeaveRequest, LeaveType } from "@/types/leaves";
 import { useAuthStore } from "@/lib/stores/auth.store";
 import { useRequireAuth } from "@/lib/hooks/use-auth";
-import { Card } from "@/components/shared/ui/Card";
+import { Card, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { CancelLeaveRequestButton } from "@/components/leaves/CancelLeaveRequestButton";
+import { RoleGuard } from "@/components/auth/role-guard";
+import { SystemRole } from "@/types";
 
 export default function LeaveRequestsPage() {
   const router = useRouter();
@@ -20,6 +22,17 @@ export default function LeaveRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    leaveTypeId: "",
+    fromDate: "",
+    toDate: "",
+    status: "",
+    sortByDate: "desc" as "asc" | "desc",
+    sortByStatus: "" as "asc" | "desc" | "",
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   useRequireAuth();
 
@@ -36,7 +49,7 @@ export default function LeaveRequestsPage() {
     }
   }, [user]);
 
-  const fetchLeaveRequests = async () => {
+  const fetchLeaveRequests = async (useFilters = false) => {
     try {
       setLoading(true);
       setError("");
@@ -47,8 +60,48 @@ export default function LeaveRequestsPage() {
         throw new Error("Employee ID is required. Please log in again.");
       }
       
-      const requests = await leavesApi.getEmployeeLeaveRequests(employeeId.trim());
-      setLeaveRequests(Array.isArray(requests) ? requests : []);
+      if (useFilters && (filters.leaveTypeId || filters.fromDate || filters.toDate || filters.status || filters.sortByDate || filters.sortByStatus)) {
+        // Use filter endpoint
+        const result = await leavesApi.filterLeaveHistory(employeeId.trim(), {
+          leaveTypeId: filters.leaveTypeId || undefined,
+          fromDate: filters.fromDate || undefined,
+          toDate: filters.toDate || undefined,
+          status: filters.status || undefined,
+          sortByDate: filters.sortByDate || undefined,
+          sortByStatus: filters.sortByStatus || undefined,
+        });
+        setLeaveRequests(Array.isArray(result.items) ? result.items : []);
+      } else {
+        // Use simple endpoint with basic filters
+        const requestFilters: any = {};
+        if (filters.fromDate) requestFilters.fromDate = filters.fromDate;
+        if (filters.toDate) requestFilters.toDate = filters.toDate;
+        if (filters.status) requestFilters.status = filters.status;
+        if (filters.leaveTypeId) requestFilters.leaveTypeId = filters.leaveTypeId;
+        
+        const requests = await leavesApi.getEmployeeLeaveRequests(employeeId.trim(), Object.keys(requestFilters).length > 0 ? requestFilters : undefined);
+        let sortedRequests = Array.isArray(requests) ? requests : [];
+        
+        // Client-side sorting if needed
+        if (filters.sortByDate) {
+          sortedRequests.sort((a, b) => {
+            const dateA = new Date(a.dates?.from || 0).getTime();
+            const dateB = new Date(b.dates?.from || 0).getTime();
+            return filters.sortByDate === "asc" ? dateA - dateB : dateB - dateA;
+          });
+        }
+        if (filters.sortByStatus) {
+          sortedRequests.sort((a, b) => {
+            const statusA = a.status || "";
+            const statusB = b.status || "";
+            return filters.sortByStatus === "asc" 
+              ? statusA.localeCompare(statusB)
+              : statusB.localeCompare(statusA);
+          });
+        }
+        
+        setLeaveRequests(sortedRequests);
+      }
     } catch (error: any) {
       console.error("Error fetching leave requests:", error);
       setError(error.message || "Failed to load leave requests");
@@ -153,43 +206,187 @@ export default function LeaveRequestsPage() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="container mx-auto max-w-6xl px-4 py-8">
-        <div className="flex justify-center items-center min-h-[400px]">
-          <p className="text-gray-600">Loading leave requests...</p>
-        </div>
+  // All roles except RECRUITER and JOB_CANDIDATE can create leave requests
+  const allowedRoles = [
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.HR_ADMIN,
+  ];
+
+  const accessDeniedFallback = (
+    <div className="container mx-auto max-w-6xl px-4 py-8">
+      <div className="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
+        <p className="text-sm font-medium text-red-800">
+          Access denied: You need one of these roles: {allowedRoles.join(", ")}. Your roles: {user?.roles?.join(", ") || "None"}
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-6 flex justify-between items-center">
+    <RoleGuard allowedRoles={allowedRoles} fallback={accessDeniedFallback}>
+      <div className="container mx-auto max-w-6xl px-4 py-8">
+        {loading && (
+          <div className="flex justify-center items-center min-h-[400px]">
+            <p className="text-gray-600">Loading leave requests...</p>
+          </div>
+        )}
+        {!loading && (
+          <>
+            <div className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Leave Requests</h1>
           <p className="mt-2 text-sm text-gray-600">
             View and manage your leave requests
           </p>
         </div>
-        <Link href="/dashboard/leaves/requests/new">
-          <Button>Create New Request</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/leaves/balance">
+            <Button variant="outline">View Leave Balance</Button>
+          </Link>
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            {showFilters ? "Hide Filters" : "Show Filters"}
+          </Button>
+          <Link href="/dashboard/leaves/requests/new">
+            <Button>Create New Request</Button>
+          </Link>
+        </div>
       </div>
 
-      {successMessage && (
+      {/* Filters */}
+      {showFilters && (
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Leave Type
+                </label>
+                <select
+                  value={filters.leaveTypeId}
+                  onChange={(e) => setFilters({ ...filters, leaveTypeId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Types</option>
+                  {leaveTypes.map((type) => (
+                    <option key={type._id} value={type._id}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From Date
+                </label>
+                <input
+                  type="date"
+                  value={filters.fromDate}
+                  onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To Date
+                </label>
+                <input
+                  type="date"
+                  value={filters.toDate}
+                  onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sort By Date
+                </label>
+                <select
+                  value={filters.sortByDate}
+                  onChange={(e) => setFilters({ ...filters, sortByDate: e.target.value as "asc" | "desc" })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="desc">Newest First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sort By Status
+                </label>
+                <select
+                  value={filters.sortByStatus}
+                  onChange={(e) => setFilters({ ...filters, sortByStatus: e.target.value as "asc" | "desc" | "" })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">No Sort</option>
+                  <option value="asc">A-Z</option>
+                  <option value="desc">Z-A</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button onClick={() => fetchLeaveRequests(true)}>Apply Filters</Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFilters({
+                    leaveTypeId: "",
+                    fromDate: "",
+                    toDate: "",
+                    status: "",
+                    sortByDate: "desc",
+                    sortByStatus: "",
+                  });
+                  fetchLeaveRequests();
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+            )}
+
+            {successMessage && (
         <div className="mb-6 rounded-md bg-green-50 p-4 border border-green-200">
           <p className="text-sm text-green-800">{successMessage}</p>
         </div>
-      )}
+            )}
 
-      {error && (
+            {error && (
         <div className="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
           <p className="text-sm text-red-800">{error}</p>
         </div>
-      )}
+            )}
 
-      {leaveRequests.length === 0 ? (
+            {leaveRequests.length === 0 ? (
         <Card className="p-8 text-center">
           <svg
             className="mx-auto h-12 w-12 text-gray-400"
@@ -216,8 +413,8 @@ export default function LeaveRequestsPage() {
             </Link>
           </div>
         </Card>
-      ) : (
-        <div className="space-y-4">
+            ) : (
+              <div className="space-y-4">
           {leaveRequests.map((request) => (
             <Card key={request._id} className="p-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -325,8 +522,11 @@ export default function LeaveRequestsPage() {
               </div>
             </Card>
           ))}
-        </div>
-      )}
-    </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </RoleGuard>
   );
 }

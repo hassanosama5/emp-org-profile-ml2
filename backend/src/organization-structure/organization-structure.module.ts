@@ -21,6 +21,7 @@ import {
   StructureChangeRequestSchema,
 } from './models/structure-change-request.schema';
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { EmployeeProfileModule } from '../employee-profile/employee-profile.modu
       },
     ]),
     forwardRef(() => EmployeeProfileModule),
+    NotificationsModule,
   ],
   controllers: [OrganizationStructureController],
   providers: [OrganizationStructureService],

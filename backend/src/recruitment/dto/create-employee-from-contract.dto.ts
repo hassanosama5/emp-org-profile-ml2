@@ -1,4 +1,4 @@
-import { IsMongoId, IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsMongoId, IsOptional, IsString, IsEnum, IsDateString } from 'class-validator';
 import {
   ContractType,
   WorkType,
@@ -9,8 +9,8 @@ import {
  * Used by HR Manager to convert candidate to employee
  */
 export class CreateEmployeeFromContractDto {
-  @IsMongoId()
-  offerId: string;
+  // Note: offerId comes from URL parameter, not body
+  // Removed @IsMongoId() offerId: string; - it's passed as URL param in controller
 
   @IsOptional()
   @IsMongoId()
@@ -19,6 +19,14 @@ export class CreateEmployeeFromContractDto {
   @IsOptional()
   @IsString()
   workEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  employeeNumber?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
 
   @IsOptional()
   @IsEnum(ContractType)

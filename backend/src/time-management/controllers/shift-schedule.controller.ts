@@ -342,7 +342,7 @@ export class ShiftAndScheduleController {
   }
 
   @Post('schedule/validate')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
   async validateScheduleRule(
     @Body() body: { scheduleRuleId: string; assignmentDate?: Date },
   ) {
@@ -353,7 +353,7 @@ export class ShiftAndScheduleController {
   }
 
   @Post('schedule/apply-to-assignment')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
+  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
   async applyScheduleRuleToShiftAssignment(
     @Body() body: { shiftAssignmentId: string; scheduleRuleId: string },
     @CurrentUser() user: any,

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
-import { useRequireAuth } from "@/lib/hooks/use-auth";
+import { useRouter } from "next/navigation";
 import { SystemRole } from "@/types";
 import { shiftScheduleApi, fetchShifts, fetchDepartments, fetchPositions } from "@/lib/api/time-management/shift-schedule.api";
 import {
@@ -20,10 +20,22 @@ import { Input } from "@/components/shared/ui/Input";
 import { Select } from "@/components/leaves/Select";
 import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
+import { ShiftAssignmentForm, AssignmentType } from "@/components/time-management/ShiftAssignmentForm";
 
 export default function ShiftAssignmentsPage() {
-  const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  // Role check: Allow HR_ADMIN or SYSTEM_ADMIN (per BR-TM-01, BR-TM-05)
+  const canManageAssignments = user?.roles?.includes(SystemRole.HR_ADMIN) || 
+                                user?.roles?.includes(SystemRole.SYSTEM_ADMIN);
+  
+  // Redirect if not authorized (after auth loading completes)
+  useEffect(() => {
+    if (!authLoading && user && !canManageAssignments) {
+      router.push('/dashboard');
+    }
+  }, [authLoading, user, canManageAssignments, router]);
   const { toast, showToast, hideToast } = useToast();
 
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
@@ -251,7 +263,10 @@ export default function ShiftAssignmentsPage() {
   // Helper functions to safely extract display values from populated objects
   const getEmployeeDisplay = (employeeId: any): string => {
     if (!employeeId) return "N/A";
-    if (typeof employeeId === 'string') return employeeId;
+    if (typeof employeeId === 'string') {
+      // Try to find in loaded data if it's just an ID
+      return employeeId; // Employee lookup not available in current data
+    }
     if (typeof employeeId === 'object' && employeeId !== null) {
       // Handle populated employee object
       if (employeeId.fullName) return employeeId.fullName;
@@ -266,7 +281,12 @@ export default function ShiftAssignmentsPage() {
 
   const getDepartmentDisplay = (departmentId: any): string => {
     if (!departmentId) return "N/A";
-    if (typeof departmentId === 'string') return departmentId;
+    if (typeof departmentId === 'string') {
+      // Try to find in loaded departments
+      const dept = departments.find((d: any) => d._id === departmentId || d.id === departmentId);
+      if (dept) return dept.name || departmentId;
+      return departmentId;
+    }
     if (typeof departmentId === 'object' && departmentId !== null) {
       // Handle populated department object
       if (departmentId.name) return departmentId.name;
@@ -277,9 +297,15 @@ export default function ShiftAssignmentsPage() {
 
   const getPositionDisplay = (positionId: any): string => {
     if (!positionId) return "N/A";
-    if (typeof positionId === 'string') return positionId;
+    if (typeof positionId === 'string') {
+      // Try to find in loaded positions
+      const pos = positions.find((p: any) => p._id === positionId || p.id === positionId);
+      if (pos) return pos.title || pos.name || positionId;
+      return positionId;
+    }
     if (typeof positionId === 'object' && positionId !== null) {
       // Handle populated position object
+      if (positionId.title) return positionId.title;
       if (positionId.name) return positionId.name;
       if (positionId._id) return String(positionId._id);
     }
@@ -288,7 +314,12 @@ export default function ShiftAssignmentsPage() {
 
   const getShiftDisplay = (shiftId: any): string => {
     if (!shiftId) return "N/A";
-    if (typeof shiftId === 'string') return shiftId;
+    if (typeof shiftId === 'string') {
+      // Try to find in loaded shifts
+      const shift = shifts.find((s: Shift) => s._id === shiftId);
+      if (shift) return shift.name || shiftId;
+      return shiftId;
+    }
     if (typeof shiftId === 'object' && shiftId !== null) {
       // Handle populated shift object
       if (shiftId.name) return shiftId.name;
@@ -322,7 +353,7 @@ export default function ShiftAssignmentsPage() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <Select
               label="Status"
               value={filters.status || ""}
@@ -363,6 +394,23 @@ export default function ShiftAssignmentsPage() {
                 })),
               ]}
               placeholder="Filter by department"
+              disabled={loadingOptions}
+            />
+            <Select
+              label="Position"
+              value={filters.positionId || ""}
+              onChange={(e) => setFilters({
+                ...filters,
+                positionId: e.target.value || undefined,
+              })}
+              options={[
+                { value: "", label: "All Positions" },
+                ...positions.map((pos: any) => ({
+                  value: pos._id || pos.id,
+                  label: pos.title || pos.name || pos._id,
+                })),
+              ]}
+              placeholder="Filter by position"
               disabled={loadingOptions}
             />
             <Select
@@ -484,6 +532,7 @@ export default function ShiftAssignmentsPage() {
                   shiftId: "",
                   startDate: undefined,
                   endDate: undefined,
+                  status: ShiftAssignmentStatus.PENDING,
                 } as AssignShiftToDepartmentDto);
               } else {
                 setFormData({
@@ -491,6 +540,7 @@ export default function ShiftAssignmentsPage() {
                   shiftId: "",
                   startDate: undefined,
                   endDate: undefined,
+                  status: ShiftAssignmentStatus.PENDING,
                 } as AssignShiftToPositionDto);
               }
             }}
@@ -623,6 +673,18 @@ export default function ShiftAssignmentsPage() {
                   } as AssignShiftToDepartmentDto)}
                 />
               </div>
+              <Select
+                label="Status *"
+                value={(formData as AssignShiftToDepartmentDto).status || ShiftAssignmentStatus.PENDING}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  status: e.target.value as ShiftAssignmentStatus,
+                } as AssignShiftToDepartmentDto)}
+                options={[
+                  { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+                  { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+                ]}
+              />
             </>
           )}
 
@@ -682,6 +744,18 @@ export default function ShiftAssignmentsPage() {
                   } as AssignShiftToPositionDto)}
                 />
               </div>
+              <Select
+                label="Status *"
+                value={(formData as AssignShiftToPositionDto).status || ShiftAssignmentStatus.PENDING}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  status: e.target.value as ShiftAssignmentStatus,
+                } as AssignShiftToPositionDto)}
+                options={[
+                  { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+                  { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+                ]}
+              />
             </>
           )}
         </form>

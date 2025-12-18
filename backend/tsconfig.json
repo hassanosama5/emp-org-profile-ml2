@@ -8,7 +8,8 @@
     "allowSyntheticDefaultImports": true,
     "target": "ES2020",
     "sourceMap": true,
-    "outDir": "./dist",
+    "outDir": "dist",  // This changes the location of the compiled files to the 'dist' folder
+    "rootDir": "./src",  // Keep source files in 'src'
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
@@ -19,5 +20,7 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true
-  }
+  },
+  "include": ["src/**/*.ts"],  // Include the source files for compilation
+  "exclude": ["node_modules"]  // Exclude 'node_modules' from compilation
 }

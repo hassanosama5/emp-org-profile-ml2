@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { useRequireAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import { leavesApi } from "@/lib/api/leaves/leaves";
+import { fetchPositions } from "@/lib/api/time-management/shift-schedule.api";
 import { LeavePolicy, CreateLeavePolicyDto, UpdateLeavePolicyDto } from "@/types/leaves";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
@@ -21,6 +22,8 @@ export default function LeavePoliciesPage() {
 
   const [policies, setPolicies] = useState<LeavePolicy[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [loadingPositions, setLoadingPositions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -42,14 +45,28 @@ export default function LeavePoliciesPage() {
   });
   const [eligibilityData, setEligibilityData] = useState({
     minTenureMonths: "",
-    positionsAllowed: "",
+    positionsAllowed: [] as string[],
     contractTypesAllowed: [] as string[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadData();
+    loadPositions();
   }, []);
+
+  const loadPositions = async () => {
+    try {
+      setLoadingPositions(true);
+      const positionsData = await fetchPositions(true);
+      setPositions(positionsData || []);
+    } catch (error: any) {
+      console.warn("Failed to fetch positions:", error);
+      setPositions([]);
+    } finally {
+      setLoadingPositions(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -91,7 +108,7 @@ export default function LeavePoliciesPage() {
     });
     setEligibilityData({
       minTenureMonths: "",
-      positionsAllowed: "",
+      positionsAllowed: [],
       contractTypesAllowed: [],
     });
     setErrors({});
@@ -118,8 +135,8 @@ export default function LeavePoliciesPage() {
     setEligibilityData({
       minTenureMonths: policy.eligibility?.minTenureMonths?.toString() || "",
       positionsAllowed: Array.isArray(policy.eligibility?.positionsAllowed)
-        ? policy.eligibility.positionsAllowed.join(", ")
-        : "",
+        ? policy.eligibility.positionsAllowed
+        : [],
       contractTypesAllowed: Array.isArray(policy.eligibility?.contractTypesAllowed)
         ? policy.eligibility.contractTypesAllowed
         : [],
@@ -158,15 +175,8 @@ export default function LeavePoliciesPage() {
         }
       }
 
-      if (eligibilityData.positionsAllowed && eligibilityData.positionsAllowed.trim() !== "") {
-        // Split by comma and clean up
-        const positions = eligibilityData.positionsAllowed
-          .split(",")
-          .map((p) => p.trim())
-          .filter((p) => p.length > 0);
-        if (positions.length > 0) {
-          eligibility.positionsAllowed = positions;
-        }
+      if (eligibilityData.positionsAllowed && eligibilityData.positionsAllowed.length > 0) {
+        eligibility.positionsAllowed = eligibilityData.positionsAllowed;
       }
 
       if (eligibilityData.contractTypesAllowed.length > 0) {
@@ -490,20 +500,49 @@ export default function LeavePoliciesPage() {
               </div>
 
               <div>
-                <Input
-                  label="Allowed Position Codes"
-                  type="text"
-                  placeholder="e.g., SE-001, HRM-001, HRE-001 (comma-separated)"
-                  value={eligibilityData.positionsAllowed}
-                  onChange={(e) =>
-                    setEligibilityData({
-                      ...eligibilityData,
-                      positionsAllowed: e.target.value,
-                    })
-                  }
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Allowed Positions
+                </label>
+                {loadingPositions ? (
+                  <p className="text-sm text-gray-500">Loading positions...</p>
+                ) : positions.length === 0 ? (
+                  <p className="text-sm text-gray-500">No positions available</p>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
+                    {positions.map((position) => (
+                      <label key={position._id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={eligibilityData.positionsAllowed.includes(position.code)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEligibilityData({
+                                ...eligibilityData,
+                                positionsAllowed: [
+                                  ...eligibilityData.positionsAllowed,
+                                  position.code,
+                                ],
+                              });
+                            } else {
+                              setEligibilityData({
+                                ...eligibilityData,
+                                positionsAllowed: eligibilityData.positionsAllowed.filter(
+                                  (code) => code !== position.code
+                                ),
+                              });
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">
+                          {position.code} - {position.title}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mt-1">
-                  Comma-separated list of position codes. Leave empty to allow all positions.
+                  Select positions that are eligible for this leave type. Leave empty to allow all positions.
                 </p>
               </div>
 

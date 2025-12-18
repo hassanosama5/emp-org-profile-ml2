@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
 import { DepartmentResponseDto } from "@/types/organization-structure";
 import { Input } from "@/components/shared/ui/Input";
+import { useAuth } from "@/lib/hooks/use-auth";
 
 export default function DepartmentsPage() {
   const router = useRouter();
@@ -55,8 +56,20 @@ export default function DepartmentsPage() {
     router.push("/dashboard/organization-structure/departments/new");
   };
 
+  // REQ-SANV-01, REQ-SANV-02: Department Heads can view departments (read-only)
+  // REQ-OSM-01, REQ-OSM-02: Only System Admin/HR Admin can manage
+  const { user } = useAuth();
+  const canManage = user?.roles?.some((r: string) => 
+    [SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN].includes(r as SystemRole)
+  );
+
   return (
-    <ProtectedRoute allowedRoles={[SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN]}>
+    <ProtectedRoute allowedRoles={[
+      SystemRole.SYSTEM_ADMIN, 
+      SystemRole.HR_ADMIN, 
+      SystemRole.HR_MANAGER,
+      SystemRole.DEPARTMENT_HEAD
+    ]}>
       <div className="container mx-auto px-4 py-8">
         {/* Header Section */}
         <div className="mb-8">
@@ -67,13 +80,15 @@ export default function DepartmentsPage() {
                 Manage organizational departments and structure
               </p>
             </div>
-            <Button
-              onClick={handleCreateNew}
-              variant="primary"
-              className="whitespace-nowrap"
-            >
-              + Create New Department
-            </Button>
+            {canManage && (
+              <Button
+                onClick={handleCreateNew}
+                variant="primary"
+                className="whitespace-nowrap"
+              >
+                + Create New Department
+              </Button>
+            )}
           </div>
           
           {/* Filters and Search */}
@@ -157,7 +172,7 @@ export default function DepartmentsPage() {
                     ? "Get started by creating your first department."
                     : "No departments found with the current filter."}
               </p>
-              {!searchQuery && (
+              {!searchQuery && canManage && (
                 <Button onClick={handleCreateNew} variant="primary">
                   Create Your First Department
                 </Button>
@@ -228,7 +243,7 @@ export default function DepartmentsPage() {
                         View Details
                       </Button>
                       
-                      {dept.isActive && (
+                      {dept.isActive && canManage && (
                         <div className="flex gap-2">
                           <Button
                             onClick={() => router.push(`/dashboard/organization-structure/departments/${dept._id}/edit`)}

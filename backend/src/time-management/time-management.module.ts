@@ -47,6 +47,7 @@ import { TimeManagementService } from './services/time-management.service';
 import { ShiftScheduleService } from './services/shift-schedule.service';
 import { NotificationService } from './services/notification.service';
 import { PolicyConfigService } from './services/policy-config.service';
+import { SyncSchedulerService } from './services/sync-scheduler.service';
 import { LeavesModule } from '../leaves/leaves.module';
 import { PayrollExecutionModule } from '../payroll-execution/payroll-execution.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -85,7 +86,8 @@ import { forwardRef } from '@nestjs/common';
     ShiftScheduleService,
     NotificationService,
     PolicyConfigService,
+    SyncSchedulerService,
   ],
-  exports: [TimeManagementService],
+  exports: [TimeManagementService, NotificationService],
 })
 export class TimeManagementModule {}

@@ -47,12 +47,12 @@ import {
   Candidate,
   CandidateSchema,
 } from '../employee-profile/models/candidate.schema';
-
 import { PayrollExecutionModule } from '../payroll-execution/payroll-execution.module';
 import { TimeManagementModule } from '../time-management/time-management.module';
 import { PayrollConfigurationModule } from '../payroll-configuration/payroll-configuration.module';
 import { OrganizationStructureModule } from '../organization-structure/organization-structure.module';
 import { LeavesModule } from '../leaves/leaves.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -84,6 +84,7 @@ import { LeavesModule } from '../leaves/leaves.module';
     forwardRef(() => TimeManagementModule),
     PayrollConfigurationModule,
     LeavesModule,
+    NotificationsModule,
   ],
   controllers: [RecruitmentController],
   providers: [RecruitmentService],

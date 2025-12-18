@@ -9,6 +9,7 @@ import {
   CreateAppraisalCycleInput,
   CycleAssignment,
   CycleTemplateAssignment,
+  CycleProgressSummary,
 } from "./performanceCycles";
 import {
   fetchAppraisalCycles,
@@ -17,13 +18,15 @@ import {
   publishAppraisalCycle,
   closeAppraisalCycle,
   archiveAppraisalCycle,
-} from "../../lib/api/performance/Api/performanceCyclesApi";
+  fetchCycleProgress,
+  sendCycleRemindersApi,
+} from "@/lib/api/performance/Api/performanceCyclesApi";
 import {
   AppraisalTemplate,
   APPRAISAL_TEMPLATE_TYPES,
   AppraisalTemplateType,
 } from "./performanceTemplates";
-import { fetchAppraisalTemplates } from "../../lib/api/performance/Api/performanceTemplatesApi";
+import { fetchAppraisalTemplates } from "@/lib/api/performance/Api/performanceTemplatesApi";
 
 type FormMode = "none" | "create";
 
@@ -50,6 +53,13 @@ export const AppraisalCyclesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [formMode, setFormMode] = useState<FormMode>("none");
+
+  // ---------- Step 4 state (progress + reminders) ----------
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [cycleProgress, setCycleProgress] =
+    useState<CycleProgressSummary | null>(null);
+  const [reminderMessage, setReminderMessage] = useState<string | null>(null);
 
   // Form state for creating a cycle
   const [name, setName] = useState("");
@@ -275,6 +285,53 @@ export const AppraisalCyclesPage: React.FC = () => {
     "Archive",
   );
 
+  // ---------- Step 4: progress & reminders ----------
+
+  const handleViewProgress = async (cycle: AppraisalCycle) => {
+    const id = cycle.id ?? cycle._id;
+    if (!id) {
+      console.error("Cycle has no id/_id");
+      return;
+    }
+
+    setSelectedCycleId(String(id));
+    setProgressLoading(true);
+    setError(null);
+    setReminderMessage(null);
+
+    try {
+      const data = await fetchCycleProgress(String(id));
+      setCycleProgress(data);
+    } catch (err: any) {
+      console.error(err);
+      setCycleProgress(null);
+      setError(
+        err?.message ?? "Failed to load cycle progress overview",
+      );
+    } finally {
+      setProgressLoading(false);
+    }
+  };
+
+  const handleSendReminders = async () => {
+    if (!selectedCycleId) return;
+    try {
+      setSaving(true);
+      setError(null);
+      setReminderMessage(null);
+
+      const res = await sendCycleRemindersApi(selectedCycleId);
+      setReminderMessage(
+        `Reminder queued: ${res.pendingCount} pending assignments in cycle "${res.cycleName}".`,
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message ?? "Failed to send reminders");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ---------- rendering helpers ----------
 
   const formatDate = (value?: string) => {
@@ -326,8 +383,8 @@ export const AppraisalCyclesPage: React.FC = () => {
             }}
           >
             Define appraisal cycles (e.g. annual, probationary),
-            assign templates and departments, and manage cycle
-            status.
+            assign templates and departments, manage cycle status,
+            and monitor completion progress.
           </p>
         </div>
         <button
@@ -360,6 +417,20 @@ export const AppraisalCyclesPage: React.FC = () => {
         </div>
       )}
 
+      {reminderMessage && (
+        <div
+          style={{
+            marginBottom: "1rem",
+            padding: "0.75rem 1rem",
+            borderRadius: "0.5rem",
+            background: "#ecfdf3",
+            color: "#14532d",
+          }}
+        >
+          {reminderMessage}
+        </div>
+      )}
+
       {loading ? (
         <p>Loading cycles...</p>
       ) : cycles.length === 0 ? (
@@ -370,7 +441,7 @@ export const AppraisalCyclesPage: React.FC = () => {
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              minWidth: "800px",
+              minWidth: "900px",
             }}
           >
             <thead>
@@ -401,10 +472,17 @@ export const AppraisalCyclesPage: React.FC = () => {
             <tbody>
               {cycles.map((c, index) => {
                 const key = c.id ?? c._id ?? `${c.name}-${index}`;
+                const isSelected =
+                  selectedCycleId &&
+                  String(selectedCycleId) === String(c.id ?? c._id);
+
                 return (
                   <tr
                     key={key}
-                    style={{ borderBottom: "1px solid #f3f4f6" }}
+                    style={{
+                      borderBottom: "1px solid #f3f4f6",
+                      backgroundColor: isSelected ? "#eff6ff" : "inherit",
+                    }}
                   >
                     <td style={{ padding: "0.5rem" }}>{c.name}</td>
                     <td style={{ padding: "0.5rem" }}>
@@ -421,6 +499,20 @@ export const AppraisalCyclesPage: React.FC = () => {
                     </td>
                     <td style={{ padding: "0.5rem" }}>{c.status}</td>
                     <td style={{ padding: "0.5rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleViewProgress(c)}
+                        style={{
+                          marginRight: "0.5rem",
+                          padding: "0.25rem 0.75rem",
+                          borderRadius: "0.375rem",
+                          border: "1px solid #bfdbfe",
+                          background: "#eff6ff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        View Progress
+                      </button>
                       {canActivate(c.status) && (
                         <button
                           type="button"
@@ -494,6 +586,221 @@ export const AppraisalCyclesPage: React.FC = () => {
         </div>
       )}
 
+      {/* ---------- Step 4 progress panel ---------- */}
+      {selectedCycleId && (
+        <section
+          style={{
+            marginTop: "1rem",
+            border: "1px solid #e5e7eb",
+            borderRadius: "0.75rem",
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  fontSize: "1.1rem",
+                  fontWeight: 600,
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Cycle Progress Overview
+              </h2>
+              {cycleProgress && (
+                <p style={{ fontSize: "0.9rem", color: "#4b5563" }}>
+                  {cycleProgress.name} · Status:{" "}
+                  <span style={{ fontWeight: 600 }}>
+                    {cycleProgress.status}
+                  </span>{" "}
+                  · Completion:{" "}
+                  <span style={{ fontWeight: 600 }}>
+                    {cycleProgress.completionRate}%
+                  </span>{" "}
+                  ({cycleProgress.totalAssignments} assignments)
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleSendReminders}
+              disabled={saving}
+              style={{
+                padding: "0.4rem 0.9rem",
+                borderRadius: "0.5rem",
+                border: "none",
+                background: "#2563eb",
+                color: "#fff",
+                cursor: "pointer",
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? "Sending..." : "Send Reminders"}
+            </button>
+          </div>
+
+          {progressLoading ? (
+            <p>Loading progress...</p>
+          ) : !cycleProgress ? (
+            <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+              Select a cycle and click &quot;View Progress&quot; to see
+              completion details.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: "1rem" }}>
+              {/* By status */}
+              <div>
+                <h3
+                  style={{
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  By Status
+                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                  }}
+                >
+                  {Object.entries(cycleProgress.byStatus).map(
+                    ([status, count]) => (
+                      <span
+                        key={status}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          borderRadius: "999px",
+                          border: "1px solid #e5e7eb",
+                          padding: "0.25rem 0.6rem",
+                          fontSize: "0.8rem",
+                          background: "#f9fafb",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            marginRight: "0.25rem",
+                          }}
+                        >
+                          {status}
+                        </span>
+                        <span>· {count}</span>
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+
+              {/* By department */}
+              <div>
+                <h3
+                  style={{
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  By Department
+                </h3>
+                {cycleProgress.byDepartment.length === 0 ? (
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "#6b7280",
+                    }}
+                  >
+                    No department-level data yet.
+                  </p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        minWidth: "400px",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                          <th
+                            style={{
+                              textAlign: "left",
+                              padding: "0.35rem",
+                            }}
+                          >
+                            Department ID
+                          </th>
+                          <th
+                            style={{
+                              textAlign: "left",
+                              padding: "0.35rem",
+                            }}
+                          >
+                            Assignments
+                          </th>
+                          <th
+                            style={{
+                              textAlign: "left",
+                              padding: "0.35rem",
+                            }}
+                          >
+                            Submitted
+                          </th>
+                          <th
+                            style={{
+                              textAlign: "left",
+                              padding: "0.35rem",
+                            }}
+                          >
+                            Completion
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cycleProgress.byDepartment.map((d) => (
+                          <tr
+                            key={d.departmentId}
+                            style={{
+                              borderBottom: "1px solid #f3f4f6",
+                            }}
+                          >
+                            <td style={{ padding: "0.35rem" }}>
+                              {d.departmentId}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              {d.totalAssignments}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              {d.submitted}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              {d.completionRate}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ---------- create form (unchanged) ---------- */}
       {formMode === "create" && (
         <div
           style={{

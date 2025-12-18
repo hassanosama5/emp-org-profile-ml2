@@ -64,7 +64,8 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        {/* CHANGED - Added text-gray-900 for visibility */}
+        <div className="flex-1 overflow-y-auto p-6 text-gray-900">{children}</div>
 
         {/* Footer */}
         {footer && (

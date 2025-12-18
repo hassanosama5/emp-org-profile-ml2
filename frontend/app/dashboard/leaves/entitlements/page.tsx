@@ -29,7 +29,16 @@ export default function LeaveEntitlementsPage() {
   const [searchLeaveTypeId, setSearchLeaveTypeId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPersonalizedModalOpen, setIsPersonalizedModalOpen] = useState(false);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [editingEntitlement, setEditingEntitlement] = useState<LeaveEntitlement | null>(null);
+  const [bulkEditFormData, setBulkEditFormData] = useState<{
+    yearlyEntitlement?: number;
+    accruedActual?: number;
+    carryForward?: number;
+    taken?: number;
+    pending?: number;
+    remaining?: number;
+  }>({});
   const [formData, setFormData] = useState<CreateLeaveEntitlementDto>({
     employeeId: "",
     leaveTypeId: "",
@@ -198,10 +207,11 @@ export default function LeaveEntitlementsPage() {
       if (editingEntitlement) {
         // Editing: Update single entitlement
         // Only send fields allowed by UpdateLeaveEntitlementDto (exclude employeeId and leaveTypeId)
+        // Note: accruedRounded will be automatically calculated by backend based on rounding rule
         const updateData: UpdateLeaveEntitlementDto = {
           yearlyEntitlement: Number(formData.yearlyEntitlement),
           accruedActual: Number(formData.accruedActual),
-          accruedRounded: Number(formData.accruedRounded),
+          // Don't send accruedRounded - backend will calculate it from accruedActual
           carryForward: Number(formData.carryForward),
           taken: Number(formData.taken),
           pending: Number(formData.pending),
@@ -256,12 +266,34 @@ export default function LeaveEntitlementsPage() {
         pending: 0,
         remaining: 0,
       });
+      
+      // After creating, automatically set filters and reload if we have the data
+      if (!editingEntitlement && createContractType && formData.leaveTypeId) {
+        setSelectedContractType(createContractType);
+        setSearchLeaveTypeId(formData.leaveTypeId);
+        // Small delay to ensure state is updated before reloading
+        setTimeout(() => {
+          loadEntitlementsByContractType();
+        }, 100);
+      } else if (editingEntitlement) {
+        // After updating, reload if filters are already set
+        if (selectedContractType && searchLeaveTypeId) {
+          loadEntitlementsByContractType();
+        } else {
+          // Try to reload based on the edited entitlement
+          const editedEmployee = employees.find(emp => emp._id === editingEntitlement.employeeId);
+          if (editedEmployee?.contractType && editingEntitlement.leaveTypeId) {
+            setSelectedContractType(editedEmployee.contractType);
+            setSearchLeaveTypeId(editingEntitlement.leaveTypeId);
+            setTimeout(() => {
+              loadEntitlementsByContractType();
+            }, 100);
+          }
+        }
+      }
+      
       setCreateContractType("");
       setEditingEntitlement(null);
-      // Reload entitlements if contract type and leave type are selected
-      if (selectedContractType && searchLeaveTypeId) {
-        loadEntitlementsByContractType();
-      }
     } catch (error: any) {
       showToast(error.message || "Failed to save leave entitlement", "error");
     }
@@ -289,6 +321,79 @@ export default function LeaveEntitlementsPage() {
       });
     } catch (error: any) {
       showToast(error.message || "Failed to assign personalized entitlement", "error");
+    }
+  };
+
+  const handleBulkEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (entitlements.length === 0) {
+      showToast("No entitlements to update", "error");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      let successCount = 0;
+      let failCount = 0;
+
+      // Build update data - only include fields that have values
+      const updateData: UpdateLeaveEntitlementDto = {};
+      if (bulkEditFormData.yearlyEntitlement !== undefined) {
+        updateData.yearlyEntitlement = Number(bulkEditFormData.yearlyEntitlement);
+      }
+      if (bulkEditFormData.accruedActual !== undefined) {
+        updateData.accruedActual = Number(bulkEditFormData.accruedActual);
+      }
+      if (bulkEditFormData.carryForward !== undefined) {
+        updateData.carryForward = Number(bulkEditFormData.carryForward);
+      }
+      if (bulkEditFormData.taken !== undefined) {
+        updateData.taken = Number(bulkEditFormData.taken);
+      }
+      if (bulkEditFormData.pending !== undefined) {
+        updateData.pending = Number(bulkEditFormData.pending);
+      }
+      if (bulkEditFormData.remaining !== undefined) {
+        updateData.remaining = Number(bulkEditFormData.remaining);
+      }
+
+      // Check if at least one field is provided
+      if (Object.keys(updateData).length === 0) {
+        showToast("Please provide at least one field to update", "error");
+        setLoading(false);
+        return;
+      }
+
+      // Update all entitlements
+      for (const ent of entitlements) {
+        try {
+          await leavesApi.updateLeaveEntitlement(ent._id, updateData);
+          successCount++;
+        } catch (error: any) {
+          console.error(`Failed to update entitlement ${ent._id}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        showToast(
+          `Updated ${successCount} entitlement(s)${failCount > 0 ? `, ${failCount} failed` : ''}`,
+          successCount === entitlements.length ? "success" : "warning"
+        );
+        setIsBulkEditModalOpen(false);
+        setBulkEditFormData({});
+        // Reload entitlements to show updated values
+        if (selectedContractType && searchLeaveTypeId) {
+          await loadEntitlementsByContractType();
+        }
+      } else {
+        showToast("Failed to update entitlements", "error");
+      }
+    } catch (error: any) {
+      showToast(error.message || "Failed to update entitlements", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -380,10 +485,24 @@ export default function LeaveEntitlementsPage() {
           <div className="flex gap-3">
             <Button 
               onClick={loadEntitlementsByContractType} 
-              disabled={!selectedContractType || !searchLeaveTypeId}
+              disabled={!selectedContractType || !searchLeaveTypeId || loading}
             >
-              Load Entitlements
+              {loading ? "Loading..." : "Load Entitlements"}
             </Button>
+            {entitlements.length > 0 && (
+              <Button 
+                variant="outline"
+                onClick={async () => {
+                  // Reload all entitlements to trigger rounding recalculation
+                  showToast("Recalculating rounding for all entitlements...", "info");
+                  await loadEntitlementsByContractType();
+                  showToast("Rounding recalculated! Check the values now.", "success");
+                }}
+                disabled={loading}
+              >
+                Recalculate Rounding
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -396,12 +515,26 @@ export default function LeaveEntitlementsPage() {
       ) : entitlements.length > 0 ? (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>
-              Entitlements for {selectedContractType.replace(/_/g, ' ')} - {leaveTypes.find(t => t._id === searchLeaveTypeId)?.name}
-            </CardTitle>
-            <CardDescription>
-              Showing {entitlements.length} of {getFilteredEmployees().length} employee(s) with entitlements
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>
+                  Entitlements for {selectedContractType.replace(/_/g, ' ')} - {leaveTypes.find(t => t._id === searchLeaveTypeId)?.name}
+                </CardTitle>
+                <CardDescription>
+                  Showing {entitlements.length} of {getFilteredEmployees().length} employee(s) with entitlements
+                </CardDescription>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  // Pre-fill with current values from first entitlement (optional)
+                  setBulkEditFormData({});
+                  setIsBulkEditModalOpen(true);
+                }}
+              >
+                Edit All
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -424,12 +557,12 @@ export default function LeaveEntitlementsPage() {
                             employeeId: ent.employeeId.toString(),
                             leaveTypeId: ent.leaveTypeId.toString(),
                             yearlyEntitlement: ent.yearlyEntitlement,
-                            accruedActual: ent.accruedActual,
-                            accruedRounded: ent.accruedRounded,
-                            carryForward: ent.carryForward,
-                            taken: ent.taken,
-                            pending: ent.pending,
-                            remaining: ent.remaining,
+                            accruedActual: ent.accruedActual || 0,
+                            accruedRounded: ent.accruedRounded || 0,
+                            carryForward: ent.carryForward || 0,
+                            taken: ent.taken || 0,
+                            pending: ent.pending || 0,
+                            remaining: ent.remaining || 0,
                           });
                           setIsModalOpen(true);
                         }}
@@ -444,8 +577,21 @@ export default function LeaveEntitlementsPage() {
                       </div>
                       <div>
                         <p className="text-gray-600">Accrued Rounded</p>
-                        <p className="font-medium text-lg">{ent.accruedRounded} days</p>
+                        <p className="font-medium text-lg">
+                          {ent.accruedRounded} days
+                          {ent.accruedActual !== undefined && ent.accruedActual !== ent.accruedRounded && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              (from {ent.accruedActual})
+                            </span>
+                          )}
+                        </p>
                       </div>
+                      {ent.accruedActual !== undefined && (
+                        <div>
+                          <p className="text-gray-600">Accrued Actual</p>
+                          <p className="font-medium text-sm text-gray-500">{ent.accruedActual} days</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-gray-600">Taken</p>
                         <p className="font-medium text-lg">{ent.taken} days</p>
@@ -592,31 +738,32 @@ export default function LeaveEntitlementsPage() {
               error={errors.yearlyEntitlement}
             />
             <Input
-              label="Accrued Actual"
+              label="Accrued Actual *"
               type="number"
               step="0.01"
               value={formData.accruedActual}
-              onChange={(e) =>
+              onChange={(e) => {
+                const newAccruedActual = parseFloat(e.target.value) || 0;
                 setFormData({
                   ...formData,
-                  accruedActual: parseFloat(e.target.value) || 0,
-                })
-              }
+                  accruedActual: newAccruedActual,
+                  // Note: accruedRounded will be automatically calculated by backend based on rounding rule
+                  // Don't set it here - let the backend handle it
+                });
+              }}
+              placeholder="e.g., 10.5 (will be rounded automatically)"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Accrued Rounded"
+              label="Accrued Rounded (Auto-calculated)"
               type="number"
               step="0.01"
               value={formData.accruedRounded}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  accruedRounded: parseFloat(e.target.value) || 0,
-                })
-              }
+              disabled={true}
+              className="bg-gray-100"
+              title="This value is automatically calculated from Accrued Actual based on the leave policy's rounding rule"
             />
             <Input
               label="Carry Forward"
@@ -668,6 +815,125 @@ export default function LeaveEntitlementsPage() {
                   remaining: parseFloat(e.target.value) || 0,
                 })
               }
+            />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Bulk Edit Modal */}
+      <Modal
+        isOpen={isBulkEditModalOpen}
+        onClose={() => {
+          setIsBulkEditModalOpen(false);
+          setBulkEditFormData({});
+        }}
+        title={`Bulk Edit Entitlements (${entitlements.length} employee(s))`}
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => {
+              setIsBulkEditModalOpen(false);
+              setBulkEditFormData({});
+            }}>
+              Cancel
+            </Button>
+            <Button type="submit" form="bulk-edit-form" disabled={loading}>
+              {loading ? "Updating..." : "Update All"}
+            </Button>
+          </>
+        }
+      >
+        <form id="bulk-edit-form" onSubmit={handleBulkEditSubmit} className="space-y-4">
+          <div className="p-3 bg-blue-50 rounded-lg mb-4">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> Leave fields empty to keep their current values. Only filled fields will be updated for all {entitlements.length} entitlement(s).
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Yearly Entitlement"
+              type="number"
+              step="0.01"
+              value={bulkEditFormData.yearlyEntitlement ?? ''}
+              onChange={(e) =>
+                setBulkEditFormData({
+                  ...bulkEditFormData,
+                  yearlyEntitlement: e.target.value ? parseFloat(e.target.value) : undefined,
+                })
+              }
+              placeholder="Leave empty to keep current"
+            />
+            <Input
+              label="Accrued Actual"
+              type="number"
+              step="0.01"
+              value={bulkEditFormData.accruedActual ?? ''}
+              onChange={(e) =>
+                setBulkEditFormData({
+                  ...bulkEditFormData,
+                  accruedActual: e.target.value ? parseFloat(e.target.value) : undefined,
+                })
+              }
+              placeholder="Leave empty to keep current"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Carry Forward"
+              type="number"
+              step="0.01"
+              value={bulkEditFormData.carryForward ?? ''}
+              onChange={(e) =>
+                setBulkEditFormData({
+                  ...bulkEditFormData,
+                  carryForward: e.target.value ? parseFloat(e.target.value) : undefined,
+                })
+              }
+              placeholder="Leave empty to keep current"
+            />
+            <Input
+              label="Taken"
+              type="number"
+              step="0.01"
+              value={bulkEditFormData.taken ?? ''}
+              onChange={(e) =>
+                setBulkEditFormData({
+                  ...bulkEditFormData,
+                  taken: e.target.value ? parseFloat(e.target.value) : undefined,
+                })
+              }
+              placeholder="Leave empty to keep current"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Pending"
+              type="number"
+              step="0.01"
+              value={bulkEditFormData.pending ?? ''}
+              onChange={(e) =>
+                setBulkEditFormData({
+                  ...bulkEditFormData,
+                  pending: e.target.value ? parseFloat(e.target.value) : undefined,
+                })
+              }
+              placeholder="Leave empty to keep current"
+            />
+            <Input
+              label="Remaining"
+              type="number"
+              step="0.01"
+              value={bulkEditFormData.remaining ?? ''}
+              onChange={(e) =>
+                setBulkEditFormData({
+                  ...bulkEditFormData,
+                  remaining: e.target.value ? parseFloat(e.target.value) : undefined,
+                })
+              }
+              placeholder="Leave empty to keep current"
             />
           </div>
         </form>

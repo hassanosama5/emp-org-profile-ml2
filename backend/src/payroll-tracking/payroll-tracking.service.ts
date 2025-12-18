@@ -69,7 +69,7 @@ export class PayrollTrackingService {
     private readonly payrollConfigurationService: PayrollConfigurationService,
     @Inject(LeavesService)
     private readonly leavesService: LeavesService,
-    @Inject(TimeManagementService)
+    @Inject(forwardRef(() => TimeManagementService))
     private readonly timeManagementService: TimeManagementService,
     @InjectModel(paySlip.name) private readonly payslipModel: Model<PayslipDocument>,
     @InjectModel(payrollRuns.name) private readonly payrollRunsModel: Model<payrollRunsDocument>,

@@ -28,8 +28,14 @@ export default function ManagerLeaveReviewPage() {
   // NEW: State for employee dropdown
   const [employees, setEmployees] = useState<Array<{ _id: string; employeeId: string; firstName: string; lastName: string }>>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  
+  // State for delegate selection per request
+  const [showDelegateDropdown, setShowDelegateDropdown] = useState<{ [requestId: string]: boolean }>({});
+  const [selectedDelegate, setSelectedDelegate] = useState<{ [requestId: string]: string }>({});
+  const [delegating, setDelegating] = useState<{ [requestId: string]: boolean }>({});
 
-  useRequireAuth(SystemRole.DEPARTMENT_HEAD);
+  // Allow both department heads and delegates to access this page
+  // useRequireAuth(SystemRole.DEPARTMENT_HEAD); // Commented out to allow delegates
 
   useEffect(() => {
     if (successMessage) {
@@ -42,6 +48,14 @@ export default function ManagerLeaveReviewPage() {
   useEffect(() => {
     loadEmployees();
   }, []);
+
+  // Check if user is a delegate and auto-load delegated requests
+  useEffect(() => {
+    if (isAuthenticated && user && !hasSearched) {
+      // Auto-fetch if user might be a delegate
+      fetchPendingRequests();
+    }
+  }, [isAuthenticated, user]);
 
   const loadEmployees = async () => {
     try {
@@ -62,7 +76,51 @@ export default function ManagerLeaveReviewPage() {
   };
 
   const fetchPendingRequests = async (employeeId?: string) => {
+    // If no employeeId provided, check if user is a delegate and show delegated requests
     if (!employeeId) {
+      // Check if there's an employeeId in URL query params (for delegates clicking from dashboard)
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryEmployeeId = urlParams.get('employeeId');
+      
+      if (queryEmployeeId) {
+        // Use the employeeId from query params
+        await fetchPendingRequests(queryEmployeeId);
+        return;
+      }
+      
+      // If user is a delegate, fetch all pending requests for the manager's team
+      // The backend will handle this when userId is passed
+      const userId = user?.userId || (user as any)?._id || (user as any)?.id;
+      if (userId) {
+        setLoadingRequests(true);
+        setError(null);
+        setHasSearched(true);
+        try {
+          console.log("Fetching delegated pending requests for user:", userId);
+          // Pass userId to backend - it will check if user is a delegate and return appropriate requests
+          const requests = await leavesApi.getEmployeeLeaveRequests(userId, {
+            status: "pending",
+          });
+          console.log("Received delegated requests:", requests);
+          const pendingOnly = requests.filter(
+            (req) => req.status?.toLowerCase() === "pending"
+          );
+          console.log("Filtered delegated pending requests:", pendingOnly);
+          setPendingRequests(pendingOnly);
+          if (pendingOnly.length > 0) {
+            setSuccessMessage(`Found ${pendingOnly.length} pending request(s) delegated to you`);
+          }
+        } catch (err: any) {
+          console.error("Error fetching delegated requests:", err);
+          // If error, user might not be a delegate - that's okay
+          setPendingRequests([]);
+          setHasSearched(false);
+        } finally {
+          setLoadingRequests(false);
+        }
+        return;
+      }
+      
       setPendingRequests([]);
       setLoadingRequests(false);
       setHasSearched(false);
@@ -130,6 +188,54 @@ export default function ManagerLeaveReviewPage() {
     setError(errorMessage);
   };
 
+  const handleDelegateClick = (requestId: string) => {
+    setShowDelegateDropdown(prev => ({
+      ...prev,
+      [requestId]: !prev[requestId]
+    }));
+  };
+
+  const handleDelegateSelect = (requestId: string, delegateId: string) => {
+    setSelectedDelegate(prev => ({
+      ...prev,
+      [requestId]: delegateId
+    }));
+  };
+
+  const handleDelegateSubmit = async (requestId: string) => {
+    const delegateId = selectedDelegate[requestId];
+    if (!delegateId) {
+      setError("Please select a delegate");
+      return;
+    }
+
+    setDelegating(prev => ({ ...prev, [requestId]: true }));
+    setError(null);
+
+    try {
+      // Create delegation for 7 days from now
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 7);
+
+      await leavesApi.delegateApprovalAuthority(delegateId, startDate, endDate);
+      
+      setSuccessMessage(`Delegation created successfully. The selected employee can now approve leave requests on your behalf for the next 7 days.`);
+      setShowDelegateDropdown(prev => ({ ...prev, [requestId]: false }));
+      setSelectedDelegate(prev => {
+        const newState = { ...prev };
+        delete newState[requestId];
+        return newState;
+      });
+    } catch (err: any) {
+      console.error("Error delegating approval authority:", err);
+      const errorMessage = err?.response?.data?.message || err?.message || "Failed to delegate approval authority";
+      setError(errorMessage);
+    } finally {
+      setDelegating(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
   const formatDate = (date: Date | string | undefined): string => {
     if (!date) return "N/A";
     const d = typeof date === "string" ? new Date(date) : date;
@@ -192,19 +298,22 @@ export default function ManagerLeaveReviewPage() {
 
   const roles = user?.roles || [];
   const isDepartmentHead = roles.includes(SystemRole.DEPARTMENT_HEAD);
-
-  if (!isDepartmentHead) {
+  
+  // Allow access if user is department head OR if they have delegated requests
+  const hasDelegatedRequests = pendingRequests.length > 0 && !isDepartmentHead;
+  
+  if (!isDepartmentHead && !hasDelegatedRequests && hasSearched) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
-        <div className="rounded-md bg-red-50 p-4 border border-red-200">
-          <p className="text-sm text-red-800">
-            You do not have permission to access this page. Only department heads can review leave requests.
+        <div className="rounded-md bg-yellow-50 p-4 border border-yellow-200">
+          <p className="text-sm text-yellow-800">
+            No delegated leave requests found. You need to be assigned as a delegate by a department head to review requests.
           </p>
           <button
-            onClick={() => router.push("/dashboard/leaves/requests")}
-            className="mt-4 text-sm text-red-600 hover:text-red-800 underline"
+            onClick={() => router.push("/dashboard/leaves")}
+            className="mt-4 text-sm text-yellow-600 hover:text-yellow-800 underline"
           >
-            Go back to leave requests
+            Go back to leaves dashboard
           </button>
         </div>
       </div>
@@ -216,7 +325,10 @@ export default function ManagerLeaveReviewPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Review Leave Requests</h1>
         <p className="text-gray-600 mt-1">
-          As a department head, review and approve or reject leave requests from your team members
+          {isDepartmentHead 
+            ? "As a department head, review and approve or reject leave requests from your team members"
+            : "Review and approve or reject leave requests delegated to you"
+          }
         </p>
       </div>
 
@@ -301,10 +413,11 @@ export default function ManagerLeaveReviewPage() {
       ) : (
         <div className="space-y-4">
           {pendingRequests.map((request) => {
-            const leaveTypeName =
-              typeof request.leaveTypeId === "object" && request.leaveTypeId !== null
+            // Use leaveTypeName from backend if available, otherwise fallback to checking leaveTypeId
+            const leaveTypeName = (request as any).leaveTypeName ||
+              (typeof request.leaveTypeId === "object" && request.leaveTypeId !== null
                 ? request.leaveTypeId.name
-                : "Unknown Leave Type";
+                : "Unknown Leave Type");
 
             return (
               <Card key={request._id}>
@@ -412,21 +525,88 @@ export default function ManagerLeaveReviewPage() {
 
                   {/* Approval Actions */}
                   {request.status.toLowerCase() === "pending" && (
-                    <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                      <ApproveLeaveRequestButton
-                        leaveRequestId={request._id}
-                        onSuccess={handleApproveSuccess}
-                        onError={handleError}
-                        variant="primary"
-                        size="md"
-                      />
-                      <RejectLeaveRequestButton
-                        leaveRequestId={request._id}
-                        onSuccess={handleRejectSuccess}
-                        onError={handleError}
-                        variant="danger"
-                        size="md"
-                      />
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-4 mb-4">
+                        <ApproveLeaveRequestButton
+                          leaveRequestId={request._id}
+                          onSuccess={handleApproveSuccess}
+                          onError={handleError}
+                          variant="primary"
+                          size="md"
+                        />
+                        <RejectLeaveRequestButton
+                          leaveRequestId={request._id}
+                          onSuccess={handleRejectSuccess}
+                          onError={handleError}
+                          variant="danger"
+                          size="md"
+                        />
+                        <Button
+                          variant="outline"
+                          size="md"
+                          onClick={() => handleDelegateClick(request._id)}
+                          className="ml-auto"
+                        >
+                          Choose Delegate
+                        </Button>
+                      </div>
+                      
+                      {/* Delegate Selection Dropdown */}
+                      {showDelegateDropdown[request._id] && (
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Select an employee to delegate approval authority:
+                            </label>
+                            <Select
+                              label=""
+                              value={selectedDelegate[request._id] || ""}
+                              onChange={(e) => handleDelegateSelect(request._id, e.target.value)}
+                              options={
+                                employees.length > 0
+                                  ? employees
+                                      .filter(emp => {
+                                        const currentUserId = user?.userId || (user as any)?._id || (user as any)?.id;
+                                        return emp._id !== currentUserId;
+                                      }) // Don't show self
+                                      .map((emp) => ({
+                                        value: emp._id,
+                                        label: `${emp.firstName} ${emp.lastName} (${emp.employeeId || emp._id})`,
+                                      }))
+                                  : [{ value: "", label: loadingEmployees ? "Loading employees..." : "No employees available" }]
+                              }
+                              placeholder="Select an employee to delegate to"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleDelegateSubmit(request._id)}
+                              disabled={!selectedDelegate[request._id] || delegating[request._id]}
+                            >
+                              {delegating[request._id] ? "Delegating..." : "Confirm Delegate"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowDelegateDropdown(prev => ({ ...prev, [request._id]: false }));
+                                setSelectedDelegate(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[request._id];
+                                  return newState;
+                                });
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            The selected employee will be able to approve leave requests on your behalf for the next 7 days.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>

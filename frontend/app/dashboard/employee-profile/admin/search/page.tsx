@@ -69,12 +69,13 @@ export default function EmployeeManagementPage() {
   const [payGrades, setPayGrades] = useState<any[]>([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
-  // Add this useEffect to fetch real data:
-  // In your useEffect for fetching dropdown data:
-  // Update the fetchDropdownData function to remove the isActive parameter:
+  // Fetch dropdown data (departments, positions, pay grades)
   useEffect(() => {
     const fetchDropdownData = async () => {
-      if (!isAuthorized) return;
+      if (!isAuthorized) {
+        setLoadingDropdowns(false);
+        return;
+      }
 
       try {
         setLoadingDropdowns(true);
@@ -116,85 +117,67 @@ export default function EmployeeManagementPage() {
         }
         setPositions(positionsData);
 
-        // 3. Fetch pay grades - IMPROVED VERSION
-        console.log(
-          "📊 Fetching pay grades from /payroll-configuration/pay-grades"
-        );
-
+        // 3. Fetch pay grades - FIXED VERSION
+        // API returns: { data: [...], pagination: {...} }
+        // Fetch with high limit to get all pay grades
         try {
           const payGradesResponse = await api.get(
-            "/payroll-configuration/pay-grades"
+            "/payroll-configuration/pay-grades?limit=1000"
           );
 
           console.log("📊 Raw pay grades response:", payGradesResponse);
 
           let payGradesData = [];
 
-          // Handle various response structures
+          // Handle paginated response structure: { data: [...], pagination: {...} }
           if (Array.isArray(payGradesResponse)) {
             payGradesData = payGradesResponse;
           } else if (
             payGradesResponse &&
             typeof payGradesResponse === "object"
           ) {
-            // Check for data property first (Axios wraps response in .data)
-            const responseData = payGradesResponse.data || payGradesResponse;
-
-            if (Array.isArray(responseData)) {
-              payGradesData = responseData;
-            } else if (responseData && typeof responseData === "object") {
-              // Check nested data structures
-              if (Array.isArray(responseData.data)) {
-                payGradesData = responseData.data;
-              } else if (Array.isArray(responseData.items)) {
-                payGradesData = responseData.items;
-              } else if (Array.isArray(responseData.payGrades)) {
-                payGradesData = responseData.payGrades;
-              }
+            // The API returns { data: [...], pagination: {...} }
+            if (Array.isArray(payGradesResponse.data)) {
+              payGradesData = payGradesResponse.data;
+            } else if (
+              payGradesResponse.data &&
+              typeof payGradesResponse.data === "object" &&
+              Array.isArray(payGradesResponse.data.data)
+            ) {
+              payGradesData = payGradesResponse.data.data;
             }
           }
 
           // Normalize the data structure
-          payGradesData = payGradesData.map((grade: any) => ({
-            id: grade.id || grade._id,
-            name:
-              grade.name ||
-              grade.grade ||
-              grade.gradeName ||
-              `Grade ${grade.level || ""}`,
-            level: grade.level,
-            code: grade.code,
-            // Include any other fields you might need
-            minSalary: grade.minSalary,
-            maxSalary: grade.maxSalary,
-          }));
+          payGradesData = payGradesData
+            .filter((grade: any) => grade) // Filter out null/undefined
+            .map((grade: any) => ({
+              id: grade.id || grade._id?.toString() || String(grade._id),
+              name:
+                grade.name ||
+                grade.grade ||
+                grade.gradeName ||
+                `Grade ${grade.level || ""}`,
+              level: grade.level,
+              code: grade.code,
+              minSalary: grade.minSalary,
+              maxSalary: grade.maxSalary,
+            }));
 
           console.log("📊 Processed pay grades data:", payGradesData);
 
-          // If no data or empty array, use fallback
-          if (!payGradesData || payGradesData.length === 0) {
-            console.warn(
-              "⚠️ No pay grades returned from API, using fallback data"
+          // Only set if we have valid data
+          if (payGradesData && payGradesData.length > 0) {
+            setPayGrades(payGradesData);
+            console.log(
+              "✅ Pay grades set successfully:",
+              payGradesData.length,
+              "grades"
             );
-            payGradesData = [
-              { id: "fallback-1", name: "Grade A", level: 1 },
-              { id: "fallback-2", name: "Grade B", level: 2 },
-              { id: "fallback-3", name: "Grade C", level: 3 },
-              { id: "fallback-4", name: "Grade D", level: 4 },
-              { id: "fallback-5", name: "Grade E", level: 5 },
-            ];
-            showToast(
-              "Pay grades not available from server. Using default grades.",
-              "warning"
-            );
+          } else {
+            console.warn("⚠️ No pay grades returned from API");
+            setPayGrades([]);
           }
-
-          setPayGrades(payGradesData);
-          console.log(
-            "✅ Pay grades set successfully:",
-            payGradesData.length,
-            "grades"
-          );
         } catch (payGradeError: any) {
           console.error("❌ Error fetching pay grades:", payGradeError);
           console.error("Error details:", {
@@ -203,36 +186,20 @@ export default function EmployeeManagementPage() {
             status: payGradeError.response?.status,
           });
 
-          // Use fallback data if API fails
-          const fallbackPayGrades = [
-            { id: "fallback-1", name: "Grade A", level: 1 },
-            { id: "fallback-2", name: "Grade B", level: 2 },
-            { id: "fallback-3", name: "Grade C", level: 3 },
-            { id: "fallback-4", name: "Grade D", level: 4 },
-            { id: "fallback-5", name: "Grade E", level: 5 },
-          ];
-          setPayGrades(fallbackPayGrades);
-
-          showToast(
-            "Could not load pay grades from server. Using default grades.",
-            "warning"
-          );
+          // Set empty array on error (don't use fallback)
+          setPayGrades([]);
         }
       } catch (error: any) {
         console.error("❌ Error fetching dropdown data:", error);
-        showToast(
-          error.response?.data?.message ||
-            error.message ||
-            "Failed to load dropdown options",
-          "error"
-        );
+        // Don't show toast for every error to avoid spam
       } finally {
+        // Always reset loading state
         setLoadingDropdowns(false);
       }
     };
 
     fetchDropdownData();
-  }, [isAuthorized, showToast]);
+  }, [isAuthorized]); // Removed showToast from dependencies to prevent re-renders
   // Load employees function - useCallback with stable dependencies
   // In the loadEmployees function
   const loadEmployees = useCallback(async () => {
@@ -332,10 +299,22 @@ export default function EmployeeManagementPage() {
       status: employee.status || EmployeeStatus.ACTIVE,
 
       // Organization
-      primaryDepartmentId: employee.primaryDepartmentId || "",
-      primaryPositionId: employee.primaryPositionId || "",
-      supervisorPositionId: employee.supervisorPositionId || "",
-      payGradeId: employee.payGradeId || "",
+      primaryDepartmentId:
+        typeof employee.primaryDepartmentId === "object"
+          ? employee.primaryDepartmentId?._id || employee.primaryDepartmentId?.id || ""
+          : employee.primaryDepartmentId || "",
+      primaryPositionId:
+        typeof employee.primaryPositionId === "object"
+          ? employee.primaryPositionId?._id || employee.primaryPositionId?.id || ""
+          : employee.primaryPositionId || "",
+      supervisorPositionId:
+        typeof employee.supervisorPositionId === "object"
+          ? employee.supervisorPositionId?._id || employee.supervisorPositionId?.id || ""
+          : employee.supervisorPositionId || "",
+      payGradeId:
+        typeof employee.payGradeId === "object"
+          ? employee.payGradeId?._id?.toString() || employee.payGradeId?.id?.toString() || String(employee.payGradeId?._id || employee.payGradeId?.id || "")
+          : employee.payGradeId?.toString() || "",
 
       // Address
       address: {

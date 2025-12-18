@@ -275,3 +275,12 @@ export class RejectCorrectionRequestDto {
   @IsString()
   reason?: string;  // Optional reason for rejection
 }
+
+// DTO for importing attendance data from CSV
+// Note: We intentionally keep this simple (raw CSV string) to avoid
+// adding new models or enums. The service is responsible for parsing.
+export class ImportAttendanceCsvDto {
+  @IsNotEmpty()
+  @IsString()
+  csv: string;  // Raw CSV content including header line
+}

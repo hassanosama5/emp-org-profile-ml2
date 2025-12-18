@@ -78,6 +78,18 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Time Management</CardTitle>
+            <CardDescription>Clock in/out, attendance, and shift management</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/time-management" className="text-blue-600 hover:underline">
+              Open Time Management
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Recruitment</CardTitle>
             <CardDescription>HR recruiting tools</CardDescription>
           </CardHeader>

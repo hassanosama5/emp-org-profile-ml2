@@ -1,4 +1,5 @@
 import { IsString, IsNumber, IsOptional, IsDate, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CarryForwardSettingsDto {
   @IsString()
@@ -29,6 +30,7 @@ export class RunCarryForwardDto {
   employeeId?: string;
 
   @IsOptional()
+  @Type(() => Date)
   @IsDate()
   asOfDate?: Date;
 
