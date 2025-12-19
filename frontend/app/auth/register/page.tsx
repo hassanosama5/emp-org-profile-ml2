@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/use-auth";
+import { useAuthStore } from "../../../lib/stores/auth.store";
 import { RegisterRequest } from "../../../types";
 
 const inputClass =
@@ -11,6 +12,7 @@ const inputClass =
 export default function RegisterPage() {
   const router = useRouter();
   const { register, loading, error } = useAuth();
+  const user = useAuthStore((state) => state.user);
 
   const [form, setForm] = useState<Partial<RegisterRequest>>({});
   const [showSuccess, setShowSuccess] = useState(false);
@@ -28,18 +30,16 @@ export default function RegisterPage() {
     try {
       await register(form as RegisterRequest);
       // Get the user from auth store to show candidate number
-      const userStr = localStorage.getItem("user");
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user.candidateNumber) {
-          setCandidateNumber(user.candidateNumber);
-          setShowSuccess(true);
-          // Redirect after 5 seconds
-          setTimeout(() => {
-            router.push("/auth/dashboard-redirect");
-          }, 5000);
-          return;
-        }
+      // User is now in the auth store after registration
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser?.candidateNumber) {
+        setCandidateNumber(currentUser.candidateNumber);
+        setShowSuccess(true);
+        // Redirect after 5 seconds
+        setTimeout(() => {
+          router.push("/auth/dashboard-redirect");
+        }, 5000);
+        return;
       }
       // If no candidate number found, redirect immediately
       router.push("/auth/dashboard-redirect");

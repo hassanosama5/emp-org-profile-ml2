@@ -1,38 +1,38 @@
 // frontend/lib/api/performance/Api/performanceAssignmentsApi.ts
 
 import api from "@/lib/api/client";
+import { CycleAssignment } from "@/components/Performance/performanceCycles";
 import { AppraisalAssignment } from "@/components/Performance/performanceAssignments";
 
-const ASSIGNMENTS_BASE_PATH = "/performance/assignments";
-
-// Line Manager / Head of Department view
-export async function fetchManagerAssignments(
-  managerProfileId: string,
-  cycleId?: string,
-): Promise<AppraisalAssignment[]> {
-  const params: Record<string, string> = {};
-  if (cycleId) params.cycleId = cycleId;
-
-  const raw = await api.get(
-    `${ASSIGNMENTS_BASE_PATH}/manager/${managerProfileId}`,
-    { params },
-  );
-
-  return raw as unknown as AppraisalAssignment[];
+export interface BulkAssignmentInput {
+  cycleId: string;
+  assignments: CycleAssignment[];
 }
 
-// Employee view (for later steps, 5 / 6)
-export async function fetchEmployeeAssignments(
-  employeeProfileId: string,
-  cycleId?: string,
+export interface BulkAssignmentResponse {
+  assignments: any[];
+}
+
+// REQ-PP-05: Bulk assignment for existing cycles
+export async function createBulkAssignments(
+  input: BulkAssignmentInput
+): Promise<BulkAssignmentResponse> {
+  const response = await api.post("/performance/assignments/bulk", input);
+  return response as unknown as BulkAssignmentResponse;
+}
+
+// Get assignments for a specific manager
+export async function fetchManagerAssignments(
+  managerProfileId: string,
+  cycleId?: string
 ): Promise<AppraisalAssignment[]> {
-  const params: Record<string, string> = {};
-  if (cycleId) params.cycleId = cycleId;
-
-  const raw = await api.get(
-    `${ASSIGNMENTS_BASE_PATH}/employee/${employeeProfileId}`,
-    { params },
+  const params = cycleId ? { cycleId } : {};
+  const response = await api.get(
+    `/performance/assignments/manager/${managerProfileId}`,
+    { params }
   );
-
-  return raw as unknown as AppraisalAssignment[];
+  
+  // Handle different response formats
+  const data = (response as any)?.data || response;
+  return Array.isArray(data) ? data : [];
 }

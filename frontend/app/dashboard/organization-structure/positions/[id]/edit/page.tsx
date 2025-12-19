@@ -174,15 +174,15 @@ export default function EditPositionPage() {
       console.log("Testing direct API with:", testData);
 
       // Make direct fetch call to bypass our API client
-      const token = localStorage.getItem("auth_token");
+      // Cookies are sent automatically with credentials: 'include'
       const response = await fetch(
         `http://localhost:5000/api/v1/organization-structure/positions/${positionId}`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          credentials: 'include', // Include cookies
           body: JSON.stringify(testData),
         }
       );

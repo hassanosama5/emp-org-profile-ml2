@@ -28,7 +28,7 @@ export const CreateLeaveRequestForm: React.FC<CreateLeaveRequestFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState<CreateLeaveRequestDto>({
-    employeeId: authApi.getUserId() || user?.id || user?.userId || "",
+    employeeId: (user?.id || user?.userId || "") as string,
     leaveTypeId: "",
     dates: {
       from: "",
@@ -61,7 +61,7 @@ export const CreateLeaveRequestForm: React.FC<CreateLeaveRequestFormProps> = ({
 
   // Update employeeId when user changes - prioritize JWT token
   useEffect(() => {
-    const employeeId = authApi.getUserId() || user?.id || user?.userId;
+    const employeeId = (user?.id || user?.userId || "") as string;
     if (employeeId) {
       setFormData((prev) => ({
         ...prev,

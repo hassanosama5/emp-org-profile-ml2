@@ -65,12 +65,29 @@ export async function submitAppraisalRecordApi(
   recordId: string,
   managerProfileId: string,
 ): Promise<AppraisalRecord> {
+  // Use empty object instead of null to avoid JSON parsing issues
+  // Some backends may return null responses which cause JSON parsing errors
   const raw = await api.patch(
     `${APPRAISALS_BASE_PATH}/${recordId}/submit`,
-    null,
+    {}, // Empty object instead of null
     {
       params: { managerProfileId },
     },
   );
   return raw as unknown as AppraisalRecord;
+}
+
+// Get time management summary for employee during appraisal period (REQ-AE-03)
+export async function fetchTimeManagementSummary(
+  employeeId: string,
+  startDate: string,
+  endDate: string,
+): Promise<any> {
+  const raw = await api.get(
+    `/performance/time-management-summary/${employeeId}`,
+    {
+      params: { startDate, endDate },
+    },
+  );
+  return raw;
 }

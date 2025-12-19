@@ -234,15 +234,16 @@ export default function ChangeLogsPage() {
                   </div>
                 </div>
               ) : (
-                <table className="min-w-full text-sm">
+                <table className="min-w-full text-sm border-collapse">
                   <thead>
-                    <tr className="text-left border-b">
-                      <th className="py-3 pr-4">When</th>
-                      <th className="py-3 pr-4">Action</th>
-                      <th className="py-3 pr-4">Entity</th>
-                      <th className="py-3 pr-4">By</th>
-                      <th className="py-3 pr-4">Summary</th>
-                      <th className="py-3 pr-4">Open</th>
+                    <tr className="text-left border-b-2 border-gray-300 bg-gray-50">
+                      <th className="py-3 px-4 font-semibold text-gray-700">Timestamp</th>
+                      <th className="py-3 px-4 font-semibold text-gray-700">Action</th>
+                      <th className="py-3 px-4 font-semibold text-gray-700">Entity Type</th>
+                      <th className="py-3 px-4 font-semibold text-gray-700">Entity ID</th>
+                      <th className="py-3 px-4 font-semibold text-gray-700">Changed By</th>
+                      <th className="py-3 px-4 font-semibold text-gray-700">Summary</th>
+                      <th className="py-3 px-4 font-semibold text-gray-700">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -259,32 +260,57 @@ export default function ChangeLogsPage() {
                           : "—";
 
                       return (
-                        <tr key={l._id} className="border-b last:border-b-0">
-                          <td className="py-3 pr-4">
-                            {l.createdAt
-                              ? new Date(l.createdAt).toLocaleString()
-                              : "—"}
-                          </td>
-                          <td className="py-3 pr-4">{badge(l.action)}</td>
-                          <td className="py-3 pr-4">
+                        <tr
+                          key={l._id}
+                          className="border-b last:border-b-0 hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="py-3 px-4">
                             <div className="flex flex-col">
-                              <span className="font-medium">
-                                {l.entityType || "—"}
+                              <span className="text-sm font-medium text-gray-900">
+                                {l.createdAt
+                                  ? new Date(l.createdAt).toLocaleDateString()
+                                  : "—"}
                               </span>
-                              <span className="text-xs text-gray-500 font-mono">
-                                {shortId(l.entityId)}
+                              <span className="text-xs text-gray-500">
+                                {l.createdAt
+                                  ? new Date(l.createdAt).toLocaleTimeString()
+                                  : ""}
                               </span>
                             </div>
                           </td>
-                          <td className="py-3 pr-4">{byLabel}</td>
-                          <td className="py-3 pr-4">
+                          <td className="py-3 px-4">{badge(l.action)}</td>
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-gray-900">
+                              {l.entityType || "—"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-xs text-gray-500 font-mono">
+                              {shortId(l.entityId)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-900">
+                                {byLabel}
+                              </span>
+                              {byId && (
+                                <span className="text-xs text-gray-500 font-mono">
+                                  {shortId(byId)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
                             {l.summary ? (
-                              <span className="line-clamp-2">{l.summary}</span>
+                              <span className="text-sm text-gray-700 line-clamp-2">
+                                {l.summary}
+                              </span>
                             ) : (
-                              <span className="text-gray-500">—</span>
+                              <span className="text-gray-400 text-sm">—</span>
                             )}
                           </td>
-                          <td className="py-3 pr-4">
+                          <td className="py-3 px-4">
                             <Button
                               variant="outline"
                               size="sm"
@@ -296,8 +322,9 @@ export default function ChangeLogsPage() {
                                 )
                               }
                               disabled={!l.entityType || !l.entityId}
+                              className="text-xs"
                             >
-                              Timeline
+                              View Timeline
                             </Button>
                           </td>
                         </tr>

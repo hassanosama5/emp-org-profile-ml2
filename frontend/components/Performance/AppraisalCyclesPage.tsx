@@ -4,6 +4,14 @@
 
 import React, { useEffect, useState } from "react";
 import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/shared/ui/Card";
+import { Button } from "@/components/shared/ui/Button";
+import {
   AppraisalCycle,
   AppraisalCycleStatus,
   CreateAppraisalCycleInput,
@@ -432,486 +440,381 @@ export const AppraisalCyclesPage: React.FC = () => {
       )}
 
       {loading ? (
-        <p>Loading cycles...</p>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">Loading cycles…</span>
+            </div>
+          </CardContent>
+        </Card>
       ) : cycles.length === 0 ? (
         <p>No cycles found. Click “New Cycle” to create one.</p>
       ) : (
-        <div style={{ overflowX: "auto", marginBottom: "1rem" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: "900px",
-            }}
-          >
-            <thead>
-              <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Name
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Type
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Template
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Start
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  End
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Status
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {cycles.map((c, index) => {
-                const key = c.id ?? c._id ?? `${c.name}-${index}`;
-                const isSelected =
-                  selectedCycleId &&
-                  String(selectedCycleId) === String(c.id ?? c._id);
-
-                return (
-                  <tr
-                    key={key}
-                    style={{
-                      borderBottom: "1px solid #f3f4f6",
-                      backgroundColor: isSelected ? "#eff6ff" : "inherit",
-                    }}
-                  >
-                    <td style={{ padding: "0.5rem" }}>{c.name}</td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {c.cycleType}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {getPrimaryTemplateName(c)}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {formatDate(c.startDate)}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {formatDate(c.endDate)}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>{c.status}</td>
-                    <td style={{ padding: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleViewProgress(c)}
-                        style={{
-                          marginRight: "0.5rem",
-                          padding: "0.25rem 0.75rem",
-                          borderRadius: "0.375rem",
-                          border: "1px solid #bfdbfe",
-                          background: "#eff6ff",
-                          cursor: "pointer",
-                        }}
-                      >
-                        View Progress
-                      </button>
-                      {canActivate(c.status) && (
-                        <button
-                          type="button"
-                          onClick={() => handleActivate(c)}
-                          style={{
-                            marginRight: "0.5rem",
-                            padding: "0.25rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: "1px solid #d1d5db",
-                            background: "#f9fafb",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Activate
-                        </button>
-                      )}
-                      {canPublish(c.status) && (
-                        <button
-                          type="button"
-                          onClick={() => handlePublish(c)}
-                          style={{
-                            marginRight: "0.5rem",
-                            padding: "0.25rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: "1px solid #d1d5db",
-                            background: "#eef2ff",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Publish
-                        </button>
-                      )}
-                      {canClose(c.status) && (
-                        <button
-                          type="button"
-                          onClick={() => handleClose(c)}
-                          style={{
-                            marginRight: "0.5rem",
-                            padding: "0.25rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: "1px solid #facc15",
-                            background: "#fef9c3",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Close
-                        </button>
-                      )}
-                      {canArchive(c.status) && (
-                        <button
-                          type="button"
-                          onClick={() => handleArchive(c)}
-                          style={{
-                            padding: "0.25rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: "1px solid #fecaca",
-                            background: "#fee2e2",
-                            color: "#b91c1c",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Archive
-                        </button>
-                      )}
-                    </td>
+        <Card>
+          <CardHeader>
+            <CardTitle>Appraisal Cycles ({cycles.length})</CardTitle>
+            <CardDescription>
+              Manage cycles, view progress, and control cycle status
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Template
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Start
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      End
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {cycles.map((c, index) => {
+                    const key = c.id ?? c._id ?? `${c.name}-${index}`;
+                    const isSelected =
+                      selectedCycleId &&
+                      String(selectedCycleId) === String(c.id ?? c._id);
+
+                    const statusColors: Record<string, string> = {
+                      PLANNED: "bg-gray-100 text-gray-800",
+                      ACTIVE: "bg-green-100 text-green-800",
+                      CLOSED: "bg-blue-100 text-blue-800",
+                      ARCHIVED: "bg-gray-100 text-gray-600",
+                    };
+
+                    return (
+                      <tr
+                        key={key}
+                        className={`transition-colors ${
+                          isSelected
+                            ? "bg-blue-100 border-l-4 border-blue-600 ring-2 ring-blue-200"
+                            : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {c.name}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {c.cycleType}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {getPrimaryTemplateName(c)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {formatDate(c.startDate)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {formatDate(c.endDate)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              statusColors[c.status] ||
+                              "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm">
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              onClick={() => handleViewProgress(c)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              View Progress
+                            </Button>
+                            {canActivate(c.status) && (
+                              <Button
+                                onClick={() => handleActivate(c)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                Activate
+                              </Button>
+                            )}
+                            {canPublish(c.status) && (
+                              <Button
+                                onClick={() => handlePublish(c)}
+                                variant="primary"
+                                size="sm"
+                              >
+                                Publish
+                              </Button>
+                            )}
+                            {canClose(c.status) && (
+                              <Button
+                                onClick={() => handleClose(c)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                Close
+                              </Button>
+                            )}
+                            {canArchive(c.status) && (
+                              <Button
+                                onClick={() => handleArchive(c)}
+                                variant="danger"
+                                size="sm"
+                              >
+                                Archive
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* ---------- Step 4 progress panel ---------- */}
+      {/* Progress Panel */}
       {selectedCycleId && (
-        <section
-          style={{
-            marginTop: "1rem",
-            border: "1px solid #e5e7eb",
-            borderRadius: "0.75rem",
-            padding: "1rem",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.75rem",
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: 600,
-                  marginBottom: "0.25rem",
-                }}
-              >
-                Cycle Progress Overview
-              </h2>
-              {cycleProgress && (
-                <p style={{ fontSize: "0.9rem", color: "#4b5563" }}>
-                  {cycleProgress.name} · Status:{" "}
-                  <span style={{ fontWeight: 600 }}>
-                    {cycleProgress.status}
-                  </span>{" "}
-                  · Completion:{" "}
-                  <span style={{ fontWeight: 600 }}>
-                    {cycleProgress.completionRate}%
-                  </span>{" "}
-                  ({cycleProgress.totalAssignments} assignments)
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleSendReminders}
-              disabled={saving}
-              style={{
-                padding: "0.4rem 0.9rem",
-                borderRadius: "0.5rem",
-                border: "none",
-                background: "#2563eb",
-                color: "#fff",
-                cursor: "pointer",
-                opacity: saving ? 0.7 : 1,
-              }}
-            >
-              {saving ? "Sending..." : "Send Reminders"}
-            </button>
-          </div>
-
-          {progressLoading ? (
-            <p>Loading progress...</p>
-          ) : !cycleProgress ? (
-            <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-              Select a cycle and click &quot;View Progress&quot; to see
-              completion details.
-            </p>
-          ) : (
-            <div style={{ display: "grid", gap: "1rem" }}>
-              {/* By status */}
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h3
-                  style={{
-                    fontSize: "0.95rem",
-                    fontWeight: 600,
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  By Status
-                </h3>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                  }}
-                >
-                  {Object.entries(cycleProgress.byStatus).map(
-                    ([status, count]) => (
-                      <span
-                        key={status}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          borderRadius: "999px",
-                          border: "1px solid #e5e7eb",
-                          padding: "0.25rem 0.6rem",
-                          fontSize: "0.8rem",
-                          background: "#f9fafb",
-                        }}
-                      >
+                <CardTitle>Cycle Progress Overview</CardTitle>
+                {cycleProgress && (
+                  <CardDescription className="mt-1">
+                    {cycleProgress.name} · Status: <span className="font-semibold">{cycleProgress.status}</span> · Completion: <span className="font-semibold">{cycleProgress.completionRate}%</span> ({cycleProgress.totalAssignments} assignments)
+                  </CardDescription>
+                )}
+              </div>
+              <Button
+                onClick={handleSendReminders}
+                disabled={saving}
+                variant="primary"
+                isLoading={saving}
+              >
+                Send Reminders
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {progressLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-sm text-gray-600">Loading progress…</span>
+              </div>
+            ) : !cycleProgress ? (
+              <p className="text-sm text-gray-600">
+                Select a cycle and click "View Progress" to see completion details.
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {/* By Status */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                    By Status
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(cycleProgress.byStatus).map(
+                      ([status, count]) => (
                         <span
-                          style={{
-                            fontWeight: 600,
-                            marginRight: "0.25rem",
-                          }}
+                          key={status}
+                          className="inline-flex items-center rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700"
                         >
-                          {status}
+                          <span className="font-semibold mr-1">{status}</span>
+                          <span>· {count}</span>
                         </span>
-                        <span>· {count}</span>
-                      </span>
-                    ),
+                      ),
+                    )}
+                  </div>
+                </div>
+
+                {/* By Department */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                    By Department
+                  </h3>
+                  {cycleProgress.byDepartment.length === 0 ? (
+                    <p className="text-sm text-gray-600">
+                      No department-level data yet.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Department ID
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Assignments
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Submitted
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Completion
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {cycleProgress.byDepartment.map((d) => (
+                            <tr key={d.departmentId} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                                {d.departmentId}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">
+                                {d.totalAssignments}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">
+                                {d.submitted}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">
+                                {d.completionRate}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>
-
-              {/* By department */}
-              <div>
-                <h3
-                  style={{
-                    fontSize: "0.95rem",
-                    fontWeight: 600,
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  By Department
-                </h3>
-                {cycleProgress.byDepartment.length === 0 ? (
-                  <p
-                    style={{
-                      fontSize: "0.85rem",
-                      color: "#6b7280",
-                    }}
-                  >
-                    No department-level data yet.
-                  </p>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table
-                      style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        minWidth: "400px",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-                          <th
-                            style={{
-                              textAlign: "left",
-                              padding: "0.35rem",
-                            }}
-                          >
-                            Department ID
-                          </th>
-                          <th
-                            style={{
-                              textAlign: "left",
-                              padding: "0.35rem",
-                            }}
-                          >
-                            Assignments
-                          </th>
-                          <th
-                            style={{
-                              textAlign: "left",
-                              padding: "0.35rem",
-                            }}
-                          >
-                            Submitted
-                          </th>
-                          <th
-                            style={{
-                              textAlign: "left",
-                              padding: "0.35rem",
-                            }}
-                          >
-                            Completion
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cycleProgress.byDepartment.map((d) => (
-                          <tr
-                            key={d.departmentId}
-                            style={{
-                              borderBottom: "1px solid #f3f4f6",
-                            }}
-                          >
-                            <td style={{ padding: "0.35rem" }}>
-                              {d.departmentId}
-                            </td>
-                            <td style={{ padding: "0.35rem" }}>
-                              {d.totalAssignments}
-                            </td>
-                            <td style={{ padding: "0.35rem" }}>
-                              {d.submitted}
-                            </td>
-                            <td style={{ padding: "0.35rem" }}>
-                              {d.completionRate}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      {/* ---------- create form (unchanged) ---------- */}
+      {/* Create Form */}
       {formMode === "create" && (
-        <div
-          style={{
-            marginTop: "1.5rem",
-            border: "1px solid #e5e7eb",
-            padding: "1rem",
-            borderRadius: "0.75rem",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "1.25rem",
-              marginBottom: "0.75rem",
-            }}
-          >
-            Create Appraisal Cycle
-          </h2>
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Create Appraisal Cycle</CardTitle>
+            <CardDescription>
+              Fill in the details below to create a new appraisal cycle
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
 
-          <div style={{ display: "grid", gap: "0.75rem" }}>
-            <label>
-              Name
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={{ width: "100%", padding: "0.5rem" }}
-              />
-            </label>
-
-            <label>
-              Description
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                style={{ width: "100%", padding: "0.5rem" }}
-              />
-            </label>
-
-            <label>
-              Cycle Type
-              <select
-                value={cycleType}
-                onChange={(e) =>
-                  setCycleType(e.target.value as AppraisalTemplateType)
-                }
-                style={{ width: "100%", padding: "0.5rem" }}
-              >
-                {APPRAISAL_TEMPLATE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div style={{ display: "flex", gap: "0.75rem" }}>
-              <label style={{ flex: 1 }}>
-                Start Date
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
                 <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  style={{ width: "100%", padding: "0.5rem" }}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., Annual Performance Review 2025"
                 />
-              </label>
-              <label style={{ flex: 1 }}>
-                End Date
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={{ width: "100%", padding: "0.5rem" }}
-                />
-              </label>
-            </div>
+              </div>
 
-            <div style={{ display: "flex", gap: "0.75rem" }}>
-              <label style={{ flex: 1 }}>
-                Manager Due Date (optional)
-                <input
-                  type="date"
-                  value={managerDueDate}
-                  onChange={(e) => setManagerDueDate(e.target.value)}
-                  style={{ width: "100%", padding: "0.5rem" }}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Optional description for this cycle"
                 />
-              </label>
-              <label style={{ flex: 1 }}>
-                Employee Acknowledgement Due Date (optional)
-                <input
-                  type="date"
-                  value={employeeAckDueDate}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cycle Type
+                </label>
+                <select
+                  value={cycleType}
                   onChange={(e) =>
-                    setEmployeeAckDueDate(e.target.value)
+                    setCycleType(e.target.value as AppraisalTemplateType)
                   }
-                  style={{ width: "100%", padding: "0.5rem" }}
-                />
-              </label>
-            </div>
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {APPRAISAL_TEMPLATE_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Template assignments */}
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <span>Template Assignments</span>
-                <button
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Manager Due Date (optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={managerDueDate}
+                    onChange={(e) => setManagerDueDate(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Employee Acknowledgement Due Date (optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={employeeAckDueDate}
+                    onChange={(e) =>
+                      setEmployeeAckDueDate(e.target.value)
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+            {/* Template Assignments */}
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                <h3 className="text-sm font-semibold text-gray-900">Template Assignments</h3>
+                <Button
                   type="button"
                   onClick={() =>
                     setTemplateRows((prev) => [
@@ -919,102 +822,98 @@ export const AppraisalCyclesPage: React.FC = () => {
                       { templateId: "", departmentIdsCsv: "" },
                     ])
                   }
+                  variant="outline"
+                  size="sm"
                 >
                   + Add Template Assignment
-                </button>
+                </Button>
               </div>
-              <div style={{ display: "grid", gap: "0.5rem" }}>
+              <div className="space-y-3">
                 {templateRows.map((row, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "0.5rem",
-                      padding: "0.5rem",
-                    }}
-                  >
-                    <label>
-                      Template
-                      <select
-                        value={row.templateId}
-                        onChange={(e) =>
-                          setTemplateRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    templateId: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      >
-                        <option value="">Select template</option>
-                        {templates.map((t) => {
-                          const id = t.id ?? t._id ?? "";
-                          return (
-                            <option key={id} value={id}>
-                              {t.name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    <label>
-                      Department IDs (comma separated)
-                      <input
-                        value={row.departmentIdsCsv}
-                        onChange={(e) =>
-                          setTemplateRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    departmentIdsCsv: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        placeholder="depId1, depId2, ..."
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      />
-                    </label>
-                    {templateRows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTemplateRows((prev) =>
-                            prev.filter((_, i) => i !== index),
-                          )
-                        }
-                        style={{
-                          marginTop: "0.25rem",
-                          fontSize: "0.85rem",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  <Card key={index} className="border-gray-200">
+                    <CardContent className="pt-6">
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Template
+                          </label>
+                          <select
+                            value={row.templateId}
+                            onChange={(e) =>
+                              setTemplateRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        templateId: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">Select template</option>
+                            {templates.map((t) => {
+                              const id = t.id ?? t._id ?? "";
+                              return (
+                                <option key={id} value={id}>
+                                  {t.name}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Department IDs (comma separated)
+                          </label>
+                          <input
+                            value={row.departmentIdsCsv}
+                            onChange={(e) =>
+                              setTemplateRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        departmentIdsCsv: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            placeholder="depId1, depId2, ..."
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        {templateRows.length > 1 && (
+                          <div>
+                            <Button
+                              type="button"
+                              onClick={() =>
+                                setTemplateRows((prev) =>
+                                  prev.filter((_, i) => i !== index),
+                                )
+                              }
+                              variant="danger"
+                              size="sm"
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             </div>
 
             {/* Assignments */}
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <span>Assignments (Employee → Manager)</span>
-                <button
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                <h3 className="text-sm font-semibold text-gray-900">Assignments (Employee → Manager)</h3>
+                <Button
                   type="button"
                   onClick={() =>
                     setAssignmentRows((prev) => [
@@ -1029,195 +928,197 @@ export const AppraisalCyclesPage: React.FC = () => {
                       },
                     ])
                   }
+                  variant="outline"
+                  size="sm"
                 >
                   + Add Assignment
-                </button>
+                </Button>
               </div>
-              <div style={{ display: "grid", gap: "0.5rem" }}>
+              <div className="space-y-3">
                 {assignmentRows.map((row, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "0.5rem",
-                      padding: "0.5rem",
-                    }}
-                  >
-                    <label>
-                      Employee Profile ID
-                      <input
-                        value={row.employeeProfileId}
-                        onChange={(e) =>
-                          setAssignmentRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    employeeProfileId: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      />
-                    </label>
-                    <label>
-                      Manager Profile ID
-                      <input
-                        value={row.managerProfileId}
-                        onChange={(e) =>
-                          setAssignmentRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    managerProfileId: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      />
-                    </label>
-                    <label>
-                      Department ID
-                      <input
-                        value={row.departmentId}
-                        onChange={(e) =>
-                          setAssignmentRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    departmentId: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      />
-                    </label>
-                    <label>
-                      Position ID (optional)
-                      <input
-                        value={row.positionId}
-                        onChange={(e) =>
-                          setAssignmentRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    positionId: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      />
-                    </label>
-                    <label>
-                      Template
-                      <select
-                        value={row.templateId}
-                        onChange={(e) =>
-                          setAssignmentRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    templateId: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      >
-                        <option value="">Select template</option>
-                        {templates.map((t) => {
-                          const id = t.id ?? t._id ?? "";
-                          return (
-                            <option key={id} value={id}>
-                              {t.name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    <label>
-                      Due Date (optional)
-                      <input
-                        type="date"
-                        value={row.dueDate}
-                        onChange={(e) =>
-                          setAssignmentRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? {
-                                    ...r,
-                                    dueDate: e.target.value,
-                                  }
-                                : r,
-                            ),
-                          )
-                        }
-                        style={{ width: "100%", padding: "0.25rem" }}
-                      />
-                    </label>
-                    {assignmentRows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setAssignmentRows((prev) =>
-                            prev.filter((_, i) => i !== index),
-                          )
-                        }
-                        style={{
-                          marginTop: "0.25rem",
-                          fontSize: "0.85rem",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  <Card key={index} className="border-gray-200">
+                    <CardContent className="pt-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Employee Profile ID
+                          </label>
+                          <input
+                            value={row.employeeProfileId}
+                            onChange={(e) =>
+                              setAssignmentRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        employeeProfileId: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Manager Profile ID
+                          </label>
+                          <input
+                            value={row.managerProfileId}
+                            onChange={(e) =>
+                              setAssignmentRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        managerProfileId: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Department ID
+                          </label>
+                          <input
+                            value={row.departmentId}
+                            onChange={(e) =>
+                              setAssignmentRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        departmentId: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Position ID (optional)
+                          </label>
+                          <input
+                            value={row.positionId}
+                            onChange={(e) =>
+                              setAssignmentRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        positionId: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Template
+                          </label>
+                          <select
+                            value={row.templateId}
+                            onChange={(e) =>
+                              setAssignmentRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        templateId: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">Select template</option>
+                            {templates.map((t) => {
+                              const id = t.id ?? t._id ?? "";
+                              return (
+                                <option key={id} value={id}>
+                                  {t.name}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Due Date (optional)
+                          </label>
+                          <input
+                            type="date"
+                            value={row.dueDate}
+                            onChange={(e) =>
+                              setAssignmentRows((prev) =>
+                                prev.map((r, i) =>
+                                  i === index
+                                    ? {
+                                        ...r,
+                                        dueDate: e.target.value,
+                                      }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                      {assignmentRows.length > 1 && (
+                        <div className="mt-3">
+                          <Button
+                            type="button"
+                            onClick={() =>
+                              setAssignmentRows((prev) =>
+                                prev.filter((_, i) => i !== index),
+                              )
+                            }
+                            variant="danger"
+                            size="sm"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             </div>
-          </div>
+            </div>
 
-          <div
-            style={{
-              marginTop: "1rem",
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "0.5rem",
-            }}
-          >
-            <button type="button" onClick={closeForm}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={handleCreate}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.5rem",
-                border: "none",
-                background: "#2563eb",
-                color: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              {saving ? "Creating..." : "Create Cycle"}
-            </button>
-          </div>
-        </div>
+            {/* Form Actions */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex justify-end gap-3">
+                <Button type="button" onClick={closeForm} variant="outline">
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleCreate}
+                  variant="primary"
+                  isLoading={saving}
+                >
+                  Create Cycle
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

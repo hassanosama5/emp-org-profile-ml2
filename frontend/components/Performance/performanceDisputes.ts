@@ -26,7 +26,7 @@ export interface AppraisalDispute {
   requestedChange?: string;
 
   hrResolverEmployeeId?: string;
-  resolutionComment?: string;
+  resolutionSummary?: string;
 
   createdAt?: string;
   updatedAt?: string;
@@ -41,6 +41,6 @@ export interface SubmitDisputeInput {
 
 // (Used later for Step 7)
 export interface ResolveDisputeInput {
-  resolutionStatus: Exclude<AppraisalDisputeStatus, "OPEN" | "UNDER_REVIEW">;
-  resolutionComment?: string;
+  status: Exclude<AppraisalDisputeStatus, "OPEN" | "UNDER_REVIEW">;
+  resolutionSummary?: string;
 }

@@ -568,7 +568,19 @@ export class EmployeeProfileController {
   // ==================== PROFILE CHANGE REQUEST ROUTES ====================
 
   @Post('change-request')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.RECRUITER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.FINANCE_STAFF,
+  )
   @HttpCode(HttpStatus.CREATED)
   async createProfileChangeRequest(
     @CurrentUser() user: any,
@@ -592,7 +604,7 @@ export class EmployeeProfileController {
   }
 
   @Get('change-request/my-requests')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.RECRUITER)
   async getMyChangeRequests(@CurrentUser() user: any) {
     const requests =
       await this.employeeProfileService.getProfileChangeRequestsByEmployee(
@@ -883,7 +895,7 @@ export class EmployeeProfileController {
   }
 
   @Patch('change-request/:id/cancel')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.RECRUITER)
   async cancelChangeRequest(@Param('id') id: string, @CurrentUser() user: any) {
     const updatedRequest =
       await this.employeeProfileService.cancelProfileChangeRequest(
@@ -900,6 +912,7 @@ export class EmployeeProfileController {
   @Post('qualification')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
@@ -951,6 +964,7 @@ export class EmployeeProfileController {
   @Get('qualification/my-qualifications')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
@@ -986,6 +1000,7 @@ export class EmployeeProfileController {
   @Patch('qualifications/:qualId')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
@@ -1014,6 +1029,7 @@ export class EmployeeProfileController {
   @Delete('qualifications/:qualId')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,

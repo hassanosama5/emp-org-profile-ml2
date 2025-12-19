@@ -104,7 +104,7 @@ export default function TeamBalancesPage() {
     try {
       setLoading(true);
       setError("");
-      const managerId = authApi.getUserId() || user?.id || user?.userId || "";
+      const managerId = (user?.id || user?.userId || "") as string;
       
       if (!managerId || !managerId.trim()) {
         throw new Error("Manager ID is required. Please log in again.");

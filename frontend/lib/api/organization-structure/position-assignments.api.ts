@@ -14,14 +14,21 @@ export const positionAssignmentsApi = {
     data: CreatePositionAssignmentDto
   ): Promise<PositionAssignmentResponseDto> => {
     try {
-      console.log("Creating position assignment:", data);
+      console.log("Creating position assignment:", JSON.stringify(data, null, 2));
       const response: PositionAssignmentResponseDto = await api.post(
         "/organization-structure/assignments",
         data
       );
+      console.log("Assignment created successfully:", response);
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating position assignment:", error);
+      console.error("Error details:", {
+        message: error?.message,
+        status: error?.status,
+        responseData: error?.responseData,
+        validationErrors: error?.validationErrors,
+      });
       throw error;
     }
   },

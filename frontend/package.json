@@ -9,12 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
     "@radix-ui/react-select": "^2.2.6",
+    "@types/cookie-parser": "^1.4.10",
     "@types/lodash": "^4.17.21",
+    "@xyflow/react": "^12.10.0",
     "axios": "^1.7.7",
     "clsx": "^2.1.1",
+    "cookie-parser": "^1.4.7",
     "exceljs": "^4.4.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.4",

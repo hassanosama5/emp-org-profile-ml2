@@ -116,7 +116,7 @@ export default function TeamManagementPage() {
 
   const fetchTeamMembers = async () => {
     try {
-      const managerId = authApi.getUserId() || user?.id || user?.userId || "";
+      const managerId = (user?.id || user?.userId || "") as string;
       if (!managerId || !managerId.trim()) {
         return;
       }
@@ -142,7 +142,7 @@ export default function TeamManagementPage() {
     try {
       setLoading(true);
       setError("");
-      const managerId = authApi.getUserId() || user?.id || user?.userId || "";
+      const managerId = (user?.id || user?.userId || "") as string;
       
       if (!managerId || !managerId.trim()) {
         throw new Error("Manager ID is required. Please log in again.");
@@ -257,7 +257,7 @@ export default function TeamManagementPage() {
     try {
       setFlagging(true);
       setError("");
-      const managerId = authApi.getUserId() || user?.id || user?.userId || "";
+      const managerId = (user?.id || user?.userId || "") as string;
       
       await leavesApi.flagIrregularPattern(
         selectedLeaveRequestId,

@@ -65,6 +65,14 @@ export const employeeProfileApi = {
     return extractData<EmployeeProfile>(response) || response;
   },
 
+  // Get employee by employee number
+  getEmployeeByNumber: async (employeeNumber: string) => {
+    const response = await api.get(
+      `/employee-profile/search/by-number/${employeeNumber}`
+    );
+    return extractData<EmployeeProfile>(response) || response;
+  },
+
   // Submit a change request
   submitChangeRequest: async (data: {
     requestDescription: string;

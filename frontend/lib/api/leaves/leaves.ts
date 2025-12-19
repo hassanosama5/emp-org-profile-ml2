@@ -271,20 +271,15 @@ export const leavesApi = {
    */
   downloadAttachment: async (attachmentId: string): Promise<Blob> => {
     try {
-      const token = typeof window !== 'undefined' 
-        ? localStorage.getItem('auth_token') || '' 
-        : '';
-      
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:6000/api/v1";
       
       // FIXED: Use correct endpoint /leaves/attachments/:id/download
+      // Cookies are sent automatically with credentials: 'include'
       const response = await fetch(
         `${API_BASE_URL}/leaves/attachments/${attachmentId}/download`,
         {
           method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          credentials: 'include', // Include cookies
         }
       );
 
@@ -464,21 +459,16 @@ export const leavesApi = {
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = typeof window !== 'undefined' 
-        ? localStorage.getItem('auth_token') || '' 
-        : '';
-
       const API_BASE_URL =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:6000/api/v1";
 
       // Use the correct endpoint
       const endpoint = '/leaves/attachment/upload';
 
+      // Cookies are sent automatically with credentials: 'include'
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include', // Include cookies
         body: formData,
       });
 

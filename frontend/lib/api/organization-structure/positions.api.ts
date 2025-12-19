@@ -77,7 +77,7 @@ export const positionsApi = {
    * REQ-SANV-01: View positions
    */
   getAllPositions: async (
-    params?: GetPositionsParams
+    params?: GetPositionsParams & { search?: string }
   ): Promise<PositionResponseDto[]> => {
     try {
       const queryParams = new URLSearchParams();
@@ -87,6 +87,9 @@ export const positionsApi = {
       }
       if (params?.isActive !== undefined) {
         queryParams.append("isActive", params.isActive.toString());
+      }
+      if (params?.search) {
+        queryParams.append("search", params.search);
       }
 
       const url = `/organization-structure/positions${

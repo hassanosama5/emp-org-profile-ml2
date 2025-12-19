@@ -113,6 +113,23 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Performance</CardTitle>
+            <CardDescription>
+              View appraisals, ratings, and performance management
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/dashboard/performance"
+              className="text-blue-600 hover:underline"
+            >
+              Open Performance
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Recruitment</CardTitle>
             <CardDescription>HR recruiting tools</CardDescription>
           </CardHeader>
@@ -216,6 +233,26 @@ export default function DashboardPage() {
                 className="text-blue-600 hover:underline"
               >
                 View My Appraisals
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 🔹 Manager Assignments – Department Heads see their assigned appraisals */}
+        {isDepartmentHead && (
+          <Card className="border-2 border-green-200">
+            <CardHeader>
+              <CardTitle>My Assigned Appraisals</CardTitle>
+              <CardDescription>
+                Complete appraisal ratings for your direct reports
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/dashboard/performance/assignments"
+                className="text-green-600 hover:underline font-medium"
+              >
+                View My Assignments
               </Link>
             </CardContent>
           </Card>

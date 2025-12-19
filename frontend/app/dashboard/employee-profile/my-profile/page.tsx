@@ -17,18 +17,44 @@ import type { EmployeeProfile } from "@/types";
 
 import EducationSection from "@/components/employee-profile/EducationSection";
 import ProfilePhotoUpload from "@/components/employee-profile/ProfilePhotoUpload";
+import { fetchEmployeeAppraisals } from "@/lib/api/performance/Api/performanceAppraisalsApi";
+import { AppraisalRecord } from "@/components/Performance/performanceRecords";
 
 export default function MyProfilePage() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<EmployeeProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [appraisals, setAppraisals] = useState<AppraisalRecord[]>([]);
+  const [appraisalsLoading, setAppraisalsLoading] = useState(false);
 
   const canEdit = true;
 
   useEffect(() => {
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (profile) {
+      loadAppraisals();
+    }
+  }, [profile]);
+
+  const loadAppraisals = async () => {
+    try {
+      setAppraisalsLoading(true);
+      const profileId = profile?._id || profile?.id || user?.id || user?.userId;
+      if (profileId) {
+        const data = await fetchEmployeeAppraisals(String(profileId));
+        setAppraisals(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load appraisals:", err);
+      // Don't show error to user, just log it
+    } finally {
+      setAppraisalsLoading(false);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -345,6 +371,127 @@ export default function MyProfilePage() {
             </CardHeader>
             <CardContent>
               <EducationSection />
+            </CardContent>
+          </Card>
+
+          {/* Appraisal History */}
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Appraisal History</CardTitle>
+                <Link href="/dashboard/performance/my-appraisals">
+                  <Button variant="outline" size="sm">
+                    View All
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {appraisalsLoading ? (
+                <p className="text-sm text-gray-600">Loading appraisal history...</p>
+              ) : appraisals.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-600">
+                    No appraisal history available yet.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Your appraisal history will appear here once appraisals are completed and published.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {appraisals.slice(0, 5).map((appraisal, index) => {
+                    const r: any = appraisal;
+                    const cycle = r.cycleId;
+                    const template = r.templateId;
+                    const publishedDate = r.hrPublishedAt || r.managerSubmittedAt;
+                    
+                    return (
+                      <div
+                        key={r._id || r.id || index}
+                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-gray-900">
+                                {cycle
+                                  ? typeof cycle === "object"
+                                    ? cycle.name || "Appraisal Cycle"
+                                    : String(cycle)
+                                  : "Appraisal Cycle"}
+                              </h4>
+                              {r.status && (
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                    r.status === "HR_PUBLISHED"
+                                      ? "bg-green-100 text-green-800"
+                                      : r.status === "MANAGER_SUBMITTED"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-gray-100 text-gray-800"
+                                  }`}
+                                >
+                                  {r.status === "HR_PUBLISHED"
+                                    ? "Published"
+                                    : r.status === "MANAGER_SUBMITTED"
+                                    ? "Submitted"
+                                    : r.status}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <p className="text-xs text-gray-500">Template</p>
+                                <p className="text-gray-900 font-medium">
+                                  {template
+                                    ? typeof template === "object"
+                                      ? template.name || "Template"
+                                      : String(template)
+                                    : "N/A"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Score</p>
+                                <p className="text-gray-900 font-medium">
+                                  {r.totalScore ?? "-"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Rating</p>
+                                <p className="text-gray-900 font-medium">
+                                  {r.overallRatingLabel ?? "-"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Date</p>
+                                <p className="text-gray-900 font-medium">
+                                  {publishedDate
+                                    ? new Date(publishedDate).toLocaleDateString()
+                                    : "-"}
+                                </p>
+                              </div>
+                            </div>
+                            {r.managerSummary && (
+                              <p className="text-xs text-gray-600 mt-2 line-clamp-2">
+                                {r.managerSummary}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {appraisals.length > 5 && (
+                    <div className="text-center pt-2">
+                      <Link href="/dashboard/performance/my-appraisals">
+                        <Button variant="outline" size="sm">
+                          View All {appraisals.length} Appraisals
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

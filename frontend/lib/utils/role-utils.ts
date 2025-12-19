@@ -274,6 +274,8 @@ export function getPrimaryDashboard(user: User | null): string {
   if (roles.includes(SystemRole.PAYROLL_MANAGER)) return "/dashboard/payroll";
   if (roles.includes(SystemRole.PAYROLL_SPECIALIST))
     return "/dashboard/payroll";
+  // Recruiters default to recruitment portal, but can access employee profile
+  // This function is only called on initial login redirect, not on every page navigation
   if (roles.includes(SystemRole.RECRUITER)) return "/dashboard/recruitment";
   if (roles.includes(SystemRole.DEPARTMENT_HEAD))
     return "/dashboard/employee-profile";

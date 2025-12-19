@@ -29,7 +29,7 @@ import {
 } from '../DTOs/reporting.dtos';
 import { LeavesService } from '../../leaves/leaves.service';
 import { NotificationService } from './notification.service';
-import { Inject, forwardRef, BadRequestException } from '@nestjs/common';
+import { Inject, forwardRef, BadRequestException, NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class TimeManagementService {
@@ -5176,25 +5176,40 @@ export class TimeManagementService {
     },
     currentUserId: string,
   ) {
-    const { 
-      employeeId, 
-      startDate, 
-      endDate,
-      includeExceptions = true,
-      includeOvertime = true,
-    } = params;
+    try {
+      const { 
+        employeeId, 
+        startDate, 
+        endDate,
+        includeExceptions = true,
+        includeOvertime = true,
+      } = params;
 
-    // Ensure dates are proper Date objects
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    // Set end date to end of day
-    end.setHours(23, 59, 59, 999);
+      if (!employeeId) {
+        throw new BadRequestException('employeeId is required');
+      }
+
+      // Ensure dates are proper Date objects
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new BadRequestException('Invalid date format for startDate or endDate');
+      }
+      
+      // Set end date to end of day
+      end.setHours(23, 59, 59, 999);
+
+      // Convert employeeId to ObjectId for MongoDB query
+      if (!Types.ObjectId.isValid(employeeId)) {
+        throw new BadRequestException(`Invalid employeeId format: ${employeeId}`);
+      }
+      const employeeObjectId = new Types.ObjectId(employeeId);
 
     // Get all attendance records for the employee and filter in code
     const allRecords = await this.attendanceRecordModel
       .find({
-        employeeId,
+        employeeId: employeeObjectId,
       })
       .populate('employeeId', 'firstName lastName email employeeNumber departmentId')
       .sort({ createdAt: 1 })
@@ -5211,7 +5226,7 @@ export class TimeManagementService {
     if (includeExceptions) {
       exceptions = await this.timeExceptionModel
         .find({
-          employeeId,
+          employeeId: employeeObjectId,
           createdAt: { $gte: startDate, $lte: endDate },
         })
         .exec();
@@ -5291,16 +5306,22 @@ export class TimeManagementService {
       ? Math.round(((summary.presentDays - summary.lateDays) / summary.presentDays) * 100)
       : 0;
 
-    await this.logTimeManagementChange(
-      'EMPLOYEE_ATTENDANCE_HISTORY_ACCESSED',
-      {
-        employeeId,
-        startDate,
-        endDate,
-        totalRecords: dailyRecords.length,
-      },
-      currentUserId,
-    );
+    // Log access (don't fail if logging fails)
+    try {
+      await this.logTimeManagementChange(
+        'EMPLOYEE_ATTENDANCE_HISTORY_ACCESSED',
+        {
+          employeeId,
+          startDate,
+          endDate,
+          totalRecords: dailyRecords.length,
+        },
+        currentUserId,
+      );
+    } catch (logError) {
+      console.warn('Failed to log time management change:', logError);
+      // Continue execution even if logging fails
+    }
 
     return {
       reportType: 'EMPLOYEE_ATTENDANCE_HISTORY',

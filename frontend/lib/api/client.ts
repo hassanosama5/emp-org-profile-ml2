@@ -17,24 +17,15 @@ export const api: AxiosInstance = axios.create({
     "Content-Type": "application/json",
   },
   timeout: 15000,
+  withCredentials: true, // Enable cookies (credentials) for all requests
 });
 
-// 🔐 Request interceptor – attach JWT if present
+// 🔐 Request interceptor – cookies are sent automatically with withCredentials: true
+// No need to manually attach tokens from localStorage
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    if (typeof window !== "undefined") {
-      // Try multiple common keys so we don't depend on one name
-      const token =
-        localStorage.getItem("auth_token") ||
-        localStorage.getItem("accessToken") ||
-        localStorage.getItem("token") ||
-        localStorage.getItem("jwt");
-
-      if (token) {
-        config.headers = config.headers ?? {};
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    }
+    // Cookies are automatically included with withCredentials: true
+    // No localStorage token handling needed
     return config;
   },
   (error) => {
@@ -59,7 +50,18 @@ api.interceptors.response.use(
       }
     }
 
-    // Return the data property if it exists, otherwise return the full response
+    // Handle null or empty responses gracefully
+    // Return the data property if it exists, otherwise return null
+    // This prevents "null" string parsing errors
+    if (response.data === null || response.data === undefined) {
+      return null;
+    }
+    
+    // If response.data is the string "null", return null instead
+    if (typeof response.data === 'string' && response.data.trim() === 'null') {
+      return null;
+    }
+    
     return response.data;
   },
   (error) => {
@@ -138,6 +140,17 @@ api.interceptors.response.use(
         headers: error.response.headers,
       });
     }
+
+    // Log validation errors if present
+    if (error.response?.data) {
+      const errorData = error.response.data;
+      if (Array.isArray(errorData.message)) {
+        // NestJS validation errors format
+        console.error('🔴 Validation Errors:', errorData.message);
+      } else if (errorData.message) {
+        console.error('🔴 Error Message:', errorData.message);
+      }
+    }
     
     // ============================================================
     // CHANGED: Removed orphaned code causing syntax errors
@@ -151,37 +164,31 @@ api.interceptors.response.use(
     // });
 
     if (error.response?.status === 401) {
-      console.log("🔒 401 Unauthorized - Token may be invalid");
+      // Only log in development and only if not on auth pages
+      if (process.env.NODE_ENV === 'development') {
+        const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+        const isAuthPage = currentPath.startsWith("/auth/");
+        if (!isAuthPage) {
+          console.log("🔒 401 Unauthorized - Cookie may be invalid or expired");
+        }
+      }
       
       // Only redirect if we're not already on the login page and it's not a network error
       if (typeof window !== "undefined") {
         const currentPath = window.location.pathname;
         const isLoginPage = currentPath.startsWith("/auth/login");
+        const isAuthPage = currentPath.startsWith("/auth/");
         const isNetworkError = !error.response; // Network errors don't have response
         
-        // Don't redirect if already on login page or if it's a network error
-        if (!isLoginPage && !isNetworkError) {
-          // Check if token exists - if not, might be a temporary issue
-          const token = localStorage.getItem("auth_token");
-          
-          if (token) {
-            // Token exists but got 401 - likely expired or invalid
-            console.log("Token exists but unauthorized - clearing and redirecting");
-            localStorage.removeItem("auth_token");
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("token");
-            localStorage.removeItem("jwt");
-            localStorage.removeItem("user");
-            
-            // Use router if available, otherwise use window.location
-            // Add a small delay to prevent redirect loops
-            setTimeout(() => {
-              window.location.href = "/auth/login";
-            }, 100);
-          } else {
-            // No token - might be a temporary API issue, don't redirect aggressively
-            console.log("No token found - might be temporary issue, not redirecting");
-          }
+        // Don't redirect if already on auth pages or if it's a network error
+        // Also don't redirect if we're in the middle of initializing auth
+        if (!isLoginPage && !isAuthPage && !isNetworkError) {
+          // Cookie-based auth - no need to clear localStorage
+          // Cookie will be cleared by backend on logout
+          // Add a small delay to prevent redirect loops
+          setTimeout(() => {
+            window.location.href = "/auth/login";
+          }, 100);
         }
       }
     }
@@ -201,7 +208,11 @@ api.interceptors.response.use(
     // CHANGED - Extract error message with better handling for validation errors
     let errorMessage = "An error occurred";
     
-    const responseData = error.response?.data;
+    // Handle case where response.data might be the string "null" or actual null
+    let responseData = error.response?.data;
+    if (typeof responseData === 'string' && responseData.trim() === 'null') {
+      responseData = null;
+    }
     
     // First, try to get message from error.response.data (NestJS format)
     if (responseData) {
@@ -278,10 +289,28 @@ api.interceptors.response.use(
 
     //change
     // Create a more detailed error object
-    const detailedError = new Error(errorMessage);
+    let finalErrorMessage = errorMessage;
+    
+    // Extract validation errors if present
+    if (error.response?.data) {
+      const errorData = error.response.data;
+      if (Array.isArray(errorData.message)) {
+        // NestJS validation errors format: { message: ["field must be...", ...] }
+        finalErrorMessage = `Validation failed: ${errorData.message.join(', ')}`;
+      } else if (errorData.message && typeof errorData.message === 'string') {
+        finalErrorMessage = errorData.message;
+      } else if (errorData.error) {
+        finalErrorMessage = errorData.error;
+      } else if (typeof errorData === 'string') {
+        finalErrorMessage = errorData;
+      }
+    }
+    
+    const detailedError = new Error(finalErrorMessage);
     (detailedError as any).status = error.response?.status;
     (detailedError as any).responseData = responseData;
     (detailedError as any).originalError = error;
+    (detailedError as any).validationErrors = error.response?.data?.message || null;
     
     return Promise.reject(detailedError);
   }

@@ -41,7 +41,10 @@ export default function LoginPage() {
     try {
       await login({ employeeNumber, password });
       // Only redirect if login was successful (no error thrown)
-      router.push("/auth/dashboard-redirect");
+      // Small delay to ensure state is updated before redirect
+      setTimeout(() => {
+        router.push("/auth/dashboard-redirect");
+      }, 100);
     } catch (err: any) {
       // RECRUITMENT SYSTEM (OFF-007): Error handling for deactivated accounts
       // When an employee's access is revoked during offboarding, they receive

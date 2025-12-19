@@ -13,6 +13,14 @@ import {
   deleteAppraisalTemplate,
 } from "../../lib/api/performance/Api/performanceTemplatesApi";
 import { AppraisalTemplateForm } from "./AppraisalTemplateForm";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/shared/ui/Card";
+import { Button } from "@/components/shared/ui/Button";
 
 type FormMode = "none" | "create" | "edit";
 
@@ -90,9 +98,7 @@ export const AppraisalTemplatesPage: React.FC = () => {
       const updatedId = updated.id ?? updated._id;
 
       setTemplates((prev) =>
-        prev.map((t) =>
-          (t.id ?? t._id) === updatedId ? updated : t,
-        ),
+        prev.map((t) => ((t.id ?? t._id) === updatedId ? updated : t))
       );
       setSelectedTemplate(null);
       setFormMode("none");
@@ -112,7 +118,7 @@ export const AppraisalTemplatesPage: React.FC = () => {
     }
 
     const confirmDelete = window.confirm(
-      `Delete template "${template.name}"? This cannot be undone.`,
+      `Delete template "${template.name}"? This cannot be undone.`
     );
     if (!confirmDelete) return;
 
@@ -120,9 +126,7 @@ export const AppraisalTemplatesPage: React.FC = () => {
       setSaving(true);
       setError(null);
       await deleteAppraisalTemplate(id);
-      setTemplates((prev) =>
-        prev.filter((t) => (t.id ?? t._id) !== id),
-      );
+      setTemplates((prev) => prev.filter((t) => (t.id ?? t._id) !== id));
     } catch (err: any) {
       console.error(err);
       setError(err?.message ?? "Failed to delete template");
@@ -132,140 +136,131 @@ export const AppraisalTemplatesPage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: "1.5rem" }}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "1rem",
-        }}
-      >
+    <div className="container mx-auto px-6 py-8">
+      {/* Header */}
+      <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>
+          <h1 className="text-3xl font-bold text-white-900">
             Appraisal Templates
           </h1>
-          <p
-            style={{
-              color: "#6b7280",
-              fontSize: "0.9rem",
-              maxWidth: "40rem",
-            }}
-          >
+          <p className="text-gray-600 mt-1 max-w-2xl">
             Configure standardized appraisal templates, rating scales, and
             criteria so managers evaluate employees consistently.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateForm}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            background: "#2563eb",
-            color: "#fff",
-            cursor: "pointer",
-          }}
-        >
+        <Button onClick={openCreateForm} variant="primary">
           + New Template
-        </button>
-      </header>
+        </Button>
+      </div>
 
+      {/* Error State */}
       {error && (
-        <div
-          style={{
-            marginBottom: "1rem",
-            padding: "0.75rem 1rem",
-            borderRadius: "0.5rem",
-            background: "#fee2e2",
-            color: "#991b1b",
-          }}
-        >
-          {error}
-        </div>
+        <Card className="border-red-200 bg-red-50 mb-6">
+          <CardContent className="pt-6">
+            <p className="text-sm text-red-800">{error}</p>
+          </CardContent>
+        </Card>
       )}
 
+      {/* Loading State */}
       {loading ? (
-        <p>Loading templates...</p>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">Loading templates…</span>
+            </div>
+          </CardContent>
+        </Card>
       ) : templates.length === 0 ? (
-        <p>No templates found. Click “New Template” to create one.</p>
+        <Card>
+          <CardHeader>
+            <CardTitle>No Templates Found</CardTitle>
+            <CardDescription>
+              Click "New Template" to create your first appraisal template.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       ) : (
-        <div style={{ overflowX: "auto", marginBottom: "1rem" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>Name</th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>Type</th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Rating Scale
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Criteria
-                </th>
-                <th style={{ textAlign: "left", padding: "0.5rem" }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((t, index) => {
-                const key = t.id ?? t._id ?? `${t.name}-${index}`;
-                return (
-                  <tr
-                    key={key}
-                    style={{ borderBottom: "1px solid #f3f4f6" }}
-                  >
-                    <td style={{ padding: "0.5rem" }}>{t.name}</td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {t.templateType}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {t.ratingScale.min} – {t.ratingScale.max}{" "}
-                      {t.ratingScale.type &&
-                        t.ratingScale.labels &&
-                        `(${t.ratingScale.labels.join(", ")})`}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>
-                      {t.criteria.length} criterion
-                      {t.criteria.length !== 1 ? "s" : ""}
-                    </td>
-                    <td style={{ padding: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => openEditForm(t)}
-                        style={{
-                          marginRight: "0.5rem",
-                          padding: "0.25rem 0.75rem",
-                          borderRadius: "0.375rem",
-                          border: "1px solid #d1d5db",
-                          background: "#f9fafb",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(t)}
-                        style={{
-                          padding: "0.25rem 0.75rem",
-                          borderRadius: "0.375rem",
-                          border: "1px solid #fecaca",
-                          background: "#fee2e2",
-                          color: "#b91c1c",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
+        <Card>
+          <CardHeader>
+            <CardTitle>Templates ({templates.length})</CardTitle>
+            <CardDescription>
+              Manage your appraisal templates and rating scales
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Rating Scale
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Criteria
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {templates.map((t, index) => {
+                    const key = t.id ?? t._id ?? `${t.name}-${index}`;
+                    return (
+                      <tr
+                        key={key}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {t.name}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {t.templateType}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {t.ratingScale.min} – {t.ratingScale.max}
+                          {t.ratingScale.type &&
+                            t.ratingScale.labels &&
+                            ` (${t.ratingScale.labels.join(", ")})`}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {t.criteria.length} criterion
+                          {t.criteria.length !== 1 ? "s" : ""}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm">
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => openEditForm(t)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              onClick={() => handleDelete(t)}
+                              variant="danger"
+                              size="sm"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {formMode !== "none" && (

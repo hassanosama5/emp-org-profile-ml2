@@ -44,14 +44,15 @@ export default function LeaveAdjustmentsPage() {
   const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
 
   useEffect(() => {
-    const userId = authApi.getUserId();
-    if (userId) {
+    // Get user ID from auth hook
+    if (user?.id || user?.userId) {
+      const userId = (user.id || user.userId) as string;
       setFormData((prev) => ({ ...prev, hrUserId: userId }));
     }
     // Load dropdown options
     loadEmployees();
     loadLeaveTypes();
-  }, []);
+  }, [user]);
 
   // NEW: Load employees for dropdown
   const loadEmployees = async () => {

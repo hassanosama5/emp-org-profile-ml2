@@ -39,6 +39,8 @@ import {
 
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { v2 as cloudinary } from 'cloudinary';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
 
 @Injectable()
 export class EmployeeProfileService {
@@ -53,6 +55,7 @@ export class EmployeeProfileService {
     private systemRoleModel: Model<EmployeeSystemRole>,
     @InjectModel(EmployeeQualification.name)
     private qualificationModel: Model<EmployeeQualification>,
+    private readonly notificationsService: NotificationsService,
   ) {
     // Configure Cloudinary (add to your service constructor)
     cloudinary.config({
@@ -315,6 +318,26 @@ export class EmployeeProfileService {
     return employee;
   }
 
+  // Helper method for probationary appraisals
+  async findEmployeesByStatus(status: EmployeeStatus | string): Promise<EmployeeProfile[]> {
+    return this.employeeModel
+      .find({ status: status as EmployeeStatus })
+      .select('-password')
+      .populate('primaryDepartmentId primaryPositionId supervisorPositionId')
+      .exec();
+  }
+
+  // Helper method to find employees by position
+  async findEmployeesByPosition(positionId: string): Promise<EmployeeProfile[]> {
+    return this.employeeModel
+      .find({
+        primaryPositionId: new Types.ObjectId(positionId),
+        status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION] },
+      })
+      .select('-password')
+      .exec();
+  }
+
   async findByNationalId(nationalId: string): Promise<EmployeeProfile> {
     const employee = await this.employeeModel
       .findOne({ nationalId })
@@ -353,10 +376,9 @@ export class EmployeeProfileService {
     }
 
     // Update status effective date if status changed
-    if (
-      updateEmployeeDto.status &&
-      updateEmployeeDto.status !== employee.status
-    ) {
+    const statusChanged =
+      updateEmployeeDto.status && updateEmployeeDto.status !== employee.status;
+    if (statusChanged) {
       updateEmployeeDto['statusEffectiveFrom'] = new Date();
     }
 
@@ -364,6 +386,34 @@ export class EmployeeProfileService {
       .findByIdAndUpdate(id, { $set: updateEmployeeDto }, { new: true })
       .select('-password')
       .exec();
+
+    // System Integrations: Notify Payroll and Time Management on status change
+    if (statusChanged && updatedEmployee) {
+      const newStatus = updateEmployeeDto.status;
+      if (
+        newStatus === EmployeeStatus.TERMINATED ||
+        newStatus === EmployeeStatus.SUSPENDED
+      ) {
+        // System Integration: Log status change for Payroll/Time Management sync
+        // In a real system, this would trigger API calls to Payroll and Time Management modules
+        console.log(
+          `[System Integration] Employee ${updatedEmployee.employeeNumber} status changed from ${employee.status} to ${newStatus}. ` +
+          `Integration points: Payroll module should block payments if TERMINATED/SUSPENDED. ` +
+          `Time Management module should block time tracking if TERMINATED.`,
+        );
+        // Note: Actual API calls to Payroll/Time Management would go here
+        // For now, we log the integration point
+      }
+
+      // System Integration: Log pay grade change for Payroll sync
+      if (updateEmployeeDto.payGradeId && updateEmployeeDto.payGradeId !== employee.payGradeId?.toString()) {
+        console.log(
+          `[System Integration] Pay grade changed for employee ${updatedEmployee.employeeNumber}. ` +
+          `Payroll module should update salary calculations.`,
+        );
+        // Note: Actual API call to Payroll would go here
+      }
+    }
 
     return updatedEmployee;
   }
@@ -1008,6 +1058,10 @@ export class EmployeeProfileService {
                     `❌ Invalid position ID: ${changes.primaryPositionId}`,
                   );
                   delete changes.primaryPositionId;
+                } else {
+                  // Convert to ObjectId for MongoDB
+                  changes.primaryPositionId = new Types.ObjectId(changes.primaryPositionId);
+                  console.log(`✅ Valid position ID, converted to ObjectId: ${changes.primaryPositionId}`);
                 }
               }
 
@@ -1017,6 +1071,10 @@ export class EmployeeProfileService {
                     `❌ Invalid department ID: ${changes.primaryDepartmentId}`,
                   );
                   delete changes.primaryDepartmentId;
+                } else {
+                  // Convert to ObjectId for MongoDB
+                  changes.primaryDepartmentId = new Types.ObjectId(changes.primaryDepartmentId);
+                  console.log(`✅ Valid department ID, converted to ObjectId: ${changes.primaryDepartmentId}`);
                 }
               }
 

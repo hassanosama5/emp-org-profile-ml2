@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { PerformanceService } from './performance.service';
 
@@ -27,6 +28,7 @@ import { UpdateAppraisalTemplateDto } from './dto/update-appraisal-template.dto'
 
 // CYCLES
 import { CreateAppraisalCycleDto } from './dto/create-appraisal-cycle.dto';
+import { BulkAssignmentDto } from './dto/bulk-assignment.dto';
 
 // RECORDS
 import { UpsertAppraisalRecordDto } from './dto/upsert-appraisal-record.dto';
@@ -34,6 +36,9 @@ import { UpsertAppraisalRecordDto } from './dto/upsert-appraisal-record.dto';
 // DISPUTES
 import { SubmitDisputeDto } from './dto/submit-dispute.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
+
+// ACKNOWLEDGMENT
+import { AcknowledgeAppraisalDto } from './dto/acknowledge-appraisal.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('performance')
@@ -169,6 +174,28 @@ export class PerformanceController {
     return this.performanceService.sendCycleReminders(id);
   }
 
+  // REQ-PP-05: Bulk assignment for existing cycles
+  @Post('assignments/bulk')
+  @Roles(
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+  )
+  createBulkAssignments(@Body() dto: BulkAssignmentDto) {
+    return this.performanceService.createBulkAssignments(dto);
+  }
+
+  // REQ-PP-02: Schedule automatic probationary appraisals
+  @Post('appraisals/schedule-probationary')
+  @Roles(
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
+  scheduleProbationaryAppraisals() {
+    return this.performanceService.scheduleProbationaryAppraisals();
+  }
+
   // ============================================================
   //                      ASSIGNMENTS (Step 3A)
   // ============================================================
@@ -219,6 +246,7 @@ export class PerformanceController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
   )
   getAssignmentsForCurrentEmployee(
     @Req() req: any,
@@ -239,6 +267,7 @@ export class PerformanceController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
   )
   getAssignmentsForEmployee(
     @Param('employeeProfileId') employeeProfileId: string,
@@ -302,6 +331,7 @@ export class PerformanceController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
   )
   getAppraisalById(@Param('id') id: string) {
     return this.performanceService.getAppraisalById(id);
@@ -315,11 +345,24 @@ export class PerformanceController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
   )
   getCurrentEmployeeAppraisals(@Req() req: any) {
-    const employeeProfileId = req.user?.employeeProfileId;
+    // Try multiple possible fields for employee profile ID
+    const employeeProfileId =
+      req.user?.employeeProfileId ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?._id;
+
+    if (!employeeProfileId) {
+      throw new BadRequestException(
+        'Could not determine employee profile ID from authenticated user',
+      );
+    }
+
     return this.performanceService.getEmployeeAppraisals(
-      employeeProfileId,
+      String(employeeProfileId),
     );
   }
 
@@ -331,6 +374,7 @@ export class PerformanceController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
   )
   getEmployeeAppraisals(
     @Param('employeeProfileId') employeeProfileId: string,
@@ -368,6 +412,7 @@ export class PerformanceController {
     SystemRole.HR_EMPLOYEE,
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
   )
   submitDispute(
     @Param('appraisalId') appraisalId: string,
@@ -422,5 +467,118 @@ export class PerformanceController {
       resolverEmployeeId,
       dto,
     );
+  }
+
+  // ============================================================
+  //                      ACKNOWLEDGMENT
+  // ============================================================
+  // Employee acknowledges published appraisal (REQ-OD-01)
+
+  @Patch('appraisals/:id/acknowledge')
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+    SystemRole.RECRUITER,
+  )
+  acknowledgeAppraisal(
+    @Param('id') id: string,
+    @Query('employeeProfileId') employeeProfileId: string,
+    @Body() dto: AcknowledgeAppraisalDto,
+  ) {
+    return this.performanceService.acknowledgeAppraisal(
+      id,
+      employeeProfileId,
+      dto.comment,
+    );
+  }
+
+  // ============================================================
+  //              TIME MANAGEMENT INTEGRATION (REQ-AE-03)
+  // ============================================================
+  // Get time management summary for employee during appraisal period
+
+  @Get('time-management-summary/:employeeId')
+  @Roles(
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+  )
+  async getTimeManagementSummary(
+    @Param('employeeId') employeeId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Req() req: any,
+  ) {
+    if (!startDate || !endDate) {
+      throw new BadRequestException(
+        'startDate and endDate query parameters are required',
+      );
+    }
+
+    // Validate dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date format for startDate or endDate');
+    }
+
+    if (start > end) {
+      throw new BadRequestException('startDate must be before endDate');
+    }
+
+    try {
+      const currentUserId =
+        req.user?.userId ||
+        req.user?.id ||
+        req.user?._id ||
+        req.user?.employeeProfileId ||
+        'system';
+
+      const result = await this.performanceService.getTimeManagementSummaryForAppraisal(
+        employeeId,
+        start,
+        end,
+        String(currentUserId),
+      );
+      return result;
+    } catch (error: any) {
+      console.error(
+        `Error in getTimeManagementSummary for employee ${employeeId}:`,
+        error?.message || error,
+        error?.stack,
+      );
+      // Re-throw BadRequestException, but wrap other errors
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      // For other errors, return empty data instead of throwing
+      // This allows the appraisal form to work even if TM data fails
+      return {
+        period: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          totalDays: 0,
+        },
+        attendance: {
+          totalWorkHours: 0,
+          totalWorkMinutes: 0,
+          averageHoursPerDay: 0,
+        },
+        punctuality: {
+          missedPunches: 0,
+          lateArrivals: 0,
+          earlyDepartures: 0,
+          absences: 0,
+          punctualityScore: 0,
+        },
+        records: [],
+        exceptions: [],
+        error: error?.message || 'Time management data not available',
+      };
+    }
   }
 }

@@ -38,9 +38,12 @@ export default function TeamPage() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [allTeamMembers, setAllTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "structure">("list");
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
+  const [showDirectReportsOnly, setShowDirectReportsOnly] = useState(false);
+  const [hideSensitiveData, setHideSensitiveData] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -61,6 +64,10 @@ export default function TeamPage() {
 
         // Get team members only
         const members = await employeeProfileApi.getMyTeam();
+        setAllTeamMembers(members);
+        // BR 41b: Filter to show only direct reports by default
+        // The backend already filters by supervisorPositionId, so members should be direct reports
+        // But we'll add a toggle to show all vs direct reports if needed
         setTeam(members);
 
         // Calculate stats from members
@@ -298,11 +305,64 @@ export default function TeamPage() {
         {/* Team Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Team Members</CardTitle>
-            <CardDescription>
-              Your direct reports and team members{" "}
-              {team.length > 0 ? `(${team.length} members)` : ""}
-            </CardDescription>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <CardTitle>Team Members</CardTitle>
+                <CardDescription>
+                  Your direct reports and team members{" "}
+                  {team.length > 0 ? `(${team.length} members)` : ""}
+                </CardDescription>
+              </div>
+              <div className="flex gap-3">
+                {/* BR 41b: Direct Reports Only Filter */}
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showDirectReportsOnly}
+                    onChange={(e) => {
+                      setShowDirectReportsOnly(e.target.checked);
+                      // Filter team based on checkbox
+                      if (e.target.checked) {
+                        // Show only direct reports (filter by supervisorPositionId matching current user's position)
+                        const currentPositionId =
+                          (currentUserProfile?.primaryPositionId as any)?._id
+                            ?.toString() ||
+                          (currentUserProfile?.primaryPositionId as any)
+                            ?.toString() ||
+                          currentUserProfile?.primaryPositionId;
+                        if (currentPositionId) {
+                          const filtered = allTeamMembers.filter((member) => {
+                            const memberSupervisorId =
+                              (member.supervisorPositionId as any)?._id
+                                ?.toString() ||
+                              (member.supervisorPositionId as any)?.toString() ||
+                              member.supervisorPositionId;
+                            return memberSupervisorId === currentPositionId;
+                          });
+                          setTeam(filtered);
+                        } else {
+                          setTeam(allTeamMembers);
+                        }
+                      } else {
+                        setTeam(allTeamMembers);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Direct Reports Only</span>
+                </label>
+                {/* BR 18b: Privacy Filter */}
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideSensitiveData}
+                    onChange={(e) => setHideSensitiveData(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Hide Sensitive Data</span>
+                </label>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -377,9 +437,14 @@ export default function TeamPage() {
                             )}
                             <div>
                               <p className="font-medium">{member.fullName}</p>
-                              {member.workEmail && (
+                              {member.workEmail && !hideSensitiveData && (
                                 <p className="text-sm text-gray-500">
                                   {member.workEmail}
+                                </p>
+                              )}
+                              {hideSensitiveData && member.workEmail && (
+                                <p className="text-sm text-gray-400 italic">
+                                  Email hidden
                                 </p>
                               )}
                             </div>

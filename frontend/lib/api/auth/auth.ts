@@ -15,14 +15,11 @@ export const authApi = {
       credentials
     )) as AuthApiResponse;
 
-    if (response.access_token && response.user) {
-      localStorage.setItem("auth_token", response.access_token);
-      localStorage.setItem("user", JSON.stringify(response.user));
-      if (typeof document !== "undefined") {
-        document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax`;
-      }
+    // Token is now in HTTP-only cookie, not in response body
+    // Only return user data
+    if (response.user) {
       return {
-        access_token: response.access_token,
+        access_token: "", // Not used anymore, kept for backward compatibility
         user: response.user,
       };
     }
@@ -36,18 +33,11 @@ export const authApi = {
       data
     )) as AuthApiResponse;
 
-    if (response.access_token && response.user) {
-      localStorage.setItem("auth_token", response.access_token);
-      localStorage.setItem("user", JSON.stringify(response.user));
-      if (typeof document !== "undefined") {
-        document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax`;
-      }
-    }
-
+    // Token is now in HTTP-only cookie, not in response body
     return {
       message: response.message || "Success",
       data: {
-        access_token: response.access_token || "",
+        access_token: "", // Not used anymore, kept for backward compatibility
         user: response.user as User,
       },
       success: true,
@@ -55,48 +45,65 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user");
-    if (typeof document !== "undefined") {
-      document.cookie = "auth_token=; path=/; Max-Age=0; SameSite=Lax";
+    // Call backend logout endpoint to clear cookie
+    try {
+      await api.post("/auth/logout");
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Continue even if logout fails
     }
   },
 
-  isAuthenticated: (): boolean => {
+  // Check authentication by calling a protected endpoint
+  isAuthenticated: async (): Promise<boolean> => {
     if (typeof window === "undefined") return false;
-    const token = localStorage.getItem("auth_token");
-    return !!token;
+    
+    try {
+      // Try to fetch user profile - if it succeeds, user is authenticated
+      await api.get("/employee-profile/me/profile");
+      return true;
+    } catch {
+      return false;
+    }
   },
 
-  getUser: (): User | null => {
+  // Fetch user from API instead of localStorage
+  getUser: async (): Promise<User | null> => {
     if (typeof window === "undefined") return null;
-    const userStr = localStorage.getItem("user");
-    if (!userStr) return null;
 
     try {
-      return JSON.parse(userStr);
+      const response = await api.get("/employee-profile/me/profile");
+      const userData = response.data?.data || response.data;
+      
+      if (userData) {
+        // Transform to User format
+        return {
+          id: userData._id || userData.id,
+          employeeNumber: userData.employeeNumber,
+          candidateNumber: userData.candidateNumber,
+          fullName: userData.fullName,
+          workEmail: userData.workEmail,
+          personalEmail: userData.personalEmail,
+          roles: userData.roles || [],
+          userType: userData.userType || (userData.employeeNumber ? "employee" : "candidate"),
+          profilePictureUrl: userData.profilePictureUrl,
+        } as User;
+      }
+      return null;
     } catch {
       return null;
     }
   },
 
   getToken: (): string | null => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("auth_token");
+    // Tokens are now in HTTP-only cookies, not accessible from JavaScript
+    // Return null to indicate we're using cookie-based auth
+    return null;
   },
 
-  // Helper to get user ID from token (from JWT payload)
-  getUserId: (): string | null => {
-    // Call getToken method directly, not using 'this'
-    const token = authApi.getToken();
-    if (!token) return null;
-
-    try {
-      // Decode JWT token to get user ID
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      return payload.sub || null;
-    } catch {
-      return null;
-    }
+  // Helper to get user ID - now fetches from API
+  getUserId: async (): Promise<string | null> => {
+    const user = await authApi.getUser();
+    return user?.id || null;
   },
 };

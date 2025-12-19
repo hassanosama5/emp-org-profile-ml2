@@ -35,7 +35,8 @@ function OrganizationStructureDashboardPage() {
 
   // Permission flags
   const canManageStructure = isSystemAdmin || isHRAdmin;
-  const canViewHierarchy = isSystemAdmin || isHRAdmin || isHRManager || isDepartmentHead || isEmployee;
+  const canViewHierarchy =
+    isSystemAdmin || isHRAdmin || isHRManager || isDepartmentHead || isEmployee;
   const canSubmitRequests = isHRManager || isDepartmentHead;
   const canApproveRequests = isSystemAdmin || isHRAdmin;
   const canViewChangeLogs = isSystemAdmin || isHRAdmin;
@@ -53,13 +54,11 @@ function OrganizationStructureDashboardPage() {
       <div className="container mx-auto px-6 py-8">
         {/* Header Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-white-900">
             Organization Structure
           </h1>
           <div className="mt-2 flex items-center gap-3">
-            <p className="text-gray-600">
-              Welcome, {user?.fullName || "User"}
-            </p>
+            <p className="text-gray-600">Welcome, {user?.fullName || "User"}</p>
             {canManageStructure && (
               <span className="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">
                 Administrator

@@ -1,16 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "../stores/auth.store";
 import { getPrimaryDashboard } from "../utils/role-utils";
 
 export const useAuth = () => {
   const store = useAuthStore();
+  const user = store.user;
+  const loading = store.loading;
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    store.initialize();
-  }, []);
+    // Only initialize once on mount, and only if user is not already set
+    // This prevents infinite loops and re-initialization after login
+    if (!hasInitialized.current && !user && !loading) {
+      hasInitialized.current = true;
+      const init = async () => {
+        await store.initialize();
+      };
+      init();
+    }
+  }, []); // Empty dependency array - only run once on mount
 
   return store;
 };
@@ -28,10 +39,21 @@ export const useRequireAuth = (
   const hasRequiredRole = useMemo(() => {
     if (!requiredRole) return true;
     const roles = user?.roles || [];
+    
+    // Convert roles to lowercase strings for case-insensitive comparison
+    const userRoleStrings = roles.map((role) =>
+      (typeof role === "string" ? role : String(role)).toLowerCase()
+    );
+    
     if (Array.isArray(requiredRole)) {
-      return requiredRole.some((r) => roles.includes(r));
+      const requiredRoleStrings = requiredRole.map((r) =>
+        (typeof r === "string" ? r : String(r)).toLowerCase()
+      );
+      return requiredRoleStrings.some((r) => userRoleStrings.includes(r));
     }
-    return roles.includes(requiredRole);
+    
+    const requiredRoleString = (typeof requiredRole === "string" ? requiredRole : String(requiredRole)).toLowerCase();
+    return userRoleStrings.includes(requiredRoleString);
   }, [user, requiredRole]);
 
   useEffect(() => {

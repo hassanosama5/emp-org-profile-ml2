@@ -253,14 +253,14 @@ export default function TalentPoolPage() {
       // Case 2: File path (starts with / or contains uploads) - fetch with auth and open
       if (resumeUrl.startsWith("/") || resumeUrl.includes("uploads")) {
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
-        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
         
         // Construct full URL
         const baseUrl = API_BASE_URL.replace('/api/v1', '');
         const fullUrl = `${baseUrl}${resumeUrl.startsWith('/') ? resumeUrl : '/' + resumeUrl}`;
         
+        // Cookies are sent automatically with credentials: 'include'
         const response = await fetch(fullUrl, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          credentials: 'include', // Include cookies
         });
         
         if (!response.ok) {

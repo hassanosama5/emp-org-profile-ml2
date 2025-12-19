@@ -4,16 +4,16 @@ import { User, LoginRequest, RegisterRequest } from "../../types";
 
 type AuthState = {
   user: User | null;
-  token: string | null;
+  token: string | null; // Kept for backward compatibility, but always null (token in cookie)
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
 
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
-  logout: () => void;
-  initialize: () => void;
-  updateUser: (updates: Partial<User>) => void; // ADD THIS
+  logout: () => Promise<void>;
+  initialize: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -23,22 +23,31 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: false,
   error: null,
 
-  initialize: () => {
+  initialize: async () => {
     // Set loading to true initially to prevent premature redirects
     set({ loading: true });
     
-    const token = authApi.getToken();
-    const user = authApi.getUser();
-
-    if (token && user) {
-      set({
-        token,
-        user,
-        isAuthenticated: true,
-        loading: false,
-      });
-    } else {
-      // No token/user found, but mark loading as complete
+    try {
+      // Fetch user from API (cookie-based auth)
+      const user = await authApi.getUser();
+      
+      if (user) {
+        set({
+          token: null, // Token is in HTTP-only cookie, not stored
+          user,
+          isAuthenticated: true,
+          loading: false,
+        });
+      } else {
+        // No user found
+        set({
+          isAuthenticated: false,
+          loading: false,
+        });
+      }
+    } catch (error) {
+      // Failed to fetch user - not authenticated
+      // Silently fail - don't log errors for unauthenticated users
       set({
         isAuthenticated: false,
         loading: false,
@@ -52,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authApi.login(data);
       set({
         user: res.user,
-        token: res.access_token,
+        token: null, // Token is in HTTP-only cookie, not stored
         isAuthenticated: true,
         loading: false,
       });
@@ -71,7 +80,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authApi.register(data);
       set({
         user: res.data?.user || null,
-        token: res.data?.access_token || null,
+        token: null, // Token is in HTTP-only cookie, not stored
         isAuthenticated: true,
         loading: false,
       });
@@ -84,8 +93,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
-    authApi.logout();
+  logout: async () => {
+    await authApi.logout();
     set({
       user: null,
       token: null,
@@ -115,15 +124,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         ...processedUpdates,
       };
 
-      // Store clean URL in localStorage (without timestamp)
-      if (typeof window !== "undefined") {
-        const userForStorage = {
-          ...updatedUser,
-          profilePictureUrl: cleanProfilePictureUrl || updatedUser.profilePictureUrl?.split('?')[0],
-        };
-        localStorage.setItem("user", JSON.stringify(userForStorage));
-      }
-
+      // No localStorage - user data is fetched from API
       return { user: updatedUser };
     });
   },

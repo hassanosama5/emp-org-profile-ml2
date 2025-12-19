@@ -81,6 +81,12 @@ export class OrganizationStructureController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_EMPLOYEE,
     SystemRole.DEPARTMENT_HEAD,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.FINANCE_STAFF,
   )
   async getAllDepartments(
     @CurrentUser() user: any,
@@ -156,15 +162,29 @@ export class OrganizationStructureController {
    * REQ-SANV-01: View positions (All authenticated users)
    */
   @Get('positions')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.FINANCE_STAFF,
+  )
   async getAllPositions(
     @CurrentUser() user: any,
     @Query('departmentId') departmentId?: string,
     @Query('isActive') isActive?: boolean,
+    @Query('search') search?: string,
   ) {
     return this.structureService.getAllPositions(
       departmentId,
       isActive !== undefined ? isActive === true : undefined,
+      search,
     );
   }
 
@@ -225,7 +245,12 @@ export class OrganizationStructureController {
     @Body() dto: CreatePositionAssignmentDto,
     @CurrentUser() user: any,
   ) {
-    return this.structureService.createPositionAssignment(dto);
+    try {
+      return await this.structureService.createPositionAssignment(dto);
+    } catch (error) {
+      console.error('[createPositionAssignment] Controller error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -279,10 +304,26 @@ export class OrganizationStructureController {
   @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN)
   async endPositionAssignment(
     @Param('id') id: string,
-    @Body('endDate') endDate: string,
+    @Body() body: { endDate: string },
     @CurrentUser() user: any,
   ) {
-    return this.structureService.endPositionAssignment(id, new Date(endDate));
+    try {
+      if (!body.endDate) {
+        throw new BadRequestException('endDate is required');
+      }
+
+      const endDate = new Date(body.endDate);
+      if (isNaN(endDate.getTime())) {
+        throw new BadRequestException(
+          `Invalid endDate format: ${body.endDate}. Expected ISO 8601 date string.`,
+        );
+      }
+
+      return await this.structureService.endPositionAssignment(id, endDate);
+    } catch (error) {
+      console.error('[endPositionAssignment] Controller error:', error);
+      throw error;
+    }
   }
 
   // ============ CHANGE REQUEST ENDPOINTS ============

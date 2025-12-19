@@ -30,17 +30,20 @@ export default function EmployeeProfileDashboardPage() {
 
   // Determine access based on roles
   const isEmployee =
-    user?.userType === "employee" || hasRole(SystemRole.DEPARTMENT_EMPLOYEE);
+    user?.userType === "employee" || 
+    hasRole(SystemRole.DEPARTMENT_EMPLOYEE) ||
+    hasRole(SystemRole.RECRUITER); // Recruiters are employees
   const isHRAdmin = hasRole(SystemRole.HR_ADMIN);
   const isHRManager = hasRole(SystemRole.HR_MANAGER);
   const isDepartmentHead = hasRole(SystemRole.DEPARTMENT_HEAD);
+  const isRecruiter = hasRole(SystemRole.RECRUITER);
 
   // HR Admin and HR Manager have same permissions
   const isHR = isHRAdmin || isHRManager;
 
   // Permission flags
-  const canEditOwnProfile = isEmployee;
-  const canSubmitChangeRequests = isEmployee;
+  const canEditOwnProfile = isEmployee || isRecruiter;
+  const canSubmitChangeRequests = isEmployee || isRecruiter;
   const canViewTeam = isDepartmentHead || isHR;
   const canManageAll = isHR;
   const canApprove = isHR;
@@ -51,6 +54,7 @@ export default function EmployeeProfileDashboardPage() {
   return (
     <ProtectedRoute
       allowedRoles={[
+        SystemRole.RECRUITER,
         SystemRole.DEPARTMENT_EMPLOYEE,
         SystemRole.DEPARTMENT_HEAD,
         SystemRole.HR_MANAGER,
@@ -368,7 +372,7 @@ export default function EmployeeProfileDashboardPage() {
               <CardDescription>Latest appraisal cycle and score</CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href="/dashboard/performance" className="text-blue-600 hover:underline">
+              <Link href="/dashboard/performance/my-appraisals" className="text-blue-600 hover:underline">
                 Performance Overview
               </Link>
             </CardContent>

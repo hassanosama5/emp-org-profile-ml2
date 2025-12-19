@@ -94,4 +94,14 @@ export enum NotificationType {
   STRUCTURE_CHANGE_REQUEST_SUBMITTED = 'structure_change_request_submitted',
   STRUCTURE_CHANGE_REQUEST_APPROVED = 'structure_change_request_approved',
   STRUCTURE_CHANGE_REQUEST_REJECTED = 'structure_change_request_rejected',
+
+  // =============================================================================
+  // PERFORMANCE MODULE NOTIFICATIONS (N-022)
+  // =============================================================================
+  // Notifications for performance appraisal workflow
+  APPRAISAL_ASSIGNED = 'appraisal_assigned',             // Manager: New appraisal form assigned to you
+  APPRAISAL_PUBLISHED = 'appraisal_published',           // Employee: Your appraisal has been published
+  APPRAISAL_SUBMITTED = 'appraisal_submitted',           // HR: Manager submitted an appraisal for review
+  APPRAISAL_DISPUTE_SUBMITTED = 'appraisal_dispute_submitted', // HR: Employee submitted a dispute
+  APPRAISAL_DISPUTE_RESOLVED = 'appraisal_dispute_resolved',   // Employee: Your dispute has been resolved
 }

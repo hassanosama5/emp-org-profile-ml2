@@ -141,7 +141,14 @@ export interface TeamMember {
   dateOfHire: string;
   workEmail?: string;
   mobilePhone?: string;
-  profilePictureUrl?: string; // ADD THIS LINE
+  profilePictureUrl?: string;
+  supervisorPositionId?: string | any; // For filtering direct reports
+  // Sensitive fields (BR 18b)
+  personalEmail?: string;
+  homePhone?: string;
+  address?: any;
+  payGrade?: any;
+  salary?: any;
 }
 
 // Update Profile DTO - based on your backend DTOs

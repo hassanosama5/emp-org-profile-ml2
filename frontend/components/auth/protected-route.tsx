@@ -27,63 +27,42 @@ export function ProtectedRoute({
   useEffect(() => {
     // Wait for loading to complete
     if (loading) {
-      setHasChecked(false);
       return;
     }
 
-    // Mark that we've checked
     setHasChecked(true);
 
-    // Only redirect if we're sure there's no user (after loading completes)
-    if (!user && !isAuthenticated) {
-      // Small delay to prevent redirect loops during navigation
-      const timer = setTimeout(() => {
-        const currentPath = window.location.pathname;
-        if (!currentPath.startsWith("/auth/login")) {
-          router.push("/auth/login");
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-
-    // If no user at this point, deny access (should have been caught above, but double-check)
-    if (!user) {
+    // Check authentication
+    if (!user || !isAuthenticated) {
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+      if (currentPath && !currentPath.startsWith("/auth/")) {
+        router.replace("/auth/login");
+      }
       return;
     }
 
-    let hasAccess = true;
-
     // Check user type if required
-    if (requiredUserType && user && user.userType !== requiredUserType) {
-      hasAccess = false;
+    if (requiredUserType && user.userType !== requiredUserType) {
+      router.replace(redirectTo);
+      return;
     }
 
     // Check roles if required
-    if (allowedRoles && allowedRoles.length > 0 && user) {
+    if (allowedRoles && allowedRoles.length > 0) {
       const userRoles = user.roles || [];
-
-      // Convert both arrays to lowercase strings for case-insensitive comparison
-      const userRoleStrings = userRoles.map((role) =>
-        (typeof role === "string" ? role : (role as any).toString()).toLowerCase()
-      );
-
-      const allowedRoleStrings = allowedRoles.map((role) =>
-        (typeof role === "string" ? role : (role as any).toString()).toLowerCase()
-      );
-
-      // Check if any user role matches any allowed role (case-insensitive)
+      
+      // Convert to lowercase for comparison
+      const userRoleStrings = userRoles.map((r) => String(r).toLowerCase());
+      const allowedRoleStrings = allowedRoles.map((r) => String(r).toLowerCase());
+      
       const hasRoleAccess = userRoleStrings.some((userRole) =>
-        allowedRoleStrings.some((allowedRole) => allowedRole === userRole)
+        allowedRoleStrings.includes(userRole)
       );
 
       if (!hasRoleAccess) {
-        hasAccess = false;
+        router.replace(redirectTo);
+        return;
       }
-    }
-
-    if (!hasAccess) {
-      router.push(redirectTo);
-      return;
     }
 
     setIsAuthorized(true);

@@ -36,7 +36,7 @@ export default function LeaveBalancePage() {
     try {
       setLoading(true);
       setError("");
-      const employeeId = authApi.getUserId() || user?.id || user?.userId || "";
+      const employeeId = (user?.id || user?.userId || "") as string;
       
       if (!employeeId || !employeeId.trim()) {
         throw new Error("Employee ID is required. Please log in again.");

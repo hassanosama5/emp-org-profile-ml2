@@ -2,17 +2,13 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
-import {
-  AppraisalRecord,
-  RatingEntry,
-} from "./performanceRecords";
+import { SystemRole } from "@/types";
+import { AppraisalRecord, RatingEntry } from "./performanceRecords";
 import {
   fetchEmployeeAppraisals,
+  fetchMyAppraisals,
 } from "@/lib/api/performance/Api/performanceAppraisalsApi";
-import {
-  AppraisalDispute,
-  SubmitDisputeInput,
-} from "./performanceDisputes";
+import { AppraisalDispute, SubmitDisputeInput } from "./performanceDisputes";
 import {
   submitDisputeApi,
   fetchDisputesForAppraisal,
@@ -24,6 +20,8 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/shared/ui/Card";
+import api from "@/lib/api/client";
+import Link from "next/link";
 
 type LoadState = "idle" | "loading" | "loaded" | "error";
 
@@ -42,44 +40,13 @@ function isMongoObjectId(id?: string | null): boolean {
   return /^[a-fA-F0-9]{24}$/.test(id);
 }
 
-function getTokenFromStorage(): string | null {
-  if (typeof window === "undefined") return null;
-  return (
-    localStorage.getItem("auth_token") ||
-    localStorage.getItem("accessToken") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("jwt")
-  );
-}
+// Removed: getTokenFromStorage and getUserFromStorage
+// Tokens are now in HTTP-only cookies, not accessible from JavaScript
+// Use useAuth hook instead to get user data
 
-function getUserFromStorage(): any | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseJwtPayload(token?: string | null): any | null {
-  try {
-    if (!token) return null;
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => `%${("00" + c.charCodeAt(0).toString(16)).slice(-2)}`)
-        .join(""),
-    );
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
+// Removed: parseJwtPayload
+// Tokens are now in HTTP-only cookies, not accessible from JavaScript
+// Use useAuth hook to get user data instead
 
 function extractEmployeeProfileId(user: any): string | null {
   const candidates: any[] = [
@@ -96,27 +63,8 @@ function extractEmployeeProfileId(user: any): string | null {
     user?.employee?.profile?.id,
   ];
 
-  const storedUser = getUserFromStorage();
-  candidates.push(
-    storedUser?.id,
-    storedUser?.employeeProfileId,
-    storedUser?.employeeProfile?._id,
-    storedUser?.employeeProfile?.id,
-    storedUser?.profileId,
-    storedUser?.profile?._id,
-    storedUser?.profile?.id,
-  );
-
-  const token = getTokenFromStorage();
-  const payload = parseJwtPayload(token);
-  candidates.push(
-    payload?.id,
-    payload?.employeeProfileId,
-    payload?.profileId,
-    payload?.employee_profile_id,
-    payload?.employeeProfile?._id,
-    payload?.employeeProfile?.id,
-  );
+  // Removed localStorage usage - user is now from useAuth hook
+  // Token is in HTTP-only cookie, not accessible from JavaScript
 
   let found: string | null = null;
 
@@ -130,12 +78,13 @@ function extractEmployeeProfileId(user: any): string | null {
 
   // Debug logging if not found (only in development)
   if (!found && typeof window !== "undefined") {
-    console.warn("[EmployeeAppraisalsPage] Could not extract employeeProfileId", {
-      user,
-      storedUser: getUserFromStorage(),
-      tokenPayload: parseJwtPayload(getTokenFromStorage()),
-      candidates: candidates.map((c) => getId(c)),
-    });
+    console.warn(
+      "[EmployeeAppraisalsPage] Could not extract employeeProfileId",
+      {
+        user,
+        candidates: candidates.map((c) => getId(c)),
+      }
+    );
   }
 
   return found;
@@ -157,8 +106,7 @@ function resolveTemplateName(record: AppraisalRecord): string {
 
 function resolvePublishedDate(record: AppraisalRecord): string {
   const r: any = record;
-  const value =
-    r.hrPublishedAt || r.managerSubmittedAt || r.createdAt;
+  const value = r.hrPublishedAt || r.managerSubmittedAt || r.createdAt;
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
@@ -169,8 +117,7 @@ function resolvePublishedDate(record: AppraisalRecord): string {
 
 function isWithinDisputeWindow(record: AppraisalRecord): boolean {
   const r: any = record;
-  const base =
-    r.hrPublishedAt || r.employeeViewedAt || r.managerSubmittedAt;
+  const base = r.hrPublishedAt;
   if (!base) return false;
 
   const published = new Date(base);
@@ -182,6 +129,23 @@ function isWithinDisputeWindow(record: AppraisalRecord): boolean {
 
   // 7-day window after publication
   return diffDays >= 0 && diffDays <= 7;
+}
+
+function getDaysRemainingInDisputeWindow(
+  record: AppraisalRecord
+): number | null {
+  const r: any = record;
+  const base = r.hrPublishedAt;
+  if (!base) return null;
+
+  const published = new Date(base);
+  if (Number.isNaN(published.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = published.getTime() + 7 * 24 * 60 * 60 * 1000 - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  return diffDays > 0 ? diffDays : 0;
 }
 
 function formatDisputeStatus(status?: string): string {
@@ -215,8 +179,22 @@ export const EmployeeAppraisalsPage: React.FC = () => {
   const [appraisals, setAppraisals] = useState<AppraisalRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [employeeProfileId, setEmployeeProfileId] = useState<string | null>(
-    null,
+    null
   );
+
+  // Check if user is a manager (Department Head)
+  const isManager = useMemo(() => {
+    if (!user?.roles) return false;
+    return user.roles.some((role) => {
+      const roleStr = String(role).toLowerCase();
+      // Check for department head role (case-insensitive)
+      return (
+        roleStr === "department head" ||
+        roleStr === SystemRole.DEPARTMENT_HEAD.toLowerCase() ||
+        roleStr === "department_head"
+      );
+    });
+  }, [user?.roles]);
 
   // dispute state
   const [disputes, setDisputes] = useState<AppraisalDispute[]>([]);
@@ -227,6 +205,16 @@ export const EmployeeAppraisalsPage: React.FC = () => {
   const [disputeFormOpen, setDisputeFormOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeDetails, setDisputeDetails] = useState("");
+
+  // acknowledgment state
+  const [acknowledging, setAcknowledging] = useState(false);
+  const [acknowledgmentComment, setAcknowledgmentComment] = useState("");
+  const [acknowledgmentError, setAcknowledgmentError] = useState<string | null>(
+    null
+  );
+  const [acknowledgmentSuccess, setAcknowledgmentSuccess] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const load = async () => {
@@ -247,13 +235,24 @@ export const EmployeeAppraisalsPage: React.FC = () => {
 
         if (!employeeProfileId) {
           throw new Error(
-            "Could not determine your employeeProfileId. Please log out and log in again (or contact HR).",
+            "Could not determine your employeeProfileId. Please log out and log in again (or contact HR)."
           );
         }
 
         setEmployeeProfileId(employeeProfileId);
 
-        const data = await fetchEmployeeAppraisals(employeeProfileId);
+        // Try using /me endpoint first (more reliable), fallback to specific ID
+        let data: AppraisalRecord[] = [];
+        try {
+          data = await fetchMyAppraisals();
+        } catch (err) {
+          console.warn(
+            "Failed to fetch via /me endpoint, trying with profile ID:",
+            err
+          );
+          // Fallback to using employeeProfileId
+          data = await fetchEmployeeAppraisals(employeeProfileId);
+        }
         setAppraisals(data || []);
 
         // auto-select the latest (assume first item is latest)
@@ -269,7 +268,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
         console.error(err);
         setError(
           err?.message ??
-            "Could not load your appraisals. Please contact HR if this persists.",
+            "Could not load your appraisals. Please contact HR if this persists."
         );
         setLoadState("error");
       }
@@ -294,11 +293,24 @@ export const EmployeeAppraisalsPage: React.FC = () => {
         const data = await fetchDisputesForAppraisal(selectedId);
         setDisputes(data || []);
       } catch (err: any) {
-        console.error(err);
-        setDisputeError(
-          err?.message ??
-            "Could not load dispute information for this appraisal.",
-        );
+        // Handle permission errors gracefully - employees may not have access to view disputes
+        // but they can still submit disputes
+        const errorMessage = err?.message || "";
+        if (
+          errorMessage.includes("Access denied") ||
+          errorMessage.includes("role")
+        ) {
+          // Employee doesn't have permission to view disputes list, but can still submit
+          // Set empty disputes array and don't show error
+          setDisputes([]);
+          setDisputeError(null);
+        } else {
+          console.error(err);
+          setDisputeError(
+            err?.message ??
+              "Could not load dispute information for this appraisal."
+          );
+        }
       } finally {
         setDisputeLoading(false);
       }
@@ -309,11 +321,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
 
   const selectedRecord: AppraisalRecord | null = useMemo(() => {
     if (!selectedId) return null;
-    return (
-      appraisals.find(
-        (r: any) => getId(r) === selectedId,
-      ) ?? null
-    );
+    return appraisals.find((r: any) => getId(r) === selectedId) ?? null;
   }, [appraisals, selectedId]);
 
   const ratings: RatingEntry[] =
@@ -336,7 +344,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
     if (!selectedRecord) return;
     if (!employeeProfileId) {
       setDisputeError(
-        "Could not determine your employee profile. Please log out and in again, or contact HR.",
+        "Could not determine your employee profile. Please log out and in again, or contact HR."
       );
       return;
     }
@@ -361,7 +369,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
       const created = await submitDisputeApi(
         appraisalId,
         employeeProfileId,
-        payload,
+        payload
       );
 
       setDisputes((prev) => [created, ...prev]);
@@ -369,13 +377,13 @@ export const EmployeeAppraisalsPage: React.FC = () => {
       setDisputeReason("");
       setDisputeDetails("");
       setDisputeSuccess(
-        "Your concern has been submitted. HR will review it and respond.",
+        "Your concern has been submitted. HR will review it and respond."
       );
     } catch (err: any) {
       console.error(err);
       setDisputeError(
         err?.message ??
-          "Could not submit your concern. Please try again or contact HR.",
+          "Could not submit your concern. Please try again or contact HR."
       );
     } finally {
       setDisputeSubmitting(false);
@@ -383,21 +391,56 @@ export const EmployeeAppraisalsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          My Appraisals
-        </h1>
-        <p className="text-gray-600 mt-1 text-sm">
-          View your finalized ratings, feedback, and development
-          notes across appraisal cycles.
-        </p>
+    <div className="container mx-auto px-6 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white-900">My Appraisals</h1>
+            <p className="text-gray-600 mt-1">
+              View your finalized ratings, feedback, and development notes
+              across appraisal cycles.
+            </p>
+          </div>
+          {isManager && (
+            <Link
+              href="/dashboard/performance/assignments"
+              className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition"
+            >
+              Manage Team Appraisals →
+            </Link>
+          )}
+        </div>
+        {isManager && (
+          <Card className="mt-4 border-blue-200 bg-blue-50">
+            <CardContent className="pt-6">
+              <p className="text-sm text-blue-800">
+                <strong>Manager Notice:</strong> As a Department Head, you can
+                also{" "}
+                <Link
+                  href="/dashboard/performance/assignments"
+                  className="underline font-medium hover:text-blue-900"
+                >
+                  view and complete appraisal ratings for your direct reports
+                </Link>
+                . This page shows your own appraisals as an employee.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {loadState === "loading" && (
-        <p className="text-sm text-gray-600">
-          Loading your appraisals...
-        </p>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">
+                Loading your appraisals…
+              </span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {loadState === "error" && (
@@ -426,12 +469,10 @@ export const EmployeeAppraisalsPage: React.FC = () => {
       {loadState === "loaded" && appraisals.length === 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              No appraisals yet
-            </CardTitle>
+            <CardTitle className="text-base">No appraisals yet</CardTitle>
             <CardDescription>
-              Once your manager completes and HR publishes an
-              appraisal, it will appear here.
+              Once your manager completes and HR publishes an appraisal, it will
+              appear here.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -442,9 +483,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
           {/* Left: list / history */}
           <Card className="h-fit">
             <CardHeader>
-              <CardTitle className="text-base">
-                Appraisal History
-              </CardTitle>
+              <CardTitle className="text-base">Appraisal History</CardTitle>
               <CardDescription>
                 Select an appraisal to see full details.
               </CardDescription>
@@ -454,14 +493,13 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                 {appraisals.map((rec, index) => {
                   const id = getId(rec) || `${index}`;
                   const isSelected = id === selectedId;
-                  const status = (rec as any).status as
-                    | string
-                    | undefined;
+                  const status = (rec as any).status as string | undefined;
                   const totalScore = (rec as any).totalScore as
                     | number
                     | undefined;
-                  const label = (rec as any)
-                    .overallRatingLabel as string | undefined;
+                  const label = (rec as any).overallRatingLabel as
+                    | string
+                    | undefined;
 
                   return (
                     <li key={id}>
@@ -502,9 +540,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                           {label && (
                             <span>
                               Rating:{" "}
-                              <span className="font-semibold">
-                                {label}
-                              </span>
+                              <span className="font-semibold">{label}</span>
                             </span>
                           )}
                         </div>
@@ -525,8 +561,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                     Select an appraisal
                   </CardTitle>
                   <CardDescription>
-                    Choose an appraisal on the left to view its
-                    details.
+                    Choose an appraisal on the left to view its details.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -538,8 +573,8 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                       {resolveCycleName(selectedRecord)}
                     </CardTitle>
                     <CardDescription>
-                      {resolveTemplateName(selectedRecord)} ·{" "}
-                      Final rating and feedback
+                      {resolveTemplateName(selectedRecord)} · Final rating and
+                      feedback
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-gray-800">
@@ -549,8 +584,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                           Total Score
                         </span>
                         <span className="font-semibold">
-                          {(selectedRecord as any).totalScore ??
-                            "-"}
+                          {(selectedRecord as any).totalScore ?? "-"}
                         </span>
                       </div>
                       <div>
@@ -558,8 +592,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                           Overall Rating
                         </span>
                         <span className="font-semibold">
-                          {(selectedRecord as any)
-                            .overallRatingLabel || "-"}
+                          {(selectedRecord as any).overallRatingLabel || "-"}
                         </span>
                       </div>
                       <div>
@@ -597,8 +630,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                           Improvement Areas / Development Notes
                         </p>
                         <p className="text-sm text-gray-800 whitespace-pre-line">
-                          {(selectedRecord as any)
-                            .improvementAreas ||
+                          {(selectedRecord as any).improvementAreas ||
                             "No improvement areas recorded."}
                         </p>
                       </div>
@@ -612,8 +644,8 @@ export const EmployeeAppraisalsPage: React.FC = () => {
 
                       {disputeLoading && (
                         <p className="text-xs text-gray-600">
-                          Checking if you have raised a concern for
-                          this appraisal...
+                          Checking if you have raised a concern for this
+                          appraisal...
                         </p>
                       )}
 
@@ -635,14 +667,14 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                             Status:{" "}
                             <span className="font-semibold">
                               {formatDisputeStatus(
-                                (primaryDispute as any).status,
+                                (primaryDispute as any).status
                               )}
                             </span>
                           </p>
                           <p className="text-xs text-gray-600">
                             Submitted on:{" "}
                             {formatDisputeDate(
-                              (primaryDispute as any).createdAt,
+                              (primaryDispute as any).createdAt
                             )}
                           </p>
                           <p className="text-sm text-gray-800 whitespace-pre-line mt-1">
@@ -650,16 +682,12 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                               (primaryDispute as any).details ||
                               "No description recorded."}
                           </p>
-                          {(primaryDispute as any)
-                            .resolutionComment && (
+                          {(primaryDispute as any).resolutionSummary && (
                             <p className="text-xs text-gray-700 whitespace-pre-line mt-2">
                               <span className="font-semibold">
                                 HR Resolution:
                               </span>{" "}
-                              {
-                                (primaryDispute as any)
-                                  .resolutionComment
-                              }
+                              {(primaryDispute as any).resolutionSummary}
                             </p>
                           )}
                         </div>
@@ -667,12 +695,40 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                         <div className="space-y-2 text-sm text-gray-800">
                           {!disputeFormOpen && (
                             <>
-                              <p className="text-xs text-gray-600">
-                                If you disagree with this rating,
-                                you can raise a concern within 7
-                                days of publication. Your concern
-                                will be logged for HR to review.
-                              </p>
+                              <div className="flex items-start gap-2">
+                                <p className="text-xs text-gray-600 flex-1">
+                                  If you disagree with this rating, you can
+                                  raise a concern within 7 days of publication.
+                                  Your concern will be logged for HR to review.
+                                </p>
+                                {(() => {
+                                  const daysRemaining =
+                                    getDaysRemainingInDisputeWindow(
+                                      selectedRecord
+                                    );
+                                  if (
+                                    daysRemaining !== null &&
+                                    daysRemaining > 0
+                                  ) {
+                                    return (
+                                      <span
+                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                          daysRemaining <= 2
+                                            ? "bg-red-100 text-red-700"
+                                            : daysRemaining <= 3
+                                            ? "bg-yellow-100 text-yellow-700"
+                                            : "bg-blue-100 text-blue-700"
+                                        }`}
+                                      >
+                                        {daysRemaining}{" "}
+                                        {daysRemaining === 1 ? "day" : "days"}{" "}
+                                        left
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => setDisputeFormOpen(true)}
@@ -733,13 +789,154 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                         </div>
                       ) : (
                         <p className="text-xs text-gray-600">
-                          You cannot raise a dispute for this
-                          appraisal (either the 7-day window has
-                          passed or the rating is not in a
+                          You cannot raise a dispute for this appraisal (either
+                          the 7-day window has passed or the rating is not in a
                           disputable state).
                         </p>
                       )}
                     </div>
+
+                    {/* Employee Acknowledgment Section */}
+                    {(() => {
+                      const r: any = selectedRecord;
+                      const status = r.status as string | undefined;
+                      const isPublished = status === "HR_PUBLISHED";
+                      const isAcknowledged = !!r.employeeAcknowledgedAt;
+
+                      if (!isPublished) return null;
+
+                      return (
+                        <div className="mt-4 border-t border-gray-200 pt-3">
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                            Acknowledgment
+                          </p>
+
+                          {isAcknowledged ? (
+                            <div className="space-y-1 text-sm text-gray-800">
+                              <p className="text-green-700 font-medium">
+                                ✓ Acknowledged on{" "}
+                                {r.employeeAcknowledgedAt
+                                  ? new Date(
+                                      r.employeeAcknowledgedAt
+                                    ).toLocaleDateString()
+                                  : "-"}
+                              </p>
+                              {r.employeeAcknowledgementComment && (
+                                <p className="text-xs text-gray-600 whitespace-pre-line mt-1">
+                                  {r.employeeAcknowledgementComment}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-xs text-gray-600">
+                                Please acknowledge that you have reviewed this
+                                appraisal. You can optionally add a comment.
+                              </p>
+
+                              {acknowledgmentError && (
+                                <p className="text-xs text-red-600">
+                                  {acknowledgmentError}
+                                </p>
+                              )}
+
+                              {acknowledgmentSuccess && (
+                                <p className="text-xs text-green-600">
+                                  {acknowledgmentSuccess}
+                                </p>
+                              )}
+
+                              <textarea
+                                rows={2}
+                                value={acknowledgmentComment}
+                                onChange={(e) =>
+                                  setAcknowledgmentComment(e.target.value)
+                                }
+                                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                                placeholder="Optional: Add a comment about this appraisal..."
+                              />
+
+                              <button
+                                type="button"
+                                disabled={acknowledging}
+                                onClick={async () => {
+                                  if (!selectedRecord || !employeeProfileId)
+                                    return;
+
+                                  try {
+                                    setAcknowledging(true);
+                                    setAcknowledgmentError(null);
+                                    setAcknowledgmentSuccess(null);
+
+                                    const appraisalId = getId(selectedRecord)!;
+                                    // Note: This endpoint needs to be implemented in the backend
+                                    // POST /performance/appraisals/:id/acknowledge
+                                    const response = await api
+                                      .patch(
+                                        `/performance/appraisals/${appraisalId}/acknowledge`,
+                                        {
+                                          comment:
+                                            acknowledgmentComment.trim() ||
+                                            undefined,
+                                        },
+                                        {
+                                          params: { employeeProfileId },
+                                        }
+                                      )
+                                      .catch((err) => {
+                                        // If endpoint doesn't exist, show helpful message
+                                        if (err?.response?.status === 404) {
+                                          throw new Error(
+                                            "Acknowledgment endpoint not yet implemented. Please contact HR."
+                                          );
+                                        }
+                                        throw err;
+                                      });
+
+                                    // Update the record
+                                    setAppraisals((prev) =>
+                                      prev.map((r) => {
+                                        const id = getId(r);
+                                        if (id === appraisalId) {
+                                          return {
+                                            ...r,
+                                            employeeAcknowledgedAt:
+                                              new Date().toISOString(),
+                                            employeeAcknowledgementComment:
+                                              acknowledgmentComment.trim() ||
+                                              undefined,
+                                          } as any;
+                                        }
+                                        return r;
+                                      })
+                                    );
+
+                                    setAcknowledgmentComment("");
+                                    setAcknowledgmentSuccess(
+                                      "Appraisal acknowledged successfully."
+                                    );
+                                  } catch (err: any) {
+                                    console.error(err);
+                                    setAcknowledgmentError(
+                                      err?.response?.data?.message ||
+                                        err?.message ||
+                                        "Failed to acknowledge appraisal. Please try again."
+                                    );
+                                  } finally {
+                                    setAcknowledging(false);
+                                  }
+                                }}
+                                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                              >
+                                {acknowledging
+                                  ? "Acknowledging..."
+                                  : "Acknowledge This Appraisal"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
@@ -750,15 +947,13 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                       Criteria Breakdown
                     </CardTitle>
                     <CardDescription>
-                      Detailed ratings and comments for each
-                      criterion.
+                      Detailed ratings and comments for each criterion.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {ratings.length === 0 ? (
                       <p className="text-sm text-gray-600">
-                        No individual criteria recorded for this
-                        appraisal.
+                        No individual criteria recorded for this appraisal.
                       </p>
                     ) : (
                       <div className="space-y-3">
@@ -777,9 +972,7 @@ export const EmployeeAppraisalsPage: React.FC = () => {
                                 </p>
                               </div>
                               <div className="text-right text-sm">
-                                <p className="font-semibold">
-                                  {r.ratingValue}
-                                </p>
+                                <p className="font-semibold">{r.ratingValue}</p>
                                 {r.ratingLabel && (
                                   <p className="text-[11px] text-gray-600">
                                     {r.ratingLabel}

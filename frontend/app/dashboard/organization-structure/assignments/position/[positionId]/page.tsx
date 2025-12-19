@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/shared/ui/Card";
 import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { PositionAssignmentResponseDto } from "@/types/organization-structure";
@@ -16,13 +21,15 @@ const shortId = (id?: string) => (id ? `${id.slice(0, 8)}…` : "—");
 const getId = (value: any): string => {
   if (!value) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "object") return value._id || value.id || (value.toString ? value.toString() : "");
+  if (typeof value === "object")
+    return value._id || value.id || (value.toString ? value.toString() : "");
   return "";
 };
 
 const getEmployeeLabel = (employeeProfileId: any) => {
   if (!employeeProfileId) return "—";
-  if (typeof employeeProfileId === "string") return `Employee ${shortId(employeeProfileId)}`;
+  if (typeof employeeProfileId === "string")
+    return `Employee ${shortId(employeeProfileId)}`;
   const fullName = employeeProfileId.fullName;
   const employeeNumber = employeeProfileId.employeeNumber;
   if (fullName && employeeNumber) return `${fullName} (${employeeNumber})`;
@@ -49,9 +56,9 @@ export default function PositionAssignmentsPage({
     clearError,
   } = useOrganizationStructure();
 
-  const [assignments, setAssignments] = useState<PositionAssignmentResponseDto[]>(
-    []
-  );
+  const [assignments, setAssignments] = useState<
+    PositionAssignmentResponseDto[]
+  >([]);
   const [positionId, setPositionId] = useState<string>("");
 
   const canManageAssignments = useMemo(() => {
@@ -63,11 +70,13 @@ export default function PositionAssignmentsPage({
 
   // Unwrap params Promise
   useEffect(() => {
-    params.then((resolved) => {
-      setPositionId(resolved.positionId);
-    }).catch((error) => {
-      console.error("Failed to resolve params:", error);
-    });
+    params
+      .then((resolved) => {
+        setPositionId(resolved.positionId);
+      })
+      .catch((error) => {
+        console.error("Failed to resolve params:", error);
+      });
   }, [params]);
 
   const fetchAssignments = async () => {
@@ -136,11 +145,12 @@ export default function PositionAssignmentsPage({
       <div className="container mx-auto px-6 py-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-white-900">
               Position Assignments
             </h1>
             <p className="text-gray-600 mt-1">
-              Position ID: <span className="font-mono">{positionId || "Loading..."}</span>
+              Position ID:{" "}
+              <span className="font-mono">{positionId || "Loading..."}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -295,5 +305,3 @@ export default function PositionAssignmentsPage({
     </ProtectedRoute>
   );
 }
-
-

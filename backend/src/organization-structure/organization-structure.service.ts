@@ -49,8 +49,14 @@ import {
   StructureRequestType,
 } from './enums/organization-structure.enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
 import { EmployeeSystemRole } from '../employee-profile/models/employee-system-role.schema';
 import { SystemRole } from '../employee-profile/enums/employee-profile.enums';
+import { EmployeeProfileService } from '../employee-profile/employee-profile.service';
+import {
+  EmployeeProfile,
+  EmployeeProfileDocument,
+} from '../employee-profile/models/employee-profile.schema';
 
 @Injectable()
 export class OrganizationStructureService {
@@ -69,7 +75,11 @@ export class OrganizationStructureService {
     private changeLogModel: Model<StructureChangeLogDocument>,
     @InjectModel(EmployeeSystemRole.name)
     private employeeSystemRoleModel: Model<any>,
+    @InjectModel(EmployeeProfile.name)
+    private employeeProfileModel: Model<EmployeeProfileDocument>,
     private notificationsService: NotificationsService,
+    @Inject(forwardRef(() => EmployeeProfileService))
+    private employeeProfileService: EmployeeProfileService,
   ) {}
 
   // ============ DEPARTMENT METHODS ============
@@ -108,6 +118,36 @@ export class OrganizationStructureService {
         null,
         department.toObject(),
       ).catch(() => undefined);
+
+      // REQ-OSM-11: Notify stakeholders on structure changes
+      try {
+        // Notify department head if assigned
+        if (department.headPositionId) {
+          // Find employees in the head position
+          const headEmployees = await this.employeeSystemRoleModel
+            .find({ positionId: department.headPositionId })
+            .populate('employeeProfileId')
+            .exec();
+          
+          for (const role of headEmployees) {
+            const employeeId = (role.employeeProfileId as any)?._id?.toString();
+            if (employeeId) {
+              await this.notificationsService.createNotification(
+                employeeId,
+                NotificationType.STRUCTURE_CHANGE_REQUEST_SUBMITTED,
+                `New department "${department.name}" has been created. You have been assigned as department head.`,
+                {
+                  departmentId: department._id.toString(),
+                  departmentName: department.name,
+                  action: 'CREATED',
+                },
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to send department creation notification:', error);
+      }
 
       return department;
     } catch (error: any) {
@@ -296,10 +336,21 @@ export class OrganizationStructureService {
   async getAllPositions(
     departmentId?: string,
     isActive?: boolean,
+    search?: string,
   ): Promise<PositionDocument[]> {
     const filter: any = {};
     if (departmentId) filter.departmentId = departmentId;
     if (isActive !== undefined) filter.isActive = isActive;
+
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      filter.$or = [
+        { title: searchRegex },
+        { code: searchRegex },
+        { description: searchRegex },
+      ];
+    }
 
     return this.positionModel
       .find(filter)
@@ -428,6 +479,14 @@ export class OrganizationStructureService {
       // Position has historical assignments - can only be delimited (deactivated), not deleted
       // This is allowed, but we log it for audit purposes
       console.log(`[deactivatePosition] Position ${id} has historical assignments - delimiting (deactivating) instead of deleting`);
+      
+      // System Integration: Notify Recruitment/Offboarding modules on position deactivation
+      console.log(
+        `[System Integration] Position "${position.title}" has been deactivated. ` +
+        `Recruitment module should update vacancy status. ` +
+        `Offboarding module should be notified if employees are affected.`,
+      );
+      // Note: Actual API calls to Recruitment/Offboarding modules would go here
     }
 
     const beforeSnapshot = position.toObject();
@@ -482,20 +541,121 @@ export class OrganizationStructureService {
       );
     }
 
-    // Check for overlapping assignments
-    const overlapping = await this.assignmentModel.findOne({
-      employeeProfileId: dto.employeeProfileId,
-      startDate: { $lte: new Date(dto.endDate || new Date()) },
-      $or: [{ endDate: null }, { endDate: { $gte: new Date(dto.startDate) } }],
-    });
-
-    if (overlapping) {
-      throw new ConflictException(
-        'Employee already has an active assignment in this period',
+    // Validate employee exists
+    const employee = await this.employeeProfileModel.findById(
+      dto.employeeProfileId,
+    );
+    if (!employee) {
+      throw new NotFoundException(
+        `Employee with ID ${dto.employeeProfileId} not found`,
       );
     }
 
-    const assignment = await this.assignmentModel.create(dto);
+    // CRITICAL: Check for overlapping active assignments
+    // An assignment overlaps if the date ranges intersect AND it's still active
+    const now = new Date();
+    const startDate = new Date(dto.startDate);
+    const endDate = dto.endDate ? new Date(dto.endDate) : null;
+    const newEndDate = endDate || now; // Use provided endDate or current date as max
+
+    // Find all assignments for this employee that might overlap
+    // We'll filter them in JavaScript to check if they're actually active and overlapping
+    const potentiallyOverlapping = await this.assignmentModel
+      .find({
+        employeeProfileId: new Types.ObjectId(dto.employeeProfileId),
+        startDate: { $lte: newEndDate }, // Existing assignment starts before new one ends
+        $or: [
+          { endDate: null }, // Ongoing assignment
+          { endDate: { $gte: startDate } }, // Ends on or after new assignment starts
+        ],
+      })
+      .populate('positionId')
+      .populate('departmentId')
+      .exec();
+
+    console.log(`[createPositionAssignment] Checking for overlapping assignments:`, {
+      newStartDate: startDate.toISOString(),
+      newEndDate: newEndDate.toISOString(),
+      foundAssignments: potentiallyOverlapping.length,
+    });
+
+    // Filter to find truly active and overlapping assignments
+    const overlapping = potentiallyOverlapping.find((assignment) => {
+      const existingStart = new Date(assignment.startDate);
+      const existingEnd = assignment.endDate ? new Date(assignment.endDate) : null;
+
+      // Check if assignment is still active (not ended in the past)
+      // An assignment is active if:
+      // - It has no endDate (ongoing), OR
+      // - Its endDate is today or in the future
+      // Note: For same-day assignments (startDate === endDate), we need to check if the end date is today or future
+      const isActive = !existingEnd || existingEnd >= now;
+
+      if (!isActive) {
+        console.log(`[createPositionAssignment] Assignment ${assignment._id} is not active (ended ${existingEnd?.toISOString()}, today is ${now.toISOString()})`);
+        return false;
+      }
+
+      // Additional check: If assignment ends on the same day it starts, and that day is in the past,
+      // it's not active (it's a historical single-day assignment)
+      if (existingEnd && existingStart.toDateString() === existingEnd.toDateString()) {
+        // Same-day assignment - check if the end date is today or in the future
+        const endDateOnly = new Date(existingEnd);
+        endDateOnly.setHours(23, 59, 59, 999); // End of the day
+        if (endDateOnly < now) {
+          console.log(`[createPositionAssignment] Assignment ${assignment._id} is a same-day assignment that already ended (${existingEnd.toISOString()})`);
+          return false;
+        }
+      }
+
+      // Check if date ranges actually overlap
+      // Two date ranges overlap if:
+      // - Existing starts before or on new end date AND
+      // - Existing ends after or on new start date (or has no end)
+      // For same-day assignments: they only overlap if the new assignment starts on or before that day
+      let rangesOverlap: boolean;
+      
+      if (existingEnd && existingStart.toDateString() === existingEnd.toDateString()) {
+        // Same-day assignment: only overlaps if new assignment starts on or before that day
+        // AND new assignment has no end date OR new assignment ends on or after that day
+        rangesOverlap = startDate <= existingEnd && (!endDate || endDate >= existingStart);
+      } else {
+        // Normal date range overlap check
+        rangesOverlap =
+          existingStart <= newEndDate &&
+          (!existingEnd || existingEnd >= startDate);
+      }
+
+      if (rangesOverlap) {
+        console.log(`[createPositionAssignment] Found overlapping active assignment:`, {
+          _id: assignment._id,
+          startDate: existingStart.toISOString(),
+          endDate: existingEnd?.toISOString() || 'ongoing',
+          positionId: assignment.positionId,
+        });
+      }
+
+      return rangesOverlap;
+    });
+
+    if (overlapping) {
+      const overlappingStart = new Date(overlapping.startDate);
+      const overlappingEnd = overlapping.endDate ? new Date(overlapping.endDate) : null;
+      
+      throw new ConflictException(
+        `Employee already has an active assignment from ${overlappingStart.toLocaleDateString()} to ${overlappingEnd ? overlappingEnd.toLocaleDateString() : 'ongoing'}. Please end the existing assignment first or adjust dates.`,
+      );
+    }
+
+    // Note: Overlap check and error throwing is now handled above in the overlap detection logic
+
+    // Create the assignment
+    const assignment = await this.assignmentModel.create({
+      ...dto,
+      employeeProfileId: new Types.ObjectId(dto.employeeProfileId),
+      positionId: new Types.ObjectId(dto.positionId),
+      departmentId: new Types.ObjectId(dto.departmentId),
+    });
 
     await this.logChange(
       ChangeLogAction.CREATED,
@@ -505,9 +665,56 @@ export class OrganizationStructureService {
       assignment.toObject(),
     );
 
+    // CRITICAL BUSINESS RULE: If this is an active assignment (no endDate or endDate in future),
+    // update EmployeeProfile's current fields
+    const isActiveAssignment = !endDate || endDate > now;
+    if (isActiveAssignment) {
+      try {
+        // Get position's supervisorPositionId if it exists
+        const positionDoc = await this.positionModel
+          .findById(dto.positionId)
+          .exec();
+        const supervisorPositionId = positionDoc?.reportsToPositionId
+          ? new Types.ObjectId(positionDoc.reportsToPositionId.toString())
+          : null;
+
+        // Update EmployeeProfile with current assignment details
+        const updateData: any = {
+          $set: {
+            primaryPositionId: new Types.ObjectId(dto.positionId),
+            primaryDepartmentId: new Types.ObjectId(dto.departmentId),
+          },
+        };
+
+        // Only set supervisorPositionId if it exists (don't set null explicitly)
+        if (supervisorPositionId) {
+          updateData.$set.supervisorPositionId = supervisorPositionId;
+        }
+
+        await this.employeeProfileModel.findByIdAndUpdate(
+          new Types.ObjectId(dto.employeeProfileId),
+          updateData,
+          { new: true },
+        );
+
+        console.log(
+          `[createPositionAssignment] Updated EmployeeProfile ${dto.employeeProfileId} with current position ${dto.positionId} and department ${dto.departmentId}`,
+        );
+      } catch (profileUpdateError) {
+        console.error(
+          `[createPositionAssignment] Error updating EmployeeProfile for ${dto.employeeProfileId}:`,
+          profileUpdateError,
+        );
+        // Continue - the assignment is still created, just the profile update failed
+        // This prevents the entire operation from failing if there's an issue with the profile update
+      }
+    }
+
     // REQ-OSM-05: Position is no longer vacant when assignment is created
     // The position now has an active assignment, so it's filled
-    console.log(`[createPositionAssignment] Position ${dto.positionId} is now filled (no longer vacant)`);
+    console.log(
+      `[createPositionAssignment] Position ${dto.positionId} is now filled (no longer vacant)`,
+    );
 
     return assignment;
   }
@@ -516,17 +723,33 @@ export class OrganizationStructureService {
     employeeProfileId: string,
     activeOnly = false,
   ): Promise<PositionAssignmentDocument[]> {
-    const filter: any = { employeeProfileId };
+    // CRITICAL: Convert string ID to ObjectId for proper query matching
+    const employeeObjectId = new Types.ObjectId(employeeProfileId);
+    
+    const filter: any = { 
+      employeeProfileId: employeeObjectId 
+    };
+    
     if (activeOnly) {
-      filter.$or = [{ endDate: null }, { endDate: { $gte: new Date() } }];
+      // Active assignments: no endDate OR endDate in the future
+      filter.$or = [
+        { endDate: null }, 
+        { endDate: { $gte: new Date() } }
+      ];
     }
 
-    return this.assignmentModel
+    console.log(`[getEmployeeAssignments] Query filter:`, JSON.stringify(filter, null, 2));
+
+    const assignments = await this.assignmentModel
       .find(filter)
       .populate('positionId')
       .populate('departmentId')
       .sort({ startDate: -1 })
       .exec();
+
+    console.log(`[getEmployeeAssignments] Found ${assignments.length} assignments for employee ${employeeProfileId}`);
+
+    return assignments;
   }
 
   async getPositionAssignments(
@@ -550,34 +773,179 @@ export class OrganizationStructureService {
       );
     }
 
-    const beforeSnapshot = assignment.toObject();
-    Object.assign(assignment, dto);
-    await assignment.save();
+    // Get a plain object snapshot before update (ensure it's a plain object, not a Mongoose document)
+    const beforeSnapshot = JSON.parse(JSON.stringify(assignment.toObject()));
+    
+    // Convert endDate string to Date if provided
+    const updateData: any = { ...dto };
+    if (dto.endDate && typeof dto.endDate === 'string') {
+      updateData.endDate = new Date(dto.endDate);
+    }
+    
+    // Use findByIdAndUpdate instead of Object.assign + save to avoid _id issues
+    const updatedAssignment = await this.assignmentModel.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true },
+    );
+
+    if (!updatedAssignment) {
+      throw new NotFoundException(
+        `Position assignment with ID ${id} not found after update`,
+      );
+    }
+
+    // Ensure afterSnapshot is also a plain object
+    const afterSnapshot = JSON.parse(JSON.stringify(updatedAssignment.toObject()));
 
     await this.logChange(
       ChangeLogAction.UPDATED,
       'PositionAssignment',
-      assignment._id,
+      updatedAssignment._id,
       beforeSnapshot,
-      assignment.toObject(),
+      afterSnapshot,
     );
 
-    return assignment;
+    return updatedAssignment;
   }
 
   async endPositionAssignment(
     id: string,
     endDate: Date,
   ): Promise<PositionAssignmentDocument> {
+    console.log(`[endPositionAssignment] Ending assignment ${id} with endDate: ${endDate.toISOString()}`);
+
     const assignment = await this.assignmentModel.findById(id);
     if (!assignment) {
       throw new NotFoundException(`Position assignment with ID ${id} not found`);
     }
 
+    const employeeProfileId = assignment.employeeProfileId;
     const positionId = assignment.positionId;
+
+    console.log(`[endPositionAssignment] Assignment details:`, {
+      assignmentId: assignment._id,
+      employeeProfileId: employeeProfileId?.toString(),
+      positionId: positionId?.toString(),
+      currentEndDate: assignment.endDate,
+    });
+
+    // Check if this is the current active assignment (before ending it)
+    // Convert employeeProfileId to ObjectId for proper query
+    const employeeObjectId = new Types.ObjectId(employeeProfileId.toString());
+    const employee = await this.employeeProfileModel.findById(
+      employeeObjectId,
+    );
+    
+    if (!employee) {
+      console.warn(`[endPositionAssignment] Employee ${employeeProfileId} not found, but continuing to end assignment`);
+    }
+
+    const isCurrentAssignment =
+      employee &&
+      employee.primaryPositionId &&
+      employee.primaryPositionId.toString() === positionId.toString();
+
+    console.log(`[endPositionAssignment] Is current assignment: ${isCurrentAssignment}`);
+
+    // End the assignment
     const result = await this.updatePositionAssignment(id, {
       endDate: endDate.toISOString(),
     });
+
+    // CRITICAL BUSINESS RULE: If this was the current assignment, update EmployeeProfile
+    if (isCurrentAssignment) {
+      console.log(`[endPositionAssignment] This was the current assignment, updating EmployeeProfile...`);
+      
+      try {
+        // Find another active assignment for this employee
+        // Note: We need to check for assignments that are still active AFTER we end this one
+        // So we look for assignments that start before or on the endDate and have no endDate or endDate >= endDate
+        const otherActiveAssignment = await this.assignmentModel
+          .findOne({
+            employeeProfileId: new Types.ObjectId(employeeProfileId.toString()),
+            _id: { $ne: assignment._id }, // Exclude the one we just ended
+            startDate: { $lte: endDate }, // Started before or on the end date
+            $or: [
+              { endDate: null }, // Ongoing
+              { endDate: { $gte: endDate } }, // Ends on or after the end date
+            ],
+          })
+          .sort({ startDate: -1 }) // Get the most recent active assignment
+          .exec();
+
+        if (otherActiveAssignment) {
+          console.log(`[endPositionAssignment] Found other active assignment:`, {
+            assignmentId: otherActiveAssignment._id,
+            positionId: otherActiveAssignment.positionId,
+            departmentId: otherActiveAssignment.departmentId,
+          });
+
+          // Update EmployeeProfile to point to the other active assignment
+          const otherPosition = await this.positionModel
+            .findById(otherActiveAssignment.positionId)
+            .exec();
+          const supervisorPositionId = otherPosition?.reportsToPositionId
+            ? new Types.ObjectId(otherPosition.reportsToPositionId.toString())
+            : null;
+
+          const updateData: any = {
+            $set: {
+              primaryPositionId: new Types.ObjectId(
+                otherActiveAssignment.positionId.toString(),
+              ),
+              primaryDepartmentId: new Types.ObjectId(
+                otherActiveAssignment.departmentId.toString(),
+              ),
+            },
+          };
+
+          // Only set supervisorPositionId if it exists
+          if (supervisorPositionId) {
+            updateData.$set.supervisorPositionId = supervisorPositionId;
+          }
+
+          await this.employeeProfileModel.findByIdAndUpdate(
+            new Types.ObjectId(employeeProfileId.toString()),
+            updateData,
+            { new: true },
+          );
+
+          console.log(
+            `[endPositionAssignment] Updated EmployeeProfile ${employeeProfileId} to point to another active assignment (position ${otherActiveAssignment.positionId})`,
+          );
+        } else {
+          console.log(`[endPositionAssignment] No other active assignment found, clearing EmployeeProfile fields`);
+          
+          // No other active assignment - clear current fields using $unset
+          await this.employeeProfileModel.findByIdAndUpdate(
+            new Types.ObjectId(employeeProfileId.toString()),
+            {
+              $unset: {
+                primaryPositionId: "",
+                primaryDepartmentId: "",
+                supervisorPositionId: "",
+              },
+            },
+            { new: true },
+          );
+
+          console.log(
+            `[endPositionAssignment] Cleared EmployeeProfile ${employeeProfileId} current position/department (no other active assignments)`,
+          );
+        }
+      } catch (profileUpdateError) {
+        // Log the error but don't fail the assignment ending
+        console.error(
+          `[endPositionAssignment] Error updating EmployeeProfile for ${employeeProfileId}:`,
+          profileUpdateError,
+        );
+        // Continue - the assignment is still ended, just the profile update failed
+        // This allows the operation to complete even if profile update has issues
+      }
+    } else {
+      console.log(`[endPositionAssignment] This was not the current assignment, no EmployeeProfile update needed`);
+    }
 
     // REQ-OSM-05: Vacant position flagging for recruitment
     // When assignment ends, check if position becomes vacant
@@ -590,7 +958,9 @@ export class OrganizationStructureService {
       // Position is now vacant - flag for recruitment
       const position = await this.positionModel.findById(positionId);
       if (position && position.isActive) {
-        console.log(`[endPositionAssignment] Position ${positionId} (${position.code}) is now vacant and flagged for recruitment`);
+        console.log(
+          `[endPositionAssignment] Position ${positionId} (${position.code}) is now vacant and flagged for recruitment`,
+        );
         // TODO: Integration with RecruitmentService to automatically create job requisition
         // await this.recruitmentService.flagPositionAsVacant(positionId.toString());
       }
@@ -1522,16 +1892,29 @@ export class OrganizationStructureService {
     afterSnapshot: any,
     performedBy?: string,
   ): Promise<void> {
-    await this.changeLogModel.create({
-      action,
-      entityType,
-      entityId,
-      beforeSnapshot,
-      afterSnapshot,
-      performedByEmployeeId: performedBy
-        ? new Types.ObjectId(performedBy)
-        : undefined,
-    });
+    try {
+      // Ensure snapshots are plain objects (not Mongoose documents)
+      const cleanBeforeSnapshot = beforeSnapshot 
+        ? JSON.parse(JSON.stringify(beforeSnapshot))
+        : null;
+      const cleanAfterSnapshot = afterSnapshot
+        ? JSON.parse(JSON.stringify(afterSnapshot))
+        : null;
+
+      await this.changeLogModel.create({
+        action,
+        entityType,
+        entityId,
+        beforeSnapshot: cleanBeforeSnapshot,
+        afterSnapshot: cleanAfterSnapshot,
+        performedByEmployeeId: performedBy
+          ? new Types.ObjectId(performedBy)
+          : undefined,
+      });
+    } catch (error) {
+      // Log the error but don't fail the operation
+      console.error(`[logChange] Error logging change for ${entityType} ${entityId}:`, error);
+    }
   }
 
   private async checkAndUpdateRequestStatus(

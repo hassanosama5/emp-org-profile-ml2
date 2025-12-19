@@ -37,8 +37,8 @@ export default function LeaveRequestsPage() {
   useRequireAuth();
 
   useEffect(() => {
-    // Get employeeId from multiple sources - prioritize JWT token (most reliable)
-    const employeeId = authApi.getUserId() || user?.id || user?.userId;
+    // Get employeeId from user hook
+    const employeeId = (user?.id || user?.userId || "") as string;
     if (employeeId && employeeId.trim()) {
       fetchLeaveRequests();
       fetchLeaveTypes();
@@ -54,7 +54,7 @@ export default function LeaveRequestsPage() {
       setLoading(true);
       setError("");
       // Get employeeId from multiple sources - prioritize JWT token
-      const employeeId = authApi.getUserId() || user?.id || user?.userId || "";
+      const employeeId = (user?.id || user?.userId || "") as string;
       
       if (!employeeId || !employeeId.trim()) {
         throw new Error("Employee ID is required. Please log in again.");

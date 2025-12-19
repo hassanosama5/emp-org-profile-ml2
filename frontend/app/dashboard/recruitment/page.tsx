@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/hooks/use-auth";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { SystemRole } from "@/types";
@@ -13,7 +19,9 @@ export default function RecruitmentPage() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
 
-  const isCandidate = user?.userType === "candidate" || user?.roles?.includes(SystemRole.JOB_CANDIDATE);
+  const isCandidate =
+    user?.userType === "candidate" ||
+    user?.roles?.includes(SystemRole.JOB_CANDIDATE);
   const isEmployee = user?.userType === "employee";
   const isDepartmentHead = user?.roles?.includes(SystemRole.DEPARTMENT_HEAD);
   const isHR = isHRStaff(user);
@@ -23,9 +31,10 @@ export default function RecruitmentPage() {
   // CHANGED - Added System Admin role check
   const isSystemAdmin = user?.roles?.includes(SystemRole.SYSTEM_ADMIN);
   // CHANGED - Added Finance role check for offboarding clearance
-  const isFinanceStaff = user?.roles?.includes(SystemRole.FINANCE_STAFF) ||
-                         user?.roles?.includes(SystemRole.PAYROLL_MANAGER) ||
-                         user?.roles?.includes(SystemRole.PAYROLL_SPECIALIST);
+  const isFinanceStaff =
+    user?.roles?.includes(SystemRole.FINANCE_STAFF) ||
+    user?.roles?.includes(SystemRole.PAYROLL_MANAGER) ||
+    user?.roles?.includes(SystemRole.PAYROLL_SPECIALIST);
 
   return (
     <ProtectedRoute>
@@ -38,19 +47,27 @@ export default function RecruitmentPage() {
         />
 
         <div className="mb-8">
-          <Link href="/dashboard" className="text-blue-600 hover:underline mb-4 inline-block">
+          <Link
+            href="/dashboard"
+            className="text-blue-600 hover:underline mb-4 inline-block"
+          >
             ← Back to Dashboard
           </Link>
           {isHRManager && !isHREmployee ? (
             <>
-              <h1 className="text-3xl font-bold text-gray-900">HR Manager Functions</h1>
+              <h1 className="text-3xl font-bold text-white-900">
+                HR Manager Functions
+              </h1>
               <p className="text-gray-600 mt-1">
-                Manage the complete recruitment lifecycle from job posting to employee onboarding
+                Manage the complete recruitment lifecycle from job posting to
+                employee onboarding
               </p>
             </>
           ) : (
             <>
-              <h1 className="text-3xl font-bold text-gray-900">Recruitment Portal</h1>
+              <h1 className="text-3xl font-bold text-white-900">
+                Recruitment Portal
+              </h1>
               <p className="text-gray-600 mt-1">Welcome, {user?.fullName}</p>
             </>
           )}
@@ -63,7 +80,9 @@ export default function RecruitmentPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>My Applications</CardTitle>
-                  <CardDescription>Track your application status</CardDescription>
+                  <CardDescription>
+                    Track your application status
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/my-applications">
@@ -87,7 +106,9 @@ export default function RecruitmentPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Job Offers</CardTitle>
-                  <CardDescription>Respond to offers and upload documents</CardDescription>
+                  <CardDescription>
+                    Respond to offers and upload documents
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/offers">
@@ -112,7 +133,9 @@ export default function RecruitmentPage() {
             <div className="mt-8">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-2xl">Available Job Openings</CardTitle>
+                  <CardTitle className="text-2xl">
+                    Available Job Openings
+                  </CardTitle>
                   <CardDescription>
                     Browse and apply to available job positions
                   </CardDescription>
@@ -120,7 +143,8 @@ export default function RecruitmentPage() {
                 <CardContent className="py-8">
                   <div className="text-center">
                     <p className="text-gray-600 mb-6">
-                      Explore all available job openings and find the perfect opportunity for you
+                      Explore all available job openings and find the perfect
+                      opportunity for you
                     </p>
                     <Link href="/dashboard/recruitment/jobs">
                       <Button size="lg" className="px-8">
@@ -141,7 +165,9 @@ export default function RecruitmentPage() {
             <Card className="border-blue-200 bg-blue-50">
               <CardHeader>
                 <CardTitle className="text-blue-900">My Onboarding</CardTitle>
-                <CardDescription className="text-blue-700">Track your onboarding progress</CardDescription>
+                <CardDescription className="text-blue-700">
+                  Track your onboarding progress
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/recruitment/my-onboarding">
@@ -153,7 +179,9 @@ export default function RecruitmentPage() {
             <Card>
               <CardHeader>
                 <CardTitle>My Referrals</CardTitle>
-                <CardDescription>Track candidates you've referred</CardDescription>
+                <CardDescription>
+                  Track candidates you've referred
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/recruitment/referrals">
@@ -165,7 +193,9 @@ export default function RecruitmentPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Resignation</CardTitle>
-                <CardDescription>Submit and track resignation requests</CardDescription>
+                <CardDescription>
+                  Submit and track resignation requests
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/recruitment/resignation">
@@ -179,13 +209,18 @@ export default function RecruitmentPage() {
         {/* Finance Staff View - OFF-010: FINANCE Clearance */}
         {isFinanceStaff && !isHR && (
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Finance Clearance Tasks</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Finance Clearance Tasks
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="border-green-200 bg-green-50">
                 <CardHeader>
-                  <CardTitle className="text-green-800">💰 Finance Clearance</CardTitle>
+                  <CardTitle className="text-green-800">
+                    💰 Finance Clearance
+                  </CardTitle>
                   <CardDescription className="text-green-700">
-                    Complete expense reports, credit card returns, and loan settlements (OFF-010)
+                    Complete expense reports, credit card returns, and loan
+                    settlements (OFF-010)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -206,7 +241,9 @@ export default function RecruitmentPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Department Interviews</CardTitle>
-                <CardDescription>View and manage department interviews</CardDescription>
+                <CardDescription>
+                  View and manage department interviews
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/recruitment/department-interviews">
@@ -218,7 +255,9 @@ export default function RecruitmentPage() {
             {/* OFF-010: Line Manager Clearance */}
             <Card className="border-purple-200 bg-purple-50">
               <CardHeader>
-                <CardTitle className="text-purple-800">👔 Line Manager Clearance</CardTitle>
+                <CardTitle className="text-purple-800">
+                  👔 Line Manager Clearance
+                </CardTitle>
                 <CardDescription className="text-purple-700">
                   Complete work handover & project transfer clearance (OFF-010)
                 </CardDescription>
@@ -243,7 +282,8 @@ export default function RecruitmentPage() {
                 <CardHeader>
                   <CardTitle>Job Templates</CardTitle>
                   <CardDescription>
-                    Define standardized job descriptions with title, department, qualifications, and skills
+                    Define standardized job descriptions with title, department,
+                    qualifications, and skills
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -258,7 +298,8 @@ export default function RecruitmentPage() {
                 <CardHeader>
                   <CardTitle>Job Requisitions</CardTitle>
                   <CardDescription>
-                    Create job postings by selecting templates and specifying openings, location, and details
+                    Create job postings by selecting templates and specifying
+                    openings, location, and details
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -273,12 +314,15 @@ export default function RecruitmentPage() {
                 <CardHeader>
                   <CardTitle>Recruitment Progress</CardTitle>
                   <CardDescription>
-                    Monitor progress across all open positions with detailed statistics and metrics
+                    Monitor progress across all open positions with detailed
+                    statistics and metrics
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/recruitment-progress">
-                    <Button className="w-full">View Recruitment Progress</Button>
+                    <Button className="w-full">
+                      View Recruitment Progress
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -286,14 +330,19 @@ export default function RecruitmentPage() {
               {/* Recruitment Reports */}
               <Card className="hover:shadow-lg transition-shadow border-2 border-green-200 bg-green-50">
                 <CardHeader>
-                  <CardTitle className="text-green-800">📊 Recruitment Reports</CardTitle>
+                  <CardTitle className="text-green-800">
+                    📊 Recruitment Reports
+                  </CardTitle>
                   <CardDescription className="text-green-700">
-                    Analytics including time-to-hire, source effectiveness, and pipeline conversion
+                    Analytics including time-to-hire, source effectiveness, and
+                    pipeline conversion
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/reports">
-                    <Button className="w-full bg-green-600 hover:bg-green-700">View Reports & Analytics</Button>
+                    <Button className="w-full bg-green-600 hover:bg-green-700">
+                      View Reports & Analytics
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -303,12 +352,15 @@ export default function RecruitmentPage() {
                 <CardHeader>
                   <CardTitle>Job Offers & Approvals</CardTitle>
                   <CardDescription>
-                    Review and approve/reject job offers for candidates with status "offer"
+                    Review and approve/reject job offers for candidates with
+                    status "offer"
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/job-offers-approvals">
-                    <Button className="w-full">Manage Offers & Approvals</Button>
+                    <Button className="w-full">
+                      Manage Offers & Approvals
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -318,7 +370,8 @@ export default function RecruitmentPage() {
                 <CardHeader>
                   <CardTitle>Offer Letters</CardTitle>
                   <CardDescription>
-                    Generate, send, and collect electronically signed offer letters from candidates
+                    Generate, send, and collect electronically signed offer
+                    letters from candidates
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -331,14 +384,19 @@ export default function RecruitmentPage() {
               {/* HR Onboarding - ONB-001, ONB-002, ONB-004 */}
               <Card className="hover:shadow-lg transition-shadow border-2 border-green-200 bg-green-50">
                 <CardHeader>
-                  <CardTitle className="text-green-800">🎯 HR Onboarding</CardTitle>
+                  <CardTitle className="text-green-800">
+                    🎯 HR Onboarding
+                  </CardTitle>
                   <CardDescription className="text-green-700">
-                    Manage new hire onboarding, track task progress, and ensure compliance (ONB-001 to ONB-019)
+                    Manage new hire onboarding, track task progress, and ensure
+                    compliance (ONB-001 to ONB-019)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/hr-onboarding">
-                    <Button className="w-full bg-green-600 hover:bg-green-700">Manage Onboarding</Button>
+                    <Button className="w-full bg-green-600 hover:bg-green-700">
+                      Manage Onboarding
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -346,14 +404,19 @@ export default function RecruitmentPage() {
               {/* Termination Management - OFF-001 */}
               <Card className="hover:shadow-lg transition-shadow border-2 border-red-200 bg-red-50">
                 <CardHeader>
-                  <CardTitle className="text-red-800">⚠️ Termination Management</CardTitle>
+                  <CardTitle className="text-red-800">
+                    ⚠️ Termination Management
+                  </CardTitle>
                   <CardDescription className="text-red-700">
-                    Review performance, initiate terminations, and manage exit requests (OFF-001)
+                    Review performance, initiate terminations, and manage exit
+                    requests (OFF-001)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/terminations">
-                    <Button className="w-full bg-red-600 hover:bg-red-700">Manage Terminations</Button>
+                    <Button className="w-full bg-red-600 hover:bg-red-700">
+                      Manage Terminations
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -361,14 +424,19 @@ export default function RecruitmentPage() {
               {/* Offboarding Checklists - OFF-006, OFF-010, OFF-013 */}
               <Card className="hover:shadow-lg transition-shadow border-2 border-orange-200 bg-orange-50">
                 <CardHeader>
-                  <CardTitle className="text-orange-800">📋 Offboarding Checklists</CardTitle>
+                  <CardTitle className="text-orange-800">
+                    📋 Offboarding Checklists
+                  </CardTitle>
                   <CardDescription className="text-orange-700">
-                    Manage exit clearance, department sign-offs, and final settlements (OFF-006, OFF-010, OFF-013)
+                    Manage exit clearance, department sign-offs, and final
+                    settlements (OFF-006, OFF-010, OFF-013)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/offboarding-checklists">
-                    <Button className="w-full bg-orange-600 hover:bg-orange-700">Manage Offboarding</Button>
+                    <Button className="w-full bg-orange-600 hover:bg-orange-700">
+                      Manage Offboarding
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -376,14 +444,19 @@ export default function RecruitmentPage() {
               {/* Talent Pool - Browse all candidates with resumes */}
               <Card className="hover:shadow-lg transition-shadow border-2 border-indigo-200 bg-indigo-50">
                 <CardHeader>
-                  <CardTitle className="text-indigo-800">🎯 Talent Pool</CardTitle>
+                  <CardTitle className="text-indigo-800">
+                    🎯 Talent Pool
+                  </CardTitle>
                   <CardDescription className="text-indigo-700">
-                    Browse and search all candidates with resumes in the organization's talent pool
+                    Browse and search all candidates with resumes in the
+                    organization's talent pool
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/talent-pool">
-                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">View Talent Pool</Button>
+                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
+                      View Talent Pool
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -393,12 +466,15 @@ export default function RecruitmentPage() {
                 <CardHeader>
                   <CardTitle>Referrals</CardTitle>
                   <CardDescription>
-                    Track candidates you've referred and their application status
+                    Track candidates you've referred and their application
+                    status
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/referrals">
-                    <Button className="w-full" variant="outline">View My Referrals</Button>
+                    <Button className="w-full" variant="outline">
+                      View My Referrals
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -413,7 +489,9 @@ export default function RecruitmentPage() {
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/resignation">
-                    <Button className="w-full" variant="outline">Manage Resignation</Button>
+                    <Button className="w-full" variant="outline">
+                      Manage Resignation
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -430,7 +508,9 @@ export default function RecruitmentPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Job Requisitions</CardTitle>
-                    <CardDescription>Preview and publish job postings</CardDescription>
+                    <CardDescription>
+                      Preview and publish job postings
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Link href="/dashboard/recruitment/job-requisitions">
@@ -445,7 +525,9 @@ export default function RecruitmentPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Candidate Tracking</CardTitle>
-                    <CardDescription>Track candidates through each hiring stage</CardDescription>
+                    <CardDescription>
+                      Track candidates through each hiring stage
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Link href="/dashboard/recruitment/applications">
@@ -458,14 +540,19 @@ export default function RecruitmentPage() {
               {/* Talent Pool - Browse all candidates with resumes */}
               <Card className="border-indigo-200 bg-indigo-50">
                 <CardHeader>
-                  <CardTitle className="text-indigo-800">🎯 Talent Pool</CardTitle>
+                  <CardTitle className="text-indigo-800">
+                    🎯 Talent Pool
+                  </CardTitle>
                   <CardDescription className="text-indigo-700">
-                    Browse and search all candidates with resumes in the organization's talent pool
+                    Browse and search all candidates with resumes in the
+                    organization's talent pool
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/talent-pool">
-                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">View Talent Pool</Button>
+                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
+                      View Talent Pool
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -473,7 +560,9 @@ export default function RecruitmentPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Interviews</CardTitle>
-                  <CardDescription>Schedule and manage interviews</CardDescription>
+                  <CardDescription>
+                    Schedule and manage interviews
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Link href="/dashboard/recruitment/hr-interviews">
@@ -486,7 +575,9 @@ export default function RecruitmentPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Onboarding</CardTitle>
-                    <CardDescription>Manage new hire onboarding</CardDescription>
+                    <CardDescription>
+                      Manage new hire onboarding
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Link href="/dashboard/recruitment/hr-onboarding">
@@ -501,7 +592,9 @@ export default function RecruitmentPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Equipment Management</CardTitle>
-                    <CardDescription>Reserve desk, equipment & access cards</CardDescription>
+                    <CardDescription>
+                      Reserve desk, equipment & access cards
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Link href="/dashboard/recruitment/equipment-management">
@@ -515,7 +608,9 @@ export default function RecruitmentPage() {
               {isHREmployee && (
                 <Card className="border-orange-200 bg-orange-50">
                   <CardHeader>
-                    <CardTitle className="text-orange-800">📋 Offboarding Clearance</CardTitle>
+                    <CardTitle className="text-orange-800">
+                      📋 Offboarding Clearance
+                    </CardTitle>
                     <CardDescription className="text-orange-700">
                       Complete FACILITIES & ADMIN clearance items (OFF-010)
                     </CardDescription>
@@ -535,7 +630,9 @@ export default function RecruitmentPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Pre-boarding</CardTitle>
-                    <CardDescription>Trigger pre-boarding tasks after offer acceptance</CardDescription>
+                    <CardDescription>
+                      Trigger pre-boarding tasks after offer acceptance
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Link href="/dashboard/recruitment/preboarding">
@@ -551,13 +648,16 @@ export default function RecruitmentPage() {
         {/* CHANGED - System Admin View (ONB-009, ONB-013, OFF-007) */}
         {isSystemAdmin && (
           <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">System Administration</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              System Administration
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Access Management</CardTitle>
                   <CardDescription>
-                    Provision or revoke system access for employees (ONB-009, OFF-007)
+                    Provision or revoke system access for employees (ONB-009,
+                    OFF-007)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -584,9 +684,12 @@ export default function RecruitmentPage() {
               {/* OFF-006, OFF-007, OFF-010: Offboarding & IT Clearance */}
               <Card className="border-red-200 bg-red-50">
                 <CardHeader>
-                  <CardTitle className="text-red-800">💻 IT Clearance Tasks</CardTitle>
+                  <CardTitle className="text-red-800">
+                    💻 IT Clearance Tasks
+                  </CardTitle>
                   <CardDescription className="text-red-700">
-                    View offboarding checklists and complete IT clearance items (OFF-007)
+                    View offboarding checklists and complete IT clearance items
+                    (OFF-007)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -604,4 +707,3 @@ export default function RecruitmentPage() {
     </ProtectedRoute>
   );
 }
-

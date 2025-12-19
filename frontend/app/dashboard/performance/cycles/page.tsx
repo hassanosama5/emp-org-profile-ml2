@@ -1,7 +1,7 @@
 "use client";
 
-import { AppraisalCyclesPage } from "@/components/Performance/AppraisalCyclesPage";
+import { AppraisalCyclesListPage } from "@/components/Performance/AppraisalCyclesListPage";
 
 export default function PerformanceCyclesRoute() {
-  return <AppraisalCyclesPage />;
+  return <AppraisalCyclesListPage />;
 }
