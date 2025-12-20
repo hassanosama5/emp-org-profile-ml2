@@ -8,6 +8,7 @@ import { Input } from "@/components/shared/ui/Input";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { employeeProfileApi } from "@/lib/api/employee-profile/employee-profile";
 import type { EmployeeQualification } from "@/types";
+import { SystemRole } from "@/types";
 import { Plus, Edit, Trash2, GraduationCap, User } from "lucide-react";
 
 interface EducationSectionProps {
@@ -34,9 +35,31 @@ export default function EducationSection({
 
   useEffect(() => {
     loadQualifications();
-  }, [employeeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId, user]);
+
+  // Check if user has permission to view qualifications
+  const hasQualificationAccess = () => {
+    if (!user?.roles) return false;
+    const userRoles = user.roles.map((r) => String(r).toLowerCase());
+    const allowedRoles = [
+      SystemRole.DEPARTMENT_EMPLOYEE.toLowerCase(),
+      SystemRole.RECRUITER.toLowerCase(),
+      SystemRole.HR_MANAGER.toLowerCase(),
+      SystemRole.HR_EMPLOYEE.toLowerCase(),
+      SystemRole.HR_ADMIN.toLowerCase(),
+      SystemRole.SYSTEM_ADMIN.toLowerCase(),
+    ];
+    return userRoles.some((role) => allowedRoles.includes(role));
+  };
 
   const loadQualifications = async () => {
+    // Skip API call if user doesn't have permission
+    if (!hasQualificationAccess() && !isHR) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       let data: EmployeeQualification[] = [];
@@ -46,15 +69,23 @@ export default function EducationSection({
         console.log(`🔍 HR viewing employee ${employeeId} qualifications`);
         data = await employeeProfileApi.getEmployeeQualifications(employeeId);
       } else {
-        // Employee viewing own qualifications
-        data = await employeeProfileApi.getMyQualifications();
+        // Employee viewing own qualifications - only if they have permission
+        if (hasQualificationAccess()) {
+          data = await employeeProfileApi.getMyQualifications();
+        }
       }
 
       console.log("📊 Qualifications loaded:", data);
       setQualifications(data || []);
     } catch (error: any) {
-      console.error("❌ Error loading qualifications:", error);
-      showToast(error.message || "Failed to load education", "error");
+      // Only show error if it's not a 403 (permission denied)
+      if (error?.response?.status !== 403) {
+        console.error("❌ Error loading qualifications:", error);
+        showToast(error.message || "Failed to load education", "error");
+      } else {
+        // Silently handle permission errors
+        console.log("⚠️ User does not have permission to view qualifications");
+      }
     } finally {
       setLoading(false);
     }

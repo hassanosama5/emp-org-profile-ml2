@@ -15,7 +15,7 @@ import { ApprovalDecision } from "@/types/organization-structure";
 export default function ApprovalDecisionPage({
   params,
 }: {
-  params: { approvalId: string };
+  params?: Promise<{ approvalId: string }>;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -31,6 +31,7 @@ export default function ApprovalDecisionPage({
   const [comments, setComments] = useState("");
   const [decision, setDecision] = useState<ApprovalDecision>(ApprovalDecision.APPROVED);
   const [changeRequestId, setChangeRequestId] = useState<string | null>(null);
+  const [approvalId, setApprovalId] = useState<string>("");
 
   const roles = user?.roles || [];
   const hasRole = (role: string) =>
@@ -39,6 +40,18 @@ export default function ApprovalDecisionPage({
     () => hasRole(SystemRole.SYSTEM_ADMIN) || hasRole(SystemRole.HR_ADMIN),
     [user?.roles]
   );
+
+  // Unwrap params Promise
+  useEffect(() => {
+    if (!params) return;
+    params
+      .then((resolved) => {
+        setApprovalId(resolved.approvalId);
+      })
+      .catch((error) => {
+        console.error("Failed to resolve params:", error);
+      });
+  }, [params]);
 
   // Fetch change request ID from approval
   useEffect(() => {
@@ -59,9 +72,9 @@ export default function ApprovalDecisionPage({
   }, []);
 
   const submit = async () => {
-    if (!canDecide) return;
+    if (!canDecide || !approvalId) return;
     try {
-      await updateApprovalDecision(params.approvalId, {
+      await updateApprovalDecision(approvalId, {
         decision,
         comments: comments.trim() || undefined,
       });
@@ -114,7 +127,7 @@ export default function ApprovalDecisionPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Approval Decision</h1>
             <p className="text-gray-600 mt-1">
-              Approval ID: <span className="font-mono">{params.approvalId}</span>
+              Approval ID: <span className="font-mono">{approvalId}</span>
             </p>
           </div>
           <Link

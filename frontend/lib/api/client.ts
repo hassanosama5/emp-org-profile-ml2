@@ -5,6 +5,8 @@ import axios, {
 } from "axios";
 
 // CHANGED - Fixed port to match backend (5000)
+
+// Backend API runs on port 5000 by default (can be overridden with PORT env var or NEXT_PUBLIC_API_URL)
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
 
@@ -17,14 +19,24 @@ export const api: AxiosInstance = axios.create({
     "Content-Type": "application/json",
   },
   timeout: 15000,
-  withCredentials: true, // Required for HTTP-only cookie authentication
 });
 
-// 🔐 Request interceptor – cookies are sent automatically with withCredentials: true
+// 🔐 Request interceptor – attach JWT if present
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Cookies are automatically sent with requests when withCredentials: true
-    // No need to manually attach tokens from localStorage
+    if (typeof window !== "undefined") {
+      // Try multiple common keys so we don't depend on one name
+      const token =
+        localStorage.getItem("auth_token") ||
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("jwt");
+
+      if (token) {
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
     return config;
   },
   (error) => {
@@ -41,18 +53,13 @@ api.interceptors.response.use(
         response.status
       } ${response.config.method?.toUpperCase()} ${response.config.url}]`
     );
-    // Only log response data in development or if it's not too large
-    if (process.env.NODE_ENV === 'development' && response.data && typeof response.data === 'object') {
-      const dataSize = JSON.stringify(response.data).length;
-      if (dataSize < 10000) { // Only log if response is less than 10KB
     console.log('✅ API Response data:', response.data);
-      }
-    }
 
     // Return the data property if it exists, otherwise return the full response
     return response.data;
   },
   (error) => {
+    
     // ============================================================
     // CHANGED: Fixed syntax errors in error handler
     // Issue: errorDetails object was incorrectly structured as inline
@@ -86,41 +93,19 @@ api.interceptors.response.use(
       },
     };
     
-    // Only log if there's meaningful error data or if we have an error message
-    const hasErrorData = error.response?.data && Object.keys(error.response.data).length > 0;
-    const hasErrorMessage = error.message && error.message.length > 0;
-    
-    if (hasErrorData || hasErrorMessage) {
-      // Only log full details in development
-      if (process.env.NODE_ENV === 'development') {
     console.error("API Error:", errorDetails);
+    
     console.error(
       `❌ API Error [${error.config?.method?.toUpperCase()} ${
         error.config?.url
       }]:`,
       errorDetails
     );
-      } else {
-        // In production, log minimal info
-        console.error(
-          `❌ API Error [${error.config?.method?.toUpperCase()} ${
-            error.config?.url
-          }]: ${error.message || 'Unknown error'}`
-        );
-      }
-    } else if (!error.response) {
-      console.error('⚠️ No response received - possible network error:', error.message || error);
-    } else {
-      // Log minimal info for empty responses
-      console.error(
-        `❌ API Error [${error.config?.method?.toUpperCase()} ${
-          error.config?.url
-        }]: Status ${error.response.status} ${error.response.statusText}`
-      );
-    }
     
-    // CHANGED - Log the full error object for debugging (only if meaningful and in development)
-    if (process.env.NODE_ENV === 'development' && error.response && hasErrorData) {
+    // CHANGED - Log the full error object for debugging
+    if (!error.response) {
+      console.error('⚠️ No response received - possible network error:', error);
+    } else {
       console.error('📋 Full error response:', {
         status: error.response.status,
         statusText: error.response.statusText,
@@ -140,32 +125,76 @@ api.interceptors.response.use(
     // },
     // });
 
-    if (error.response?.status === 401) {
-      // Only log in development and only if not on auth pages
-      if (process.env.NODE_ENV === 'development') {
-        const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
-        const isAuthPage = currentPath.startsWith("/auth/");
-        if (!isAuthPage) {
-          console.log("🔒 401 Unauthorized - Cookie may be invalid or expired");
+    const status = error.response?.status || error.status;
+    const url = error.config?.url || error.request?.responseURL || '';
+    
+    // Suppress 404 errors for backup endpoints (not yet implemented)
+    // Browser network layer will still show these, but we won't log them as application errors
+    const isBackup404 = status === 404 && (url.includes('/backups') || url.includes('backup'));
+    
+    // Suppress 403 errors for optional endpoints (employee-profile and payroll/runs with query params)
+    const isOptionalEmployeeProfile = status === 403 && url.includes('/employee-profile') && 
+      (url.includes('limit') || url.includes('?'));
+    const isOptionalPayrollRuns = status === 403 && url.includes('/payroll/runs') && 
+      (url.includes('limit') || url.includes('?'));
+    
+    // Suppress timeout errors for notifications endpoint (optional feature, may be slow or unavailable)
+    const isNotificationsTimeout = (error.message?.includes('timeout') || error.code === 'ECONNABORTED') && 
+      (url.includes('/notifications') || url.includes('notification'));
+    
+    if (isBackup404 || isOptionalEmployeeProfile || isOptionalPayrollRuns || isNotificationsTimeout) {
+      // Silently handle these errors - they're expected for optional features or unimplemented endpoints
+      // Browser console will show the network error, but we don't treat it as an app error
+      // Return a clean error that can be caught and handled gracefully
+    } else {
+      // Log other errors normally
+      console.error(
+        `❌ API Error [${error.config?.method?.toUpperCase()} ${
+          error.config?.url
+        }]:`,
+        {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          message: error.message,
+          responseData: error.response?.data,
+          headers: error.response?.headers,
         }
-      }
+      );
+    }
+
+    // Handle errors
+    if (error.response?.status === 401) {
+      console.log("🔒 401 Unauthorized - Token may be invalid");
       
       // Only redirect if we're not already on the login page and it's not a network error
       if (typeof window !== "undefined") {
         const currentPath = window.location.pathname;
         const isLoginPage = currentPath.startsWith("/auth/login");
-        const isAuthPage = currentPath.startsWith("/auth/");
         const isNetworkError = !error.response; // Network errors don't have response
         
-        // Don't redirect if already on login/auth page or if it's a network error
-        // Also don't redirect during initial page load - let the auth hooks handle it
-        if (!isLoginPage && !isAuthPage && !isNetworkError) {
-          // With cookie-based auth, 401 means the cookie is invalid/expired
-          // Redirect to login to get a new cookie
-          // Small delay to prevent redirect loops
-          setTimeout(() => {
-            window.location.href = "/auth/login";
-          }, 100);
+        // Don't redirect if already on login page or if it's a network error
+        if (!isLoginPage && !isNetworkError) {
+          // Check if token exists - if not, might be a temporary issue
+          const token = localStorage.getItem("auth_token");
+          
+          if (token) {
+            // Token exists but got 401 - likely expired or invalid
+            console.log("Token exists but unauthorized - clearing and redirecting");
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("token");
+            localStorage.removeItem("jwt");
+            localStorage.removeItem("user");
+            
+            // Use router if available, otherwise use window.location
+            // Add a small delay to prevent redirect loops
+            setTimeout(() => {
+              window.location.href = "/auth/login";
+            }, 100);
+          } else {
+            // No token - might be a temporary API issue, don't redirect aggressively
+            console.log("No token found - might be temporary issue, not redirecting");
+          }
         }
       }
     }
@@ -186,25 +215,9 @@ api.interceptors.response.use(
     let errorMessage = "An error occurred";
     
     const responseData = error.response?.data;
-    
-    // First, try to get message from error.response.data (NestJS format)
     if (responseData) {
-      // Handle empty object responses - check if it's truly empty or if message is in error object
-      if (typeof responseData === 'object' && Object.keys(responseData).length === 0) {
-        // For empty responses, try to extract from error.message or use status-based messages
-        if (error.message && error.message.includes('not found')) {
-          errorMessage = error.message;
-        } else if (error.response?.status === 404) {
-          errorMessage = `Resource not found`;
-        } else if (error.response?.status === 401) {
-          errorMessage = "Unauthorized - Please log in again";
-        } else if (error.response?.status === 403) {
-          errorMessage = "Forbidden - Insufficient permissions";
-        } else {
-          errorMessage = `HTTP ${error.response?.status || "Unknown"} error`;
-        }
-      } else if (Array.isArray(responseData.message)) {
       // Handle NestJS validation errors (array of messages)
+      if (Array.isArray(responseData.message)) {
         errorMessage = responseData.message.join(", ");
       } else if (responseData.message) {
         errorMessage = responseData.message;
@@ -213,15 +226,32 @@ api.interceptors.response.use(
       } else if (typeof responseData === 'string') {
         errorMessage = responseData;
       } else {
-        // If responseData exists but no message, try to stringify or use error.message
-        errorMessage = error.message || JSON.stringify(responseData);
+        errorMessage = JSON.stringify(responseData);
       }
     } else if (error.message) {
-      // Fallback to error.message if no response data
       errorMessage = error.message;
     } else {
-      // Last resort: status-based message
       errorMessage = `HTTP ${error.response?.status || "Unknown"} error`;
+      // Check if this is an optional endpoint (already checked above, but check again for redirect logic)
+      const isOptionalEndpoint = isOptionalEmployeeProfile || isOptionalPayrollRuns;
+      
+      if (!isOptionalEndpoint) {
+        console.log("🚫 403 Forbidden - Insufficient permissions");
+        console.log("Endpoint:", url);
+        console.log("User role may not have access to this endpoint");
+      }
+      
+      // Redirect to forbidden page instead of login
+      // But only if we're not on a dashboard page (to avoid breaking dashboard functionality)
+      // Don't redirect for optional endpoints - let the page handle it gracefully
+      if (typeof window !== "undefined" && !isOptionalEndpoint) {
+        const currentPath = window.location.pathname;
+        // Only redirect if we're not already on the forbidden page or a dashboard page
+        // Dashboard pages should handle 403 errors gracefully without redirecting
+        if (!currentPath.includes("/forbidden") && !currentPath.includes("/dashboard")) {
+          window.location.href = "/forbidden";
+        }
+      }
     }
     
     // ============================================================
@@ -268,6 +298,20 @@ api.interceptors.response.use(
     (detailedError as any).originalError = error;
     
     return Promise.reject(detailedError);
+
+//FOR LEAVES
+    // ============================================================
+    // CHANGED: Suppress logging for expected 404 errors (not found)
+    // These are common when checking for entitlements that don't exist yet
+    // ============================================================
+    const isNotFoundError = error.response?.status === 404;
+    const isEntitlementCheck = error.config?.url?.includes('/leaves/entitlement/');
+    
+    // Don't log 404 errors for entitlement checks - these are expected
+    if (isNotFoundError && isEntitlementCheck) {
+      // Just return the error without logging - let the calling code handle it
+      return Promise.reject(error);
+    }
   }
 );
 

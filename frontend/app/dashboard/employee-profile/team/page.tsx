@@ -48,17 +48,22 @@ export default function TeamPage() {
       try {
         // Get current user profile
         try {
-          const profile = await employeeProfileApi.getMyProfile();
+          const profileResponse = await employeeProfileApi.getMyProfile();
+          // Type guard: ensure we have the actual profile data, not AxiosResponse
+          const profile = (profileResponse && typeof profileResponse === 'object' && 'data' in profileResponse && !('primaryPosition' in profileResponse) && !('primaryPositionId' in profileResponse))
+            ? (profileResponse as any).data
+            : profileResponse;
+          
           // Ensure position and department are properly extracted
           const profileWithExtractedData = {
-            ...profile,
-            primaryPosition: profile?.primaryPosition || 
-              (typeof profile?.primaryPositionId === 'object' && profile?.primaryPositionId ? {
-                title: profile.primaryPositionId.title || profile.primaryPositionId.name || ""
+            ...(profile as any),
+            primaryPosition: (profile as any)?.primaryPosition || 
+              (typeof (profile as any)?.primaryPositionId === 'object' && (profile as any)?.primaryPositionId ? {
+                title: (profile as any).primaryPositionId.title || (profile as any).primaryPositionId.name || ""
               } : null),
-            primaryDepartment: profile?.primaryDepartment ||
-              (typeof profile?.primaryDepartmentId === 'object' && profile?.primaryDepartmentId ? {
-                name: profile.primaryDepartmentId.name || profile.primaryDepartmentId.title || ""
+            primaryDepartment: (profile as any)?.primaryDepartment ||
+              (typeof (profile as any)?.primaryDepartmentId === 'object' && (profile as any)?.primaryDepartmentId ? {
+                name: (profile as any).primaryDepartmentId.name || (profile as any).primaryDepartmentId.title || ""
               } : null),
           };
           setCurrentUserProfile(profileWithExtractedData);

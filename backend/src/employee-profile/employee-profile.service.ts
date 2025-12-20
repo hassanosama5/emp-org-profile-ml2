@@ -189,6 +189,7 @@ export class EmployeeProfileService {
     const savedEmployee = await employee.save();
 
     // Create default system role
+    const assignedRole = createEmployeeDto.systemRole || SystemRole.DEPARTMENT_EMPLOYEE;
     const defaultRole = new this.systemRoleModel({
       _id: new Types.ObjectId(),
       employeeProfileId: savedEmployee._id,

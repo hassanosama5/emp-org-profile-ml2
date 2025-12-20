@@ -354,7 +354,7 @@ export class PerformanceService {
         // Check if appraisal already exists for this employee
         const existingAssignment = await this.assignmentModel
           .findOne({
-            employeeProfileId: employee._id,
+            employeeProfileId: (employee as any)._id,
             templateId: probationTemplate._id,
             status: {
               $in: [
@@ -417,8 +417,8 @@ export class PerformanceService {
           const assignment = await new this.assignmentModel({
             cycleId: cycle._id,
             templateId: probationTemplate._id,
-            employeeProfileId: employee._id,
-            managerProfileId: manager._id,
+            employeeProfileId: (employee as any)._id,
+            managerProfileId: (manager as any)._id,
             departmentId: employee.primaryDepartmentId,
             positionId: employee.primaryPositionId,
             status: AppraisalAssignmentStatus.NOT_STARTED,
@@ -429,7 +429,7 @@ export class PerformanceService {
           // Send notification to manager
           try {
             await this.notificationsService.createNotification(
-              manager._id.toString(),
+              (manager as any)._id.toString(),
               NotificationType.APPRAISAL_ASSIGNED,
               `Probationary appraisal assigned for ${employee.fullName} (${employee.employeeNumber}). Due date: ${new Date(assignment.dueDate).toLocaleDateString()}.`,
               {
@@ -440,7 +440,7 @@ export class PerformanceService {
             );
           } catch (error) {
             console.error(
-              `Failed to send notification to manager ${manager._id}:`,
+              `Failed to send notification to manager ${(manager as any)._id}:`,
               error,
             );
           }
@@ -923,7 +923,7 @@ export class PerformanceService {
       // Calculate summary metrics from the history response
       // The getEmployeeAttendanceHistory returns: { records, summary, ... }
       const records = history.records || [];
-      const summary = history.summary || {};
+      const summary = (history.summary || {}) as any;
       
       // Extract exceptions from records (each record has exceptions array)
       const allExceptions = records.flatMap((r: any) => r.exceptions || []);

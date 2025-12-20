@@ -2,15 +2,9 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
-const cookieParser = require('cookie-parser');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  // -----------------------------------
-  // COOKIE PARSER - Required for HTTP-only cookies
-  // -----------------------------------
-  app.use(cookieParser());
 
   // -----------------------------------
   // CORS CONFIGURATION
@@ -19,7 +13,7 @@ async function bootstrap() {
   const allowedOrigins = [frontendUrl, 'http://localhost:3001'];
   app.enableCors({
     origin: allowedOrigins,
-    credentials: true, // Required for cookies
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });

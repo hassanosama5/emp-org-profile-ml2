@@ -912,6 +912,30 @@ export class NotificationsService {
   }
 
   /**
+   * Create a notification
+   */
+  async createNotification(
+    userId: string,
+    type: NotificationType,
+    message: string,
+    data?: any,
+  ) {
+    try {
+      const notification = await this.notificationLogModel.create({
+        to: new Types.ObjectId(userId),
+        type,
+        message,
+        data,
+        isRead: false,
+      });
+      return notification;
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+      throw error;
+    }
+  }
+
+  /**
    * TEST FUNCTION: Create a test notification for development
    * Remove before production
    */

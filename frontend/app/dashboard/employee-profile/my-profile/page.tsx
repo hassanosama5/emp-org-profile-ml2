@@ -19,6 +19,7 @@ import EducationSection from "@/components/employee-profile/EducationSection";
 import ProfilePhotoUpload from "@/components/employee-profile/ProfilePhotoUpload";
 import { fetchEmployeeAppraisals } from "@/lib/api/performance/Api/performanceAppraisalsApi";
 import { AppraisalRecord } from "@/components/Performance/performanceRecords";
+import { SystemRole } from "@/types";
 
 export default function MyProfilePage() {
   const { user } = useAuth();
@@ -34,13 +35,53 @@ export default function MyProfilePage() {
     loadProfile();
   }, []);
 
+  // Check if user has permission to view qualifications
+  const hasQualificationAccess = () => {
+    if (!user?.roles) return false;
+    const userRoles = user.roles.map((r) => String(r).toLowerCase());
+    const allowedRoles = [
+      SystemRole.DEPARTMENT_EMPLOYEE.toLowerCase(),
+      SystemRole.RECRUITER.toLowerCase(),
+      SystemRole.HR_MANAGER.toLowerCase(),
+      SystemRole.HR_EMPLOYEE.toLowerCase(),
+      SystemRole.HR_ADMIN.toLowerCase(),
+      SystemRole.SYSTEM_ADMIN.toLowerCase(),
+    ];
+    return userRoles.some((role) => allowedRoles.includes(role));
+  };
+
+  // Check if user has permission to view appraisals
+  const hasAppraisalAccess = () => {
+    if (!user?.roles) return false;
+    const userRoles = user.roles.map((r) => String(r).toLowerCase());
+    const allowedRoles = [
+      SystemRole.DEPARTMENT_EMPLOYEE.toLowerCase(),
+      SystemRole.DEPARTMENT_HEAD.toLowerCase(),
+      SystemRole.HR_MANAGER.toLowerCase(),
+      SystemRole.HR_EMPLOYEE.toLowerCase(),
+      SystemRole.HR_ADMIN.toLowerCase(),
+      SystemRole.RECRUITER.toLowerCase(),
+    ];
+    return userRoles.some((role) => allowedRoles.includes(role));
+  };
+
   useEffect(() => {
-    if (profile) {
+    if (profile && hasAppraisalAccess()) {
       loadAppraisals();
+    } else {
+      // If no access, set loading to false immediately
+      setAppraisalsLoading(false);
     }
-  }, [profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, user]);
 
   const loadAppraisals = async () => {
+    // Skip API call if user doesn't have permission
+    if (!hasAppraisalAccess()) {
+      setAppraisalsLoading(false);
+      return;
+    }
+
     try {
       setAppraisalsLoading(true);
       const profileId = profile?._id || profile?.id || user?.id || user?.userId;
@@ -48,9 +89,14 @@ export default function MyProfilePage() {
         const data = await fetchEmployeeAppraisals(String(profileId));
         setAppraisals(data || []);
       }
-    } catch (err) {
-      console.error("Failed to load appraisals:", err);
-      // Don't show error to user, just log it
+    } catch (err: any) {
+      // Only log if it's not a 403 (permission denied)
+      if (err?.response?.status !== 403) {
+        console.error("Failed to load appraisals:", err);
+      } else {
+        // Silently handle permission errors
+        console.log("⚠️ User does not have permission to view appraisals");
+      }
     } finally {
       setAppraisalsLoading(false);
     }
@@ -364,41 +410,44 @@ export default function MyProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Education & Qualifications */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Education & Qualifications</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EducationSection />
-            </CardContent>
-          </Card>
+          {/* Education & Qualifications - Only show if user has access */}
+          {hasQualificationAccess() && (
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle>Education & Qualifications</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <EducationSection />
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Appraisal History */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Appraisal History</CardTitle>
-                <Link href="/dashboard/performance/my-appraisals">
-                  <Button variant="outline" size="sm">
-                    View All
-                  </Button>
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {appraisalsLoading ? (
-                <p className="text-sm text-gray-600">Loading appraisal history...</p>
-              ) : appraisals.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-sm text-gray-600">
-                    No appraisal history available yet.
-                  </p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Your appraisal history will appear here once appraisals are completed and published.
-                  </p>
+          {/* Appraisal History - Only show if user has access */}
+          {hasAppraisalAccess() && (
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle>Appraisal History</CardTitle>
+                  <Link href="/dashboard/performance/my-appraisals">
+                    <Button variant="outline" size="sm">
+                      View All
+                    </Button>
+                  </Link>
                 </div>
-              ) : (
+              </CardHeader>
+              <CardContent>
+                {appraisalsLoading ? (
+                  <p className="text-sm text-gray-600">Loading appraisal history...</p>
+                ) : appraisals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-600">
+                      No appraisal history available yet.
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Your appraisal history will appear here once appraisals are completed and published.
+                    </p>
+                  </div>
+                ) : (
                 <div className="space-y-4">
                   {appraisals.slice(0, 5).map((appraisal, index) => {
                     const r: any = appraisal;
@@ -494,6 +543,7 @@ export default function MyProfilePage() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
 
         {/* Quick Links */}

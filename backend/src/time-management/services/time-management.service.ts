@@ -6250,6 +6250,10 @@ export class TimeManagementService {
       generatedAt: new Date(),
       accessedBy: currentUserId,
     };
+    } catch (error: any) {
+      console.error('Error getting employee attendance history:', error);
+      throw error;
+    }
   }
 
   /**
