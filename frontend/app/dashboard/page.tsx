@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useRouter } from "next/navigation";
-import { getPrimaryDashboard } from "@/lib/utils/role-utils";
 
 import {
   Card,
@@ -45,33 +44,10 @@ export default function DashboardPage() {
     }
   }, [mounted, loading, isAuthenticated, user, router]);
 
-  // Priority 3: Redirect users to their primary dashboard (only if authenticated)
-  useEffect(() => {
-    if (mounted && !loading && isAuthenticated && user?.roles && user.roles.length > 0) {
-      const primaryDashboard = getPrimaryDashboard(user);
-      const currentPath = window.location.pathname;
-      
-      // Debug logging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 Dashboard redirect check:', {
-          currentPath,
-          primaryDashboard,
-          userRoles: user.roles,
-          shouldRedirect: primaryDashboard !== "/dashboard" && currentPath === "/dashboard",
-        });
-      }
-      
-      // Always redirect if primary dashboard is not /dashboard and we're on /dashboard
-      // This ensures System Admins, HR Managers, HR Admins, etc. go to their correct dashboard
-      if (primaryDashboard !== "/dashboard" && currentPath === "/dashboard") {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🔄 Redirecting from ${currentPath} to ${primaryDashboard}`);
-        }
-        router.replace(primaryDashboard);
-        return; // Exit early to prevent rendering
-      }
-    }
-  }, [mounted, loading, isAuthenticated, user, router]);
+  // REMOVED: Priority 3 redirect logic
+  // All authenticated users (except candidates) can now access /dashboard
+  // This allows "Back to Dashboard" buttons to work properly
+  // Initial login redirects are still handled by /auth/dashboard-redirect
 
   // Show loading while checking auth or waiting for mount
   if (!mounted || loading || !isAuthenticated) {
