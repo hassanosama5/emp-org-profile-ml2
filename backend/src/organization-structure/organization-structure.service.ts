@@ -77,6 +77,8 @@ export class OrganizationStructureService {
     private employeeSystemRoleModel: Model<any>,
     @InjectModel(EmployeeProfile.name)
     private employeeProfileModel: Model<EmployeeProfileDocument>,
+    @InjectModel('ExtendedNotification')
+    private notificationLogModel: Model<any>,
     private notificationsService: NotificationsService,
     @Inject(forwardRef(() => EmployeeProfileService))
     private employeeProfileService: EmployeeProfileService,
@@ -132,16 +134,17 @@ export class OrganizationStructureService {
           for (const role of headEmployees) {
             const employeeId = (role.employeeProfileId as any)?._id?.toString();
             if (employeeId) {
-              await this.notificationsService.createNotification(
-                employeeId,
-                NotificationType.STRUCTURE_CHANGE_REQUEST_SUBMITTED,
-                `New department "${department.name}" has been created. You have been assigned as department head.`,
-                {
+              await this.notificationLogModel.create({
+                to: new Types.ObjectId(employeeId),
+                type: NotificationType.STRUCTURE_CHANGE_REQUEST_SUBMITTED,
+                message: `New department "${department.name}" has been created. You have been assigned as department head.`,
+                data: {
                   departmentId: department._id.toString(),
                   departmentName: department.name,
                   action: 'CREATED',
                 },
-              );
+                isRead: false,
+              });
             }
           }
         }

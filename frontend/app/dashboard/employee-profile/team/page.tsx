@@ -48,7 +48,9 @@ export default function TeamPage() {
       try {
         // Get current user profile
         try {
-          const profile = await employeeProfileApi.getMyProfile();
+          const profileResponse = await employeeProfileApi.getMyProfile();
+          // Handle both EmployeeProfile and AxiosResponse types
+          const profile = (profileResponse as any)?.data || profileResponse;
           // Ensure position and department are properly extracted
           const profileWithExtractedData = {
             ...profile,

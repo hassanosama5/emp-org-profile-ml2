@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
@@ -12,12 +12,10 @@ import { useOrganizationStructure } from "@/lib/hooks/use-organization-structure
 import { useAuth } from "@/lib/hooks/use-auth";
 import { ApprovalDecision } from "@/types/organization-structure";
 
-export default function ApprovalDecisionPage({
-  params,
-}: {
-  params: { approvalId: string };
-}) {
+export default function ApprovalDecisionPage() {
   const router = useRouter();
+  const params = useParams();
+  const approvalId = params?.approvalId as string;
   const { user } = useAuth();
   const { 
     updateApprovalDecision, 
@@ -59,9 +57,12 @@ export default function ApprovalDecisionPage({
   }, []);
 
   const submit = async () => {
-    if (!canDecide) return;
+    if (!canDecide || !approvalId) {
+      console.error("Cannot submit: missing approvalId or no permission");
+      return;
+    }
     try {
-      await updateApprovalDecision(params.approvalId, {
+      await updateApprovalDecision(approvalId, {
         decision,
         comments: comments.trim() || undefined,
       });
@@ -114,7 +115,7 @@ export default function ApprovalDecisionPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Approval Decision</h1>
             <p className="text-gray-600 mt-1">
-              Approval ID: <span className="font-mono">{params.approvalId}</span>
+              Approval ID: <span className="font-mono">{approvalId || "Loading..."}</span>
             </p>
           </div>
           <Link

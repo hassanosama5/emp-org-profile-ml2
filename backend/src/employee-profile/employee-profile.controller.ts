@@ -143,7 +143,7 @@ export class EmployeeProfileController {
       }
       
       // Convert employee to plain object and attach roles
-      const employeeObj = employee.toObject ? employee.toObject() : employee;
+      const employeeObj = (employee as any).toObject ? (employee as any).toObject() : employee;
       const employeeWithRoles = {
         ...employeeObj,
         roles: roles,

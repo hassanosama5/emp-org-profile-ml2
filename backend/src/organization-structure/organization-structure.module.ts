@@ -27,6 +27,7 @@ import {
   EmployeeProfile,
   EmployeeProfileSchema,
 } from '../employee-profile/models/employee-profile.schema';
+import { ExtendedNotificationSchema } from '../notifications/models/extended-notification.schema';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import {
       },
       { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
       { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
+      { name: 'ExtendedNotification', schema: ExtendedNotificationSchema },
     ]),
     forwardRef(() => EmployeeProfileModule),
     NotificationsModule,

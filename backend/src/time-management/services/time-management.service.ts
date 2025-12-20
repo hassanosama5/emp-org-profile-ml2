@@ -6250,6 +6250,10 @@ export class TimeManagementService {
       generatedAt: new Date(),
       accessedBy: currentUserId,
     };
+    } catch (error: any) {
+      console.error('Error fetching employee attendance history:', error);
+      throw error instanceof BadRequestException ? error : new BadRequestException(error?.message || 'Failed to fetch attendance history');
+    }
   }
 
   /**
