@@ -8,6 +8,7 @@ import { GenerateOvertimeReportRequest, OvertimeReportResponse } from "@/types/t
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { Toast, useToast } from "@/components/leaves/Toast";
+import { formatUTCDate } from "@/lib/utils/date-utils";
 
 interface OvertimeReportTableProps {
   employeeId?: string;
@@ -195,8 +196,7 @@ export function OvertimeReportTable({
           <CardHeader>
             <CardTitle>Overtime Report</CardTitle>
             <CardDescription>
-              Period: {new Date(startDate).toLocaleDateString()} -{" "}
-              {new Date(endDate).toLocaleDateString()}
+              Period: {formatUTCDate(startDate)} - {formatUTCDate(endDate)}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -236,9 +236,7 @@ export function OvertimeReportTable({
                           {record.employeeName || record.employeeId || "N/A"}
                         </td>
                         <td className="py-3 px-4">
-                          {record.date
-                            ? new Date(record.date).toLocaleDateString()
-                            : "N/A"}
+                          {formatUTCDate(record.date)}
                         </td>
                         <td className="py-3 px-4">
                           {record.overtimeHours?.toFixed(2) || 0}

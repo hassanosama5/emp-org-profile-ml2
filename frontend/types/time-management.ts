@@ -549,6 +549,8 @@ export interface AttendanceRecord {
   clockIn?: Date | string;
   clockOut?: Date | string;
   totalWorkMinutes?: number;
+  overtimeMinutes?: number;
+  shortTimeMinutes?: number;
   hasMissedPunch?: boolean;
   status: 'COMPLETE' | 'INCOMPLETE' | 'CORRECTION_PENDING';
   exceptionIds?: string[];

@@ -21,6 +21,12 @@ export class AttendanceRecord {
   @Prop({ default: 0 }) // to be computed after creating an instance
   totalWorkMinutes: number;
 
+  @Prop({ default: 0 }) // overtime minutes (work beyond expected shift duration)
+  overtimeMinutes: number;
+
+  @Prop({ default: 0 }) // short time minutes (work less than expected shift duration)
+  shortTimeMinutes: number;
+
   @Prop({ default: false }) // to be computed after creating an instance
   hasMissedPunch: boolean;
 

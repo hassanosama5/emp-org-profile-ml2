@@ -11,6 +11,7 @@ import { Button } from "@/components/shared/ui/Button";
 import { Select } from "@/components/leaves/Select";
 import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
+import { formatUTCDateTime } from "@/lib/utils/date-utils";
 
 interface OvertimeApprovalListProps {
   filters?: GetAllTimeExceptionsFilters;
@@ -246,11 +247,6 @@ export function OvertimeApprovalList({
     return "N/A";
   };
 
-  const formatDateTime = (date: Date | string | undefined) => {
-    if (!date) return "N/A";
-    return new Date(date).toLocaleString();
-  };
-
   const canApproveOrReject = (status: TimeExceptionStatus) => {
     return status === TimeExceptionStatus.OPEN || status === TimeExceptionStatus.PENDING;
   };
@@ -418,13 +414,13 @@ export function OvertimeApprovalList({
             {selectedException.createdAt && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Created</label>
-                <p className="text-gray-900">{formatDateTime(selectedException.createdAt)}</p>
+                <p className="text-gray-900">{formatUTCDateTime(selectedException.createdAt)}</p>
               </div>
             )}
             {selectedException.updatedAt && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Last Updated</label>
-                <p className="text-gray-900">{formatDateTime(selectedException.updatedAt)}</p>
+                <p className="text-gray-900">{formatUTCDateTime(selectedException.updatedAt)}</p>
               </div>
             )}
             {canApproveOrReject(selectedException.status) && (

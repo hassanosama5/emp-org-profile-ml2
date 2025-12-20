@@ -6591,6 +6591,134 @@ export class TimeManagementService {
   // ===== ATTENDANCE IMPORT (CSV) =====
 
   /**
+   * Helper: Analyze shift characteristics for intelligent attendance processing
+   * Determines if shift crosses midnight, calculates expected duration, etc.
+   */
+  private analyzeShift(shift: any): {
+    isOvernightShift: boolean;
+    expectedDurationMinutes: number;
+    shiftStartTime: Date;
+    shiftEndTime: Date;
+    shiftTypeName: string;
+  } {
+    const shiftTypeName = shift?.shiftType?.name || shift?.name || 'Unknown Shift';
+    
+    // Parse shift times (format: "HH:mm")
+    const [startHours, startMinutes] = (shift.startTime || '09:00').split(':').map(Number);
+    const [endHours, endMinutes] = (shift.endTime || '17:00').split(':').map(Number);
+    
+    // Create time objects for comparison (using a reference date)
+    const referenceDate = new Date('2025-01-01T00:00:00.000Z');
+    const shiftStartTime = new Date(referenceDate);
+    shiftStartTime.setUTCHours(startHours, startMinutes, 0, 0);
+    
+    const shiftEndTime = new Date(referenceDate);
+    shiftEndTime.setUTCHours(endHours, endMinutes, 0, 0);
+    
+    // Detect overnight shift: end time is "before" start time in the same day
+    const isOvernightShift = shiftEndTime <= shiftStartTime;
+    
+    let expectedDurationMinutes: number;
+    if (isOvernightShift) {
+      // For overnight shifts, add 24 hours to end time to calculate duration
+      const adjustedEndTime = new Date(shiftEndTime);
+      adjustedEndTime.setDate(adjustedEndTime.getDate() + 1);
+      expectedDurationMinutes = Math.round((adjustedEndTime.getTime() - shiftStartTime.getTime()) / (1000 * 60));
+    } else {
+      expectedDurationMinutes = Math.round((shiftEndTime.getTime() - shiftStartTime.getTime()) / (1000 * 60));
+    }
+    
+    console.log(`🔍 Shift Analysis: "${shiftTypeName}" (${shift.startTime} - ${shift.endTime})`);
+    console.log(`   - Overnight: ${isOvernightShift}, Expected Duration: ${expectedDurationMinutes} minutes`);
+    
+    return {
+      isOvernightShift,
+      expectedDurationMinutes,
+      shiftStartTime,
+      shiftEndTime,
+      shiftTypeName,
+    };
+  }
+
+  /**
+   * Helper: Calculate overtime based on shift characteristics
+   */
+  private calculateOvertimeForShift(
+    totalWorkMinutes: number,
+    shiftAnalysis: ReturnType<typeof this.analyzeShift>,
+  ): {
+    overtimeMinutes: number;
+    shortTimeMinutes: number;
+  } {
+    const { expectedDurationMinutes } = shiftAnalysis;
+    
+    // Overtime: work time exceeds expected shift duration
+    const overtimeMinutes = Math.max(0, totalWorkMinutes - expectedDurationMinutes);
+    
+    // Short time: work time is less than expected shift duration
+    const shortTimeMinutes = Math.max(0, expectedDurationMinutes - totalWorkMinutes);
+    
+    console.log(`⏰ Duration Analysis: Worked ${totalWorkMinutes}min, Expected ${expectedDurationMinutes}min`);
+    console.log(`   - Overtime: ${overtimeMinutes}min, Short: ${shortTimeMinutes}min`);
+    
+    return {
+      overtimeMinutes,
+      shortTimeMinutes,
+    };
+  }
+
+  /**
+   * Helper: Validate if punches form a complete shift based on shift type
+   */
+  private validateShiftCompleteness(
+    punches: Array<{ type: PunchType; time: Date }>,
+  ): {
+    isComplete: boolean;
+    hasMissedPunch: boolean;
+    missedPunchType: 'CLOCK_IN' | 'CLOCK_OUT' | null;
+  } {
+    if (punches.length === 0) {
+      return {
+        isComplete: false,
+        hasMissedPunch: true,
+        missedPunchType: 'CLOCK_IN',
+      };
+    }
+    
+    const firstPunch = punches[0];
+    const lastPunch = punches[punches.length - 1];
+    
+    // Check if first punch is IN and last is OUT
+    const startsWithIn = firstPunch.type === PunchType.IN;
+    const endsWithOut = lastPunch.type === PunchType.OUT;
+    
+    if (!startsWithIn) {
+      return {
+        isComplete: false,
+        hasMissedPunch: true,
+        missedPunchType: 'CLOCK_IN',
+      };
+    }
+    
+    if (!endsWithOut) {
+      return {
+        isComplete: false,
+        hasMissedPunch: true,
+        missedPunchType: 'CLOCK_OUT',
+      };
+    }
+    
+    // Check punch count parity (should be even for complete shifts)
+    const hasOddPunches = punches.length % 2 !== 0;
+    
+    return {
+      isComplete: !hasOddPunches && startsWithIn && endsWithOut,
+      hasMissedPunch: hasOddPunches || !startsWithIn || !endsWithOut,
+      missedPunchType: hasOddPunches ? 'CLOCK_OUT' : null,
+    };
+  }
+
+  /**
    * Import attendance punches from a CSV string.
    * Supported CSV formats:
    *
@@ -6662,6 +6790,9 @@ export class TimeManagementService {
         { employeeId: string; date: Date; punches: Array<{ type: PunchType; time: Date }> }
       >();
 
+      // First pass: collect all punches
+      const allPunches: Array<{ employeeId: string; type: PunchType; time: Date; lineNum: number }> = [];
+      
       for (let i = 1; i < lines.length; i++) {
         const raw = lines[i];
         if (!raw) continue;
@@ -6696,15 +6827,59 @@ export class TimeManagementService {
             throw new Error(`Invalid time: ${timeRaw}`);
           }
 
-          const dayKey = punchTime.toISOString().split('T')[0]; // UTC day
-          const key = `${employeeId}|${dayKey}`;
-          if (!grouped.has(key)) {
-            grouped.set(key, { employeeId, date: punchTime, punches: [] });
-          }
-          grouped.get(key)!.punches.push({ type: punchType, time: punchTime });
+          allPunches.push({ employeeId, type: punchType, time: punchTime, lineNum: i + 1 });
         } catch (error: any) {
           errors.push({ line: i + 1, error: error.message || 'Unknown error' });
         }
+      }
+
+      // Second pass: group punches intelligently for night shifts
+      // Sort all punches by employee and time
+      allPunches.sort((a, b) => {
+        const empCompare = a.employeeId.localeCompare(b.employeeId);
+        return empCompare !== 0 ? empCompare : a.time.getTime() - b.time.getTime();
+      });
+
+      let currentEmployee = '';
+      let lastInPunch: { time: Date; dayKey: string } | null = null;
+
+      for (const punch of allPunches) {
+        // Reset tracking when we switch to a new employee
+        if (punch.employeeId !== currentEmployee) {
+          currentEmployee = punch.employeeId;
+          lastInPunch = null;
+        }
+
+        let dayKey: string;
+        
+        if (punch.type === PunchType.IN) {
+          // For IN punches, always use their own date
+          dayKey = punch.time.toISOString().split('T')[0];
+          lastInPunch = { time: punch.time, dayKey };
+        } else {
+          // For OUT punches, check if they belong to a previous IN punch (night shift)
+          if (lastInPunch) {
+            const hoursSinceIn = (punch.time.getTime() - lastInPunch.time.getTime()) / (1000 * 60 * 60);
+            // If OUT is within 24 hours of the last IN, group them together
+            // This handles night shifts that cross midnight
+            if (hoursSinceIn >= 0 && hoursSinceIn <= 24) {
+              dayKey = lastInPunch.dayKey; // Use the IN punch's date
+              lastInPunch = null; // Reset after pairing
+            } else {
+              // OUT is too far from last IN, treat as orphan
+              dayKey = punch.time.toISOString().split('T')[0];
+            }
+          } else {
+            // No recent IN punch, use OUT's own date
+            dayKey = punch.time.toISOString().split('T')[0];
+          }
+        }
+
+        const key = `${punch.employeeId}|${dayKey}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { employeeId: punch.employeeId, date: new Date(dayKey + 'T00:00:00.000Z'), punches: [] });
+        }
+        grouped.get(key)!.punches.push({ type: punch.type, time: punch.time });
       }
 
       for (const [key, group] of grouped.entries()) {
@@ -6743,10 +6918,12 @@ export class TimeManagementService {
           const punchPolicy = shift?.punchPolicy || 'MULTIPLE';
           const shiftName = shift?.name || 'Unknown Shift';
 
+          // Analyze shift characteristics (overnight detection, expected duration, etc.)
+          const shiftAnalysis = this.analyzeShift(shift);
+
           console.log(`📋 Processing ${key}: Shift="${shiftName}"`);
-          console.log(`📋 Shift Object:`, JSON.stringify(shift, null, 2));
-          console.log(`📋 Punch Policy from DB: "${shift?.punchPolicy}" (type: ${typeof shift?.punchPolicy})`);
-          console.log(`📋 Final Policy to use: "${punchPolicy}"`);
+          console.log(`📋 Shift Type: ${shiftAnalysis.shiftTypeName}, Overnight: ${shiftAnalysis.isOvernightShift}`);
+          console.log(`📋 Punch Policy: "${punchPolicy}"`);
 
           // Sort punches by time
           const punchesSorted = group.punches
@@ -6829,34 +7006,37 @@ export class TimeManagementService {
             }
           }
 
-          const hasMissedPunch =
-            filteredPunches.length === 0 ||
-            !!openIn ||
-            hasUnpairedOut ||
-            filteredPunches[0]?.type === PunchType.OUT;
+          // Validate shift completeness using shift-aware validation
+          const completenessCheck = this.validateShiftCompleteness(filteredPunches);
+          const hasMissedPunch = completenessCheck.hasMissedPunch;
 
           if (hasMissedPunch) missedPunches++;
+
+          // Calculate overtime based on shift analysis
+          const overtimeCalc = this.calculateOvertimeForShift(totalWorkMinutes, shiftAnalysis);
 
           const record = new this.attendanceRecordModel({
             employeeId: new Types.ObjectId(group.employeeId),
             punches: filteredPunches.map((p) => ({ type: p.type, time: p.time })),
             totalWorkMinutes,
+            overtimeMinutes: overtimeCalc.overtimeMinutes,
+            shortTimeMinutes: overtimeCalc.shortTimeMinutes,
             hasMissedPunch,
             exceptionIds: [],
-            finalisedForPayroll: false,
+            finalisedForPayroll: !hasMissedPunch,
           });
 
           await record.save();
           created++;
 
-          console.log(`✅ Created attendance record for ${group.employeeId} on ${punchDate.toISOString().split('T')[0]} with ${totalWorkMinutes} minutes`);
+          console.log(`✅ Created attendance record for ${group.employeeId} on ${punchDate.toISOString().split('T')[0]}`);
+          console.log(`   - Total Work: ${totalWorkMinutes}min, Overtime: ${overtimeCalc.overtimeMinutes}min`);
+          console.log(`   - Missed Punch: ${hasMissedPunch}, Complete: ${completenessCheck.isComplete}`);
 
           if (hasMissedPunch) {
-            // Decide which punch is missing to label the alert
-            const missedPunchType: 'CLOCK_IN' | 'CLOCK_OUT' =
-              filteredPunches[0]?.type === PunchType.OUT || hasUnpairedOut
-                ? 'CLOCK_IN'
-                : 'CLOCK_OUT';
+            // Use validated missed punch type from completeness check
+            const missedPunchType: 'CLOCK_IN' | 'CLOCK_OUT' = 
+              completenessCheck.missedPunchType || 'CLOCK_OUT';
 
             const notifyAt =
               missedPunchType === 'CLOCK_IN'

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { timeManagementApi } from "@/lib/api/time-management/time-management.api";
 import { AttendanceCorrectionRequest, CorrectionRequestStatus } from "@/types/time-management";
+import { formatUTCDate } from "@/lib/utils/date-utils";
 
 export function CorrectionRequestList() {
     const { user } = useAuth();
@@ -68,15 +69,6 @@ export function CorrectionRequestList() {
             default:
                 return "bg-gray-100 text-gray-800 border-gray-200";
         }
-    };
-
-    const formatDate = (date?: Date | string) => {
-        if (!date) return "N/A";
-        return new Date(date).toLocaleDateString([], {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-        });
     };
 
     if (loading) {
@@ -154,10 +146,10 @@ export function CorrectionRequestList() {
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <p className="font-medium text-gray-900">
-                                            {recordDate ? formatDate(recordDate) : "Attendance Record"}
+                                            {recordDate ? formatUTCDate(recordDate) : "Attendance Record"}
                                         </p>
                                         <p className="text-xs text-gray-500 mt-1">
-                                            Submitted {formatDate(request.createdAt)}
+                                            Submitted {formatUTCDate(request.createdAt)}
                                         </p>
                                     </div>
                                     <span

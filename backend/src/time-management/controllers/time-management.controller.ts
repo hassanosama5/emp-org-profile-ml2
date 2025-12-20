@@ -69,6 +69,10 @@ export class TimeManagementController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.HR_EMPLOYEE,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async clockInWithID(
     @Param('employeeId') employeeId: string,
@@ -94,6 +98,10 @@ export class TimeManagementController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.HR_EMPLOYEE,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async clockOutWithID(
     @Param('employeeId') employeeId: string,
@@ -117,6 +125,13 @@ export class TimeManagementController {
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async clockInWithMetadata(
     @Param('employeeId') employeeId: string,
@@ -148,6 +163,13 @@ export class TimeManagementController {
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async clockOutWithMetadata(
     @Param('employeeId') employeeId: string,
@@ -195,6 +217,12 @@ export class TimeManagementController {
     SystemRole.HR_ADMIN,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async getEmployeeAttendanceStatus(
     @Param('employeeId') employeeId: string,
@@ -218,6 +246,12 @@ export class TimeManagementController {
     SystemRole.HR_ADMIN,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async getEmployeeAttendanceRecords(
     @Param('employeeId') employeeId: string,
@@ -297,6 +331,12 @@ export class TimeManagementController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async recordPunchWithMetadata(
     @Body() recordPunchWithMetadataDto: RecordPunchWithMetadataDto,
@@ -324,6 +364,11 @@ export class TimeManagementController {
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
     SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async recordPunchFromDevice(
     @Body() recordPunchWithMetadataDto: RecordPunchWithMetadataDto,
@@ -391,6 +436,13 @@ export class TimeManagementController {
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
     SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
+    SystemRole.SYSTEM_ADMIN,
   )
   async submitCorrectionRequest(
     @Body()
@@ -422,6 +474,12 @@ export class TimeManagementController {
     SystemRole.HR_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async getCorrectionRequestsByEmployee(
     @Param('employeeId') employeeId: string,
@@ -452,6 +510,12 @@ export class TimeManagementController {
     SystemRole.HR_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.FINANCE_STAFF,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.RECRUITER,
   )
   async getCorrectionRequestById(
     @Param('requestId') requestId: string,

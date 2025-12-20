@@ -62,6 +62,13 @@ export default function ShiftTypesPage() {
     }
   }, [authLoading, isAuthenticated, canView, filterActive]);
 
+  // Redirect if not authorized (after auth loading completes)
+  useEffect(() => {
+    if (!authLoading && user && !canView) {
+      router.push('/dashboard');
+    }
+  }, [authLoading, user, canView, router]);
+
   // Handle delete
   const handleDelete = async (id: string) => {
     try {
@@ -93,25 +100,10 @@ export default function ShiftTypesPage() {
   };
 
   // Loading state
-  if (authLoading) {
+  if (authLoading || !canView) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // Permission check
-  if (!canView) {
-    return (
-      <div className="container mx-auto px-6 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <h2 className="text-xl font-semibold text-red-800 mb-2">Access Denied</h2>
-          <p className="text-red-600">
-            You don&apos;t have permission to view this page. This page is only accessible to
-            HR Managers, System Admins, HR Admins, and Department Heads.
-          </p>
-        </div>
       </div>
     );
   }

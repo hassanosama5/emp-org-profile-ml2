@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { formatUTCDate, formatUTCTime, formatDuration, calculateDurationMinutes } from "@/lib/utils/date-utils";
 
 interface AttendanceRecord {
   _id?: string;
@@ -11,6 +12,8 @@ interface AttendanceRecord {
   clockInTime?: string | Date;
   clockOutTime?: string | Date;
   totalWorkMinutes?: number;
+  overtimeMinutes?: number;
+  shortTimeMinutes?: number;
   duration?: number;
   punches?: Array<{ type?: string; time?: string | Date } | any>;
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'INCOMPLETE' | 'COMPLETE' | 'CORRECTION_PENDING' | 'MISSED PUNCH';
@@ -49,39 +52,6 @@ export function AttendanceRecordTable({
     };
   };
 
-  const formatTime = (time?: string | Date) => {
-    if (!time) return '-';
-    return new Date(time).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  const formatDuration = (minutes?: number) => {
-    if (minutes === undefined || minutes === null) return '-';
-    // Round to avoid floating point display issues
-    const totalMinutes = Math.round(minutes);
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
-    return `${hours}h ${mins}m`;
-  };
-
-  // Calculate duration from clock in/out times if totalWorkMinutes is missing
-  const calculateDurationFromTimes = (clockIn?: Date | string, clockOut?: Date | string): number | undefined => {
-    if (!clockIn || !clockOut) return undefined;
-    try {
-      const inTime = new Date(clockIn);
-      const outTime = new Date(clockOut);
-      if (isNaN(inTime.getTime()) || isNaN(outTime.getTime())) return undefined;
-      const diffMs = outTime.getTime() - inTime.getTime();
-      if (diffMs < 0) return undefined; // Invalid if out is before in
-      return Math.floor(diffMs / (1000 * 60)); // Convert to minutes
-    } catch {
-      return undefined;
-    }
-  };
-
   const getStatusBadgeColor = (status: string) => {
     const colors = {
       'PRESENT': 'bg-green-100 text-green-800',
@@ -112,6 +82,7 @@ export function AttendanceRecordTable({
             <th className="px-4 py-3 text-left font-semibold text-gray-900">Clock In</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-900">Clock Out</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-900">Duration</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-900">Overtime</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-900">Status</th>
           </tr>
         </thead>
@@ -126,7 +97,7 @@ export function AttendanceRecordTable({
             // Calculate duration: use totalWorkMinutes if available, otherwise calculate from times
             let workDuration = record.totalWorkMinutes || record.duration;
             if (!workDuration || workDuration <= 0) {
-              workDuration = calculateDurationFromTimes(clockInTime, clockOutTime);
+              workDuration = calculateDurationMinutes(clockInTime, clockOutTime);
             }
 
             // Determine status: if clock out is missing, show "MISSED PUNCH"
@@ -140,16 +111,25 @@ export function AttendanceRecordTable({
             return (
               <tr key={recordId} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-gray-900">
-                  {new Date(record.date).toLocaleDateString()}
+                  {formatUTCDate(record.date)}
                 </td>
                 <td className="px-4 py-3 text-gray-700">
-                  {formatTime(clockInTime)}
+                  {formatUTCTime(clockInTime)}
                 </td>
                 <td className="px-4 py-3 text-gray-700">
-                  {formatTime(clockOutTime)}
+                  {formatUTCTime(clockOutTime)}
                 </td>
                 <td className="px-4 py-3 text-gray-700">
                   {formatDuration(workDuration)}
+                </td>
+                <td className="px-4 py-3 text-gray-700">
+                  {record.overtimeMinutes && record.overtimeMinutes > 0 ? (
+                    <span className="text-orange-600 font-medium">
+                      {formatDuration(record.overtimeMinutes)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span
