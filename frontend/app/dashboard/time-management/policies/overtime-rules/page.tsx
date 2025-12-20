@@ -23,46 +23,22 @@ export default function OvertimeRulesPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Filters
-  const [filters, setFilters] = useState({
-    active: "",
-    approved: "",
-    search: "",
-  });
-
   const canEdit = user?.roles?.includes(SystemRole.HR_MANAGER);
 
   const loadRules = useCallback(async () => {
     try {
       setLoading(true);
-      const queryFilters: Record<string, boolean> = {};
-      if (filters.active !== "") {
-        queryFilters.active = filters.active === "true";
-      }
-      if (filters.approved !== "") {
-        queryFilters.approved = filters.approved === "true";
-      }
-      const data = await policyConfigApi.getOvertimeRules(queryFilters);
-      
-      // Apply search filter client-side
-      let filteredData = data;
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        filteredData = data.filter(
-          rule =>
-            rule.name.toLowerCase().includes(searchLower) ||
-            (rule.description && rule.description.toLowerCase().includes(searchLower))
-        );
-      }
-      
-      setRules(filteredData);
+      const data = await policyConfigApi.getOvertimeRules();
+      setRules(data || []);
     } catch (error: any) {
       console.error("Failed to load overtime rules:", error);
+      showToast(error.message || "Failed to load overtime rules", "error");
+      setRules([]);
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.active, filters.approved, filters.search]);
+  }, [showToast]);
 
   useEffect(() => {
     loadRules();
@@ -99,11 +75,7 @@ export default function OvertimeRulesPage() {
   };
 
   const clearFilters = () => {
-    setFilters({
-      active: "",
-      approved: "",
-      search: "",
-    });
+    loadRules();
   };
 
   if (authLoading) {
@@ -140,56 +112,6 @@ export default function OvertimeRulesPage() {
         )}
       </div>
 
-      {/* Filters */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                placeholder="Search by name or description..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Active Status</label>
-              <select
-                value={filters.active}
-                onChange={(e) => setFilters(prev => ({ ...prev, active: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All</option>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Approval Status</label>
-              <select
-                value={filters.approved}
-                onChange={(e) => setFilters(prev => ({ ...prev, approved: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All</option>
-                <option value="true">Approved</option>
-                <option value="false">Pending Approval</option>
-              </select>
-            </div>
-            <div className="flex items-end">
-              <Button variant="outline" onClick={clearFilters}>
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Rules List */}
       <Card>
         <CardHeader>
@@ -212,12 +134,9 @@ export default function OvertimeRulesPage() {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No Overtime Rules</h3>
               <p className="text-gray-500 mb-4">
-                {filters.search || filters.active || filters.approved
-                  ? "No rules match your filters. Try adjusting the criteria."
-                  : "Get started by creating your first overtime rule."
-                }
+                Get started by creating your first overtime rule.
               </p>
-              {canEdit && !filters.search && !filters.active && !filters.approved && (
+              {canEdit && (
                 <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
                   + Create Rule
                 </Button>

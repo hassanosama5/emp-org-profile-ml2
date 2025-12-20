@@ -253,6 +253,12 @@ export default function JobDetailPage() {
                       <span>{job.template?.department || "Department"}</span>
                       {job.location && <span>• {job.location}</span>}
                       <span>• {job.openings} {job.openings === 1 ? "opening" : "openings"}</span>
+                      {/* CHANGED: Show available positions */}
+                      {job.statistics && (
+                        <span className={job.statistics.availablePositions === 0 ? "text-red-600 font-medium" : "text-green-600 font-medium"}>
+                          • {job.statistics.availablePositions ?? job.openings} available
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -339,8 +345,21 @@ export default function JobDetailPage() {
                   <div className="pt-6 border-t">
                     {/* CHANGED - Check publishStatus === 'published' instead of job.published */}
                     {job.publishStatus === 'published' && user?.userType === "candidate" ? (
-                      // CHANGED - Disable button if user has already applied
-                      hasAlreadyApplied ? (
+                      // CHANGED - Check if no positions available
+                      job.statistics?.availablePositions === 0 ? (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <p className="text-red-800 font-medium">❌ No Positions Available</p>
+                          <p className="text-red-600 text-sm mt-1">
+                            All positions for this job have been filled. Check back later or explore other opportunities.
+                          </p>
+                          <Link href="/dashboard/recruitment/jobs">
+                            <Button variant="outline" size="sm" className="mt-3">
+                              Browse Other Jobs
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : hasAlreadyApplied ? (
+                        // CHANGED - Disable button if user has already applied
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                           <p className="text-green-800 font-medium">✅ You have already applied for this position</p>
                           <p className="text-green-600 text-sm mt-1">

@@ -391,6 +391,20 @@ export class PostponeShiftAssignmentDto {
   postponeUntil: Date;
 }
 
+export class ReassignShiftAssignmentDto {
+  @IsNotEmpty()
+  @IsString()
+  assignmentId: string;
+
+  @IsNotEmpty()
+  @IsString()
+  newEmployeeId: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 // DTO for getting all shift assignments for an employee
 export class GetEmployeeShiftAssignmentsDto {
   @IsNotEmpty()

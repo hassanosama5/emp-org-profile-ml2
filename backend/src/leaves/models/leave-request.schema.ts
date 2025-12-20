@@ -68,5 +68,4 @@ export class LeaveRequest {
   irregularPatternFlag: boolean;
 }
 
-export const LeaveRequestSchema =
-  SchemaFactory.createForClass(LeaveRequest);
+export const LeaveRequestSchema = SchemaFactory.createForClass(LeaveRequest);

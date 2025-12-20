@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TimeManagementService } from '../services/time-management.service';
+import { SyncSchedulerService } from '../services/sync-scheduler.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -50,6 +51,7 @@ import {
 export class TimeManagementController {
   constructor(
     private readonly timeManagementService: TimeManagementService,
+    private readonly syncSchedulerService: SyncSchedulerService,
   ) {}
 
   // ===== US5: Clock-In/Out and Attendance Records =====
@@ -72,9 +74,10 @@ export class TimeManagementController {
     @Param('employeeId') employeeId: string,
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== employeeId
     ) {
       throw new Error('Access denied');
@@ -96,9 +99,10 @@ export class TimeManagementController {
     @Param('employeeId') employeeId: string,
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== employeeId
     ) {
       throw new Error('Access denied');
@@ -126,9 +130,10 @@ export class TimeManagementController {
     },
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== employeeId
     ) {
       throw new Error('Access denied');
@@ -156,9 +161,10 @@ export class TimeManagementController {
     },
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== employeeId
     ) {
       throw new Error('Access denied');
@@ -194,7 +200,7 @@ export class TimeManagementController {
     @Param('employeeId') employeeId: string,
     @CurrentUser() user: any,
   ) {
-    // Self-access check for employees
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
       !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
@@ -218,7 +224,7 @@ export class TimeManagementController {
     @Query('days') days: string = '30',
     @CurrentUser() user: any,
   ) {
-    // Self-access check for employees
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
       !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
@@ -269,9 +275,10 @@ export class TimeManagementController {
     @Body() submitCorrectionRequestDto: SubmitCorrectionRequestDto,
     @CurrentUser() user: any,
   ) {
-    // Self-access check for employees
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== submitCorrectionRequestDto.employeeId
     ) {
       throw new Error('Access denied');
@@ -295,9 +302,10 @@ export class TimeManagementController {
     @Body() recordPunchWithMetadataDto: RecordPunchWithMetadataDto,
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== recordPunchWithMetadataDto.employeeId
     ) {
       throw new Error('Access denied');
@@ -311,6 +319,7 @@ export class TimeManagementController {
   @Post('attendance/punch/device')
   @Roles(
     SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.HR_ADMIN,
@@ -320,9 +329,10 @@ export class TimeManagementController {
     @Body() recordPunchWithMetadataDto: RecordPunchWithMetadataDto,
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== recordPunchWithMetadataDto.employeeId
     ) {
       throw new Error('Access denied');
@@ -458,7 +468,7 @@ export class TimeManagementController {
   /**
    * Import attendance punches from a CSV file.
    * The CSV should include at least: employeeId, clockInTime, clockOutTime (optional).
-   * This endpoint is intended for HR Manager / System Admin to ingest data
+   * This endpoint allows HR, System Admin, and Employees to import attendance data
    * from biometric devices or external systems.
    *
    * The service will:
@@ -471,6 +481,8 @@ export class TimeManagementController {
     SystemRole.HR_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.SYSTEM_ADMIN,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
   )
   async importAttendanceFromCsv(
     @Body() body: ImportAttendanceCsvDto,
@@ -478,6 +490,30 @@ export class TimeManagementController {
   ) {
     return this.timeManagementService.importAttendanceFromCsv(
       body.csv,
+      user.userId,
+    );
+  }
+
+  /**
+   * Import attendance punches from an Excel file (.xlsx, .xls)
+   * The Excel file should have the same format as CSV:
+   * - Punch rows: employeeId, punchType, time
+   * - Legacy rows: employeeId, clockInTime, clockOutTime (optional)
+   */
+  @Post('attendance/import-excel')
+  @Roles(
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+  )
+  async importAttendanceFromExcel(
+    @Body() body: { excelData: string }, // base64 encoded Excel file
+    @CurrentUser() user: any,
+  ) {
+    return this.timeManagementService.importAttendanceFromExcel(
+      body.excelData,
       user.userId,
     );
   }
@@ -688,9 +724,10 @@ export class TimeManagementController {
     @Body() createTimeExceptionDto: CreateTimeExceptionDto,
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== createTimeExceptionDto.employeeId
     ) {
       throw new Error('Access denied');
@@ -728,9 +765,10 @@ export class TimeManagementController {
     @Body() getTimeExceptionsByEmployeeDto: GetTimeExceptionsByEmployeeDto,
     @CurrentUser() user: any,
   ) {
-    // Self-access check
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== id
     ) {
       throw new Error('Access denied');
@@ -800,6 +838,7 @@ export class TimeManagementController {
     SystemRole.HR_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.DEPARTMENT_EMPLOYEE, // Allow employees to view their own exceptions
   )
   async getAllTimeExceptions(
     @Query('status') status?: string,
@@ -810,6 +849,14 @@ export class TimeManagementController {
     @Query('endDate') endDate?: string,
     @CurrentUser() user?: any,
   ) {
+    // Security check: If user is DEPARTMENT_EMPLOYEE, they can only view their own exceptions
+    if (
+      user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      (!employeeId || employeeId !== user.userId)
+    ) {
+      throw new Error('Access denied: Employees can only view their own time exceptions');
+    }
+    
     return this.timeManagementService.getAllTimeExceptions(
       {
         status,
@@ -1123,6 +1170,21 @@ export class TimeManagementController {
     );
   }
 
+  // Scan and flag existing late attendance records
+  // This retroactively creates LATE exceptions for past late clock-ins
+  @Post('lateness/scan-existing')
+  @Roles(SystemRole.HR_ADMIN)
+  async scanExistingForLateness(
+    @Body() body: { employeeId?: string; days?: number },
+    @CurrentUser() user: any,
+  ) {
+    return this.timeManagementService.scanAndFlagExistingLateness(
+      body.employeeId,
+      body.days || 30,
+      user.userId,
+    );
+  }
+
   // Auto-create early leave exception
   // BR-TM-08: Support EARLY_LEAVE exception type
   @Post('time-exception/auto-early-leave')
@@ -1226,12 +1288,7 @@ export class TimeManagementController {
    * BR-TM-09: Track lateness for disciplinary purposes
    */
   @Get('lateness/history/:employeeId')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.DEPARTMENT_HEAD,
-  )
+  @Roles(SystemRole.HR_ADMIN)
   async getEmployeeLatenessHistory(
     @Param('employeeId') employeeId: string,
     @Query('startDate') startDate?: string,
@@ -1255,10 +1312,7 @@ export class TimeManagementController {
    * BR-TM-09: Create disciplinary flag for tracking
    */
   @Post('lateness/flag')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-  )
+  @Roles(SystemRole.HR_ADMIN)
   async flagEmployeeForRepeatedLateness(
     @Body()
     body: {
@@ -1287,11 +1341,7 @@ export class TimeManagementController {
    * BR-TM-09: Retrieve flagged employees for HR review
    */
   @Get('lateness/flags')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-  )
+  @Roles(SystemRole.HR_ADMIN)
   async getLatenesDisciplinaryFlags(
     @Query('status') status?: 'PENDING' | 'RESOLVED' | 'ESCALATED',
     @Query('severity') severity?: string,
@@ -1315,12 +1365,7 @@ export class TimeManagementController {
    * BR-TM-09: Pattern analysis for identifying systemic issues
    */
   @Get('lateness/patterns/:employeeId')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.DEPARTMENT_HEAD,
-  )
+  @Roles(SystemRole.HR_ADMIN)
   async analyzeLatenessPatterns(
     @Param('employeeId') employeeId: string,
     @Query('periodDays') periodDays?: number,
@@ -1371,11 +1416,7 @@ export class TimeManagementController {
    * BR-TM-09: Mark flags as resolved after corrective action
    */
   @Post('lateness/flag/resolve')
-  @Roles(
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-  )
+  @Roles(SystemRole.HR_ADMIN)
   async resolveDisciplinaryFlag(
     @Body()
     body: {
@@ -1393,6 +1434,22 @@ export class TimeManagementController {
       },
       user.userId,
     );
+  }
+
+  /**
+   * US12: Manually trigger repeated lateness detection
+   * BR-TM-09: Allow HR Admin to run the check on demand
+   */
+  @Post('lateness/check')
+  @Roles(SystemRole.HR_ADMIN)
+  async triggerRepeatedLatenessCheck(@CurrentUser() user: any) {
+    await this.syncSchedulerService.handleRepeatedLatenessDetection();
+    return {
+      success: true,
+      message: 'Repeated lateness check completed. Refresh the page to see updated flags.',
+      triggeredBy: user.userId,
+      triggeredAt: new Date().toISOString(),
+    };
   }
 
   /**
@@ -1450,9 +1507,10 @@ export class TimeManagementController {
     },
     @CurrentUser() user: any,
   ) {
-    // Self-access check for employees
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== body.employeeId
     ) {
       throw new Error('Access denied');
@@ -1496,7 +1554,7 @@ export class TimeManagementController {
     @Query('endDate') endDate: string,
     @CurrentUser() user: any,
   ) {
-    // Self-access check for employees
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
       !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
@@ -2094,5 +2152,143 @@ export class TimeManagementController {
       },
       user.userId,
     );
+  }
+
+  // ===== US16: VACATION PACKAGE - ATTENDANCE INTEGRATION =====
+  // BR-TM-19: Vacation packages must be linked to shift schedules
+  // Auto-reflect approved leave in attendance records
+
+  /**
+   * Create attendance records for approved leave period
+   * Called when a leave request is finalized/approved
+   */
+  @Post('leave-attendance/create')
+  @Roles(
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
+  async createLeaveAttendanceRecords(
+    @Body() body: {
+      employeeId: string;
+      leaveRequestId: string;
+      startDate: Date;
+      endDate: Date;
+      leaveType: string;
+      durationDays: number;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.timeManagementService.createLeaveAttendanceRecords(
+      {
+        employeeId: body.employeeId,
+        leaveRequestId: body.leaveRequestId,
+        startDate: new Date(body.startDate),
+        endDate: new Date(body.endDate),
+        leaveType: body.leaveType,
+        durationDays: body.durationDays,
+      },
+      user.userId,
+    );
+  }
+
+  /**
+   * Get employee's leave-attendance integration status
+   */
+  @Get('leave-attendance/status/:employeeId')
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
+  async getEmployeeLeaveAttendanceStatus(
+    @Param('employeeId') employeeId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.timeManagementService.getEmployeeLeaveAttendanceStatus(
+      employeeId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
+  }
+
+  /**
+   * Validate shift assignment against approved leaves
+   */
+  @Post('leave-attendance/validate-shift')
+  @Roles(
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
+  async validateShiftAgainstApprovedLeave(
+    @Body() body: {
+      employeeId: string;
+      shiftStartDate: Date;
+      shiftEndDate: Date;
+    },
+  ) {
+    return this.timeManagementService.validateShiftAgainstApprovedLeave({
+      employeeId: body.employeeId,
+      shiftStartDate: new Date(body.shiftStartDate),
+      shiftEndDate: new Date(body.shiftEndDate),
+    });
+  }
+
+  /**
+   * Get department vacation-attendance summary
+   */
+  @Get('leave-attendance/department-summary/:departmentId')
+  @Roles(
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
+  async getDepartmentVacationAttendanceSummary(
+    @Param('departmentId') departmentId: string,
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.timeManagementService.getDepartmentVacationAttendanceSummary(
+      departmentId,
+      month ? parseInt(month) : undefined,
+      year ? parseInt(year) : undefined,
+    );
+  }
+
+  // ===== US18: PAYROLL CUT-OFF ESCALATION (BR-TM-20) =====
+
+  /**
+   * US18: Trigger manual payroll cut-off escalation
+   * BR-TM-20: Escalate pending requests before payroll cut-off
+   */
+  @Post('payroll-escalation/trigger')
+  @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  async triggerPayrollCutoffEscalation(@CurrentUser() user: any) {
+    return this.syncSchedulerService.triggerPayrollCutoffEscalation();
+  }
+
+  /**
+   * US18: Get payroll readiness status
+   * BR-TM-20: Check pending requests before payroll cut-off
+   */
+  @Get('payroll-escalation/status')
+  @Roles(SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  async getPayrollReadinessStatus() {
+    return this.syncSchedulerService.getPayrollReadinessStatus();
+  }
+
+  /**
+   * TEST ONLY: Reset escalated items back to pending
+   * For testing purposes only - removes escalation status
+   */
+  @Post('payroll-escalation/reset-to-pending')
+  @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  async resetEscalatedToPending() {
+    return this.syncSchedulerService.resetEscalatedToPending();
   }
 }

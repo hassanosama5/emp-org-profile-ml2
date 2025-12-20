@@ -236,13 +236,32 @@ export default function CarryForwardPage() {
                         <div key={index} className="text-sm border-b pb-1">
                           <div className="flex justify-between">
                             <span>Employee: {detail.employeeId}</span>
-                            <span className={detail.status === 'success' ? 'text-green-600' : 'text-red-600'}>
+                            <span className={
+                              detail.status === 'success' ? 'text-green-600' : 
+                              detail.status === 'failed' ? 'text-red-600' : 
+                              'text-gray-600'
+                            }>
                               {detail.status}
                             </span>
                           </div>
                           {detail.carryForwardAmount !== undefined && (
                             <div className="text-gray-600">
                               Carry Forward: {detail.carryForwardAmount} days
+                            </div>
+                          )}
+                          {detail.error && (
+                            <div className="text-red-600 text-xs mt-1">
+                              Error: {detail.error}
+                            </div>
+                          )}
+                          {detail.reason && (
+                            <div className="text-gray-500 text-xs mt-1">
+                              Reason: {detail.reason}
+                            </div>
+                          )}
+                          {detail.details && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              Accrued: {detail.details.accruedRounded}, Taken: {detail.details.taken}, Pending: {detail.details.pending}
                             </div>
                           )}
                         </div>

@@ -600,11 +600,11 @@ export const CreateLeaveRequestForm: React.FC<CreateLeaveRequestFormProps> = ({
           
           if (isPastLeave && daysSinceEnd <= maxGracePeriodDays && daysSinceEnd > 0) {
             return (
-              <div className="rounded-md bg-blue-50 p-4 border border-blue-200">
-                <div className="flex">
-                  <div className="flex-shrink-0">
+              <div className="rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-2 border-blue-300">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg mt-0.5">
                     <svg
-                      className="h-5 w-5 text-blue-400"
+                      className="h-5 w-5 text-white"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -617,20 +617,20 @@ export const CreateLeaveRequestForm: React.FC<CreateLeaveRequestFormProps> = ({
                       />
                     </svg>
                   </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-blue-800">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-bold text-blue-900 mb-2">
                       Post-Leave Submission
                     </h3>
-                    <div className="mt-2 text-sm text-blue-700">
+                    <div className="text-sm text-blue-800">
                       <p>
                         You are submitting a leave request for dates that have already passed.
                         This is allowed for emergency situations within {maxGracePeriodDays} days after the leave end date.
                       </p>
                       {daysSinceEnd > 0 && (
-                        <p className="mt-1">
+                        <p className="mt-2 font-semibold">
                           Leave ended {daysSinceEnd} day{daysSinceEnd !== 1 ? 's' : ''} ago.
                           {daysSinceEnd <= maxGracePeriodDays && (
-                            <span className="font-semibold"> You have {maxGracePeriodDays - daysSinceEnd} day{maxGracePeriodDays - daysSinceEnd !== 1 ? 's' : ''} remaining in the grace period.</span>
+                            <span className="text-blue-900"> You have {maxGracePeriodDays - daysSinceEnd} day{maxGracePeriodDays - daysSinceEnd !== 1 ? 's' : ''} remaining in the grace period.</span>
                           )}
                         </p>
                       )}
@@ -745,8 +745,15 @@ export const CreateLeaveRequestForm: React.FC<CreateLeaveRequestFormProps> = ({
 
       {/* Submit Error */}
       {errors.submit && (
-        <div className="rounded-md bg-red-50 p-4 border border-red-200">
-          <p className="text-sm text-red-800">{errors.submit}</p>
+        <div className="rounded-xl bg-gradient-to-r from-red-50 to-rose-50 p-4 border-2 border-red-300">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-gradient-to-br from-red-400 to-rose-500 rounded-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-red-800">{errors.submit}</p>
+          </div>
         </div>
       )}
 
@@ -767,10 +774,24 @@ export const CreateLeaveRequestForm: React.FC<CreateLeaveRequestFormProps> = ({
             setErrors({});
           }}
           disabled={loading}
+          className="inline-flex items-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gradient-to-r hover:from-gray-50 hover:to-slate-50 hover:border-gray-400 transition-all duration-200"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
           Reset
         </Button>
-        <Button type="submit" isLoading={loading} disabled={loading}>
+        <Button 
+          type="submit" 
+          isLoading={loading} 
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-semibold rounded-lg hover:from-teal-600 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {!loading && (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
           Submit Leave Request
         </Button>
       </div>

@@ -3,9 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Inject,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { OrganizationStructureService } from '../organization-structure/organization-structure.service';
 
 // Import all schemas
 import { payGrade } from './models/payGrades.schema';
@@ -183,6 +185,7 @@ export class PayrollConfigurationService {
     private terminationBenefitsModel: Model<terminationAndResignationBenefits>,
     @InjectModel(CompanyWideSettings.name)
     private companySettingsModel: Model<CompanyWideSettings>,
+    private readonly organizationStructureService: OrganizationStructureService,
   ) {}
 
   // ============================================================================
@@ -1036,6 +1039,21 @@ export class PayrollConfigurationService {
       );
     }
 
+    // Validate that positionName exists in organization structure
+    const positions = await this.organizationStructureService.getAllPositions(
+      undefined,
+      true, // Only active positions
+    );
+    const positionExists = positions.some(
+      (position) => position.title.trim().toLowerCase() === createDto.positionName.trim().toLowerCase(),
+    );
+
+    if (!positionExists) {
+      throw new BadRequestException(
+        `Position "${createDto.positionName}" does not exist in the organization structure. Please select a valid position.`,
+      );
+    }
+
     const signingBonus = new this.signingBonusModel({
       ...createDto,
       status: ConfigStatus.DRAFT,
@@ -1066,6 +1084,23 @@ export class PayrollConfigurationService {
       throw new BadRequestException(
         'Signing bonus amount must be non-negative',
       );
+    }
+
+    // Validate positionName if it's being updated
+    if (updateDto.positionName !== undefined) {
+      const positions = await this.organizationStructureService.getAllPositions(
+        undefined,
+        true, // Only active positions
+      );
+      const positionExists = positions.some(
+        (position) => position.title.trim().toLowerCase() === updateDto.positionName!.trim().toLowerCase(),
+      );
+
+      if (!positionExists) {
+        throw new BadRequestException(
+          `Position "${updateDto.positionName}" does not exist in the organization structure. Please select a valid position.`,
+        );
+      }
     }
 
     Object.assign(signingBonus, updateDto);

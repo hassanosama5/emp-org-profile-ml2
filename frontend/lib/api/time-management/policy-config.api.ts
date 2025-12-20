@@ -69,6 +69,40 @@ export interface UpdateLatenessRuleDto {
   active: boolean;
 }
 
+// ===== PERMISSION POLICY INTERFACES =====
+export interface PermissionPolicy {
+  _id: string;
+  name: string;
+  description: string;
+  permissionType: 'EARLY_IN' | 'LATE_OUT' | 'OUT_OF_HOURS' | 'TOTAL_OVERTIME' | 'SHORT_TIME';
+  maxDurationMinutes: number;
+  requiresApproval: boolean;
+  affectsPayroll: boolean;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreatePermissionPolicyDto {
+  name: string;
+  description: string;
+  permissionType: 'EARLY_IN' | 'LATE_OUT' | 'OUT_OF_HOURS' | 'TOTAL_OVERTIME' | 'SHORT_TIME';
+  maxDurationMinutes: number;
+  requiresApproval: boolean;
+  affectsPayroll: boolean;
+  active: boolean;
+}
+
+export interface UpdatePermissionPolicyDto {
+  name: string;
+  description: string;
+  permissionType: 'EARLY_IN' | 'LATE_OUT' | 'OUT_OF_HOURS' | 'TOTAL_OVERTIME' | 'SHORT_TIME';
+  maxDurationMinutes: number;
+  requiresApproval: boolean;
+  affectsPayroll: boolean;
+  active: boolean;
+}
+
 export const policyConfigApi = {
   // ===== OVERTIME RULES (BR-TM-10) =====
   
@@ -80,10 +114,15 @@ export const policyConfigApi = {
   // GET all overtime rules
   getOvertimeRules: async (filters?: { active?: boolean; approved?: boolean }): Promise<OvertimeRule[]> => {
     const params = new URLSearchParams();
-    if (filters?.active !== undefined) params.append("active", filters.active.toString());
-    if (filters?.approved !== undefined) params.append("approved", filters.approved.toString());
+    if (filters?.active !== undefined) {
+      params.append("active", String(filters.active));
+    }
+    if (filters?.approved !== undefined) {
+      params.append("approved", String(filters.approved));
+    }
     const queryString = params.toString();
-    const response: any = await api.get(`/policy-config/overtime${queryString ? `?${queryString}` : ""}`);
+    const url = queryString ? `/policy-config/overtime?${queryString}` : "/policy-config/overtime";
+    const response: any = await api.get(url);
     return Array.isArray(response) ? response : (response.data || []);
   },
   
@@ -237,6 +276,34 @@ export const policyConfigApi = {
     request: LinkHolidaysToShiftRequest
   ): Promise<LinkHolidaysToShiftResponse> => {
     return await api.post("/policy-config/holiday/link-to-shift", request);
+  },
+
+  // ===== PERMISSION POLICIES =====
+  
+  // POST create permission policy
+  createPermissionPolicy: async (data: CreatePermissionPolicyDto): Promise<PermissionPolicy> => {
+    return await api.post("/policy-config/permission-policy", data);
+  },
+  
+  // GET all permission policies
+  getPermissionPolicies: async (): Promise<PermissionPolicy[]> => {
+    const response: any = await api.get("/policy-config/permission-policy");
+    return Array.isArray(response) ? response : (response.data || []);
+  },
+  
+  // GET permission policy by ID
+  getPermissionPolicyById: async (id: string): Promise<PermissionPolicy> => {
+    return await api.get(`/policy-config/permission-policy/${id}`);
+  },
+  
+  // PUT update permission policy
+  updatePermissionPolicy: async (id: string, data: UpdatePermissionPolicyDto): Promise<PermissionPolicy> => {
+    return await api.put(`/policy-config/permission-policy/${id}`, data);
+  },
+  
+  // DELETE permission policy
+  deletePermissionPolicy: async (id: string): Promise<void> => {
+    return await api.delete(`/policy-config/permission-policy/${id}`);
   },
 };
 

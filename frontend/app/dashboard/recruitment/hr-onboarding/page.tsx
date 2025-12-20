@@ -58,47 +58,82 @@ export default function HROnboardingPage() {
            name.includes('contract');
   };
 
-  // CHANGED - Determine if user can update a specific task based on department, role, and task name
+  // CHANGED - Determine if user can update a specific task based on USER STORIES
+  // Candidate/New Hire: Upload documents (ID, contracts, certifications)
+  // System Admin: Provision system access (email, SSO, payroll access, internal systems)
+  // HR Employee: Reserve equipment, desk, access cards ONLY
+  // HR Manager: VIEW ONLY (creates checklist and employee profile, but doesn't complete tasks)
+  // Automatic: Payroll initiation, signing bonus (no one manually completes)
   const canUpdateTask = (taskDepartment: string, taskName: string): boolean => {
-    // Document upload tasks are ONLY for the New Hire to complete - HR can only view
+    const nameLower = taskName.toLowerCase();
+    
+    // Document upload tasks are ONLY for the Candidate/New Hire
     if (isDocumentUploadTask(taskName)) {
-      return false; // No one in HR/Admin/IT can update document tasks - only the employee
+      return false; // Staff can't complete - only candidate can upload
     }
 
-    // Payroll tasks are automatic - no one updates them manually
-    if (taskDepartment === 'Payroll') {
-      return false;
+    // Automatic tasks - no one manually completes these
+    if (nameLower.includes('payroll') || nameLower.includes('signing bonus') || 
+        nameLower.includes('benefits')) {
+      return false; // System handles automatically
     }
 
-    // HR Manager can only update HR department tasks (e.g., "Set up Benefits")
-    if (isHRManager && taskDepartment === 'HR') return true;
+    // System Admin tasks (ONB-009): email, SSO, system access, internal systems
+    const isSystemAdminTask = nameLower.includes('email account') || nameLower.includes('email') ||
+      nameLower.includes('sso') || nameLower.includes('system access') || 
+      nameLower.includes('internal systems') || taskDepartment === 'IT';
+
+    // HR Employee tasks (ONB-012): equipment, desk, badge, access card ONLY
+    const isHREmployeeTask = nameLower.includes('laptop') || nameLower.includes('equipment') ||
+      nameLower.includes('workspace') || nameLower.includes('desk') ||
+      nameLower.includes('badge') || nameLower.includes('access card');
+
+    // System Admin can complete System Admin tasks
+    if (isSystemAdmin && isSystemAdminTask) {
+      return true;
+    }
     
-    // System Admin can update IT department tasks
-    if (isSystemAdmin && taskDepartment === 'IT') return true;
+    // HR Employee can complete HR Employee tasks (equipment only)
+    if (isHREmployee && isHREmployeeTask) {
+      return true;
+    }
     
-    // HR Employee can update Admin department tasks
-    if (isHREmployee && taskDepartment === 'Admin') return true;
-    
-    // System Admin has broader access as fallback (except document tasks)
-    if (isSystemAdmin) return true;
-    
+    // HR Manager = VIEW ONLY (per user story)
     return false;
   };
 
-  // CHANGED - Get label for who should complete this task
+  // CHANGED - Get label for who should complete this task (based on USER STORIES)
   const getTaskResponsibleRole = (taskDepartment: string, taskName: string): string => {
-    // Document upload tasks are done by the New Hire
+    const nameLower = taskName.toLowerCase();
+    
+    // Document upload tasks - Candidate/New Hire (ONB-007)
     if (isDocumentUploadTask(taskName)) {
-      return 'New Hire';
+      return 'Candidate/New Hire (ONB-007)';
     }
     
-    switch (taskDepartment) {
-      case 'IT': return 'System Admin';
-      case 'Admin': return 'HR Employee';
-      case 'HR': return 'HR Manager';
-      case 'Payroll': return 'System (Auto)';
-      default: return taskDepartment;
+    // Automatic tasks - System handles (ONB-018, ONB-019)
+    if (nameLower.includes('payroll') || nameLower.includes('signing bonus')) {
+      return 'Automatic (System)';
     }
+    if (nameLower.includes('benefits')) {
+      return 'Automatic (System)';
+    }
+    
+    // System Admin tasks - email, SSO, system access (ONB-009)
+    if (nameLower.includes('email') || nameLower.includes('sso') || 
+        nameLower.includes('system access') || nameLower.includes('internal systems') ||
+        taskDepartment === 'IT') {
+      return 'System Admin (ONB-009)';
+    }
+    
+    // HR Employee tasks - equipment, desk, badge, access card (ONB-012)
+    if (nameLower.includes('laptop') || nameLower.includes('equipment') ||
+        nameLower.includes('workspace') || nameLower.includes('desk') ||
+        nameLower.includes('badge') || nameLower.includes('access card')) {
+      return 'HR Employee (ONB-012)';
+    }
+    
+    return taskDepartment;
   };
 
   useEffect(() => {
@@ -249,34 +284,35 @@ export default function HROnboardingPage() {
           </div>
         </div>
 
-        {/* CHANGED - Permission Legend */}
+        {/* CHANGED - Permission Legend (Based on User Stories) */}
         <Card className="mb-6 bg-blue-50 border-blue-200">
           <CardContent className="py-4">
-            <h3 className="font-semibold text-blue-900 mb-2">📋 Task Permissions</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            <h3 className="font-semibold text-blue-900 mb-2">📋 Task Responsibilities (User Stories)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-sm">
               <div className="flex items-center gap-2">
-                <span className="inline-block px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">New Hire</span>
-                <span className="text-gray-600">→ Document Uploads</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">HR Manager</span>
-                <span className="text-gray-600">→ Benefits Setup</span>
-                {isHRManager && <span className="text-green-600 text-xs">✓ You</span>}
+                <span className="inline-block px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">Candidate</span>
+                <span className="text-gray-600">→ Upload Documents</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-block px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">System Admin</span>
-                <span className="text-gray-600">→ IT Access</span>
+                <span className="text-gray-600">→ Email, SSO, Access</span>
                 {isSystemAdmin && <span className="text-green-600 text-xs">✓ You</span>}
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-block px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800">HR Employee</span>
-                <span className="text-gray-600">→ Desk, Badge</span>
+                <span className="text-gray-600">→ Equipment, Desk, Badge</span>
                 {isHREmployee && <span className="text-green-600 text-xs">✓ You</span>}
               </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800">HR Manager</span>
+                <span className="text-gray-600">→ VIEW ONLY</span>
+                {isHRManager && !isHREmployee && !isSystemAdmin && <span className="text-orange-600 text-xs">✓ You</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">Automatic</span>
+                <span className="text-gray-600">→ Payroll, Bonus</span>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Document upload tasks are completed by the New Hire only. You can view all tasks, but only update tasks assigned to your role.
-            </p>
           </CardContent>
         </Card>
 
@@ -326,15 +362,7 @@ export default function HROnboardingPage() {
                         {onboarding.tasks?.length || 0} tasks
                       </CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenAddTask(onboarding)}
-                      >
-                        Add Task
-                      </Button>
-                    </div>
+                    {/* REMOVED: Add Task button removed for all users per user request */}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -364,9 +392,7 @@ export default function HROnboardingPage() {
                                 {/* Task name with department icon */}
                                 <span className="text-lg">
                                   {task.department === 'IT' ? '💻' : 
-                                   task.department === 'Admin' ? '🏢' : 
-                                   task.department === 'HR' ? '👥' : 
-                                   task.department === 'Payroll' ? '💵' : '📋'}
+                                   task.department === 'HR' ? '👥' : '📋'}
                                 </span>
                                 <span className="font-medium text-gray-900">{task.name}</span>
                                 <StatusBadge status={task.status} type="onboarding" />
@@ -374,8 +400,7 @@ export default function HROnboardingPage() {
                               <p className="text-sm text-gray-500 mt-1">
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs mr-2 ${
                                   task.department === 'IT' ? 'bg-blue-100 text-blue-800' :
-                                  task.department === 'Admin' ? 'bg-purple-100 text-purple-800' :
-                                  task.department === 'HR' ? 'bg-green-100 text-green-800' :
+                                  task.department === 'HR' ? 'bg-purple-100 text-purple-800' :
                                   'bg-gray-100 text-gray-800'
                                 }`}>
                                   {responsibleRole}

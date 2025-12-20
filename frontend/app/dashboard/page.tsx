@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { getPrimaryDashboard } from "@/lib/utils/role-utils";
+
 import {
   Card,
   CardHeader,
@@ -11,17 +13,77 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/shared/ui/Card";
+import { SystemRole } from "@/types";
 
 export default function DashboardPage() {
   const { user, loading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
-  // Redirect candidates to candidate portal
+  // Set mounted to true after component mounts (client-side only)
+  // Using useLayoutEffect to avoid React warning about setState in effect
+  useLayoutEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Priority 1: Redirect to login if not authenticated (only after mount to prevent hydration issues)
   useEffect(() => {
-    if (!loading && isAuthenticated && user?.userType === "candidate") {
+    if (mounted && !loading && !isAuthenticated) {
+      router.replace("/auth/login");
+    }
+  }, [mounted, loading, isAuthenticated, router]);
+
+  // Priority 2: Redirect candidates to candidate portal (only if authenticated)
+  useEffect(() => {
+    if (
+      mounted &&
+      !loading &&
+      isAuthenticated &&
+      user?.userType === "candidate"
+    ) {
       router.replace("/candidate-portal");
     }
-  }, [loading, isAuthenticated, user, router]);
+  }, [mounted, loading, isAuthenticated, user, router]);
+
+  // Priority 3: Redirect users to their primary dashboard (only if authenticated)
+  useEffect(() => {
+    if (mounted && !loading && isAuthenticated && user?.roles && user.roles.length > 0) {
+      const primaryDashboard = getPrimaryDashboard(user);
+      const currentPath = window.location.pathname;
+      
+      // Debug logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Dashboard redirect check:', {
+          currentPath,
+          primaryDashboard,
+          userRoles: user.roles,
+          shouldRedirect: primaryDashboard !== "/dashboard" && currentPath === "/dashboard",
+        });
+      }
+      
+      // Always redirect if primary dashboard is not /dashboard and we're on /dashboard
+      // This ensures System Admins, HR Managers, HR Admins, etc. go to their correct dashboard
+      if (primaryDashboard !== "/dashboard" && currentPath === "/dashboard") {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔄 Redirecting from ${currentPath} to ${primaryDashboard}`);
+        }
+        router.replace(primaryDashboard);
+        return; // Exit early to prevent rendering
+      }
+    }
+  }, [mounted, loading, isAuthenticated, user, router]);
+
+  // Show loading while checking auth or waiting for mount
+  if (!mounted || loading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Don't render anything for candidates (they'll be redirected)
   if (user?.userType === "candidate") {
@@ -41,6 +103,24 @@ export default function DashboardPage() {
   const canSeeAssignments = isHREmployee || isDepartmentHead;
   const isSystemAdmin = roles.some(
     (r) => r.toLowerCase() === "system admin".toLowerCase()
+  );
+
+  // Check if user has access to Finance Dashboard
+  const hasFinanceAccess = user?.roles?.some(
+    (role) =>
+      role === SystemRole.FINANCE_STAFF || role === SystemRole.SYSTEM_ADMIN
+  );
+
+  // Check if user has access to Payroll Manager Dashboard
+  const hasPayrollManagerAccess = user?.roles?.some(
+    (role) =>
+      role === SystemRole.PAYROLL_MANAGER || role === SystemRole.SYSTEM_ADMIN
+  );
+
+  // Check if user has access to Payroll Specialist Dashboard
+  const hasPayrollSpecialistAccess = user?.roles?.some(
+    (role) =>
+      role === SystemRole.PAYROLL_SPECIALIST || role === SystemRole.SYSTEM_ADMIN
   );
 
   return (
@@ -67,7 +147,10 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Payroll</CardTitle>
-            <CardDescription>View payslips and salary</CardDescription>
+            <CardDescription>
+              View payslips, salary details, claims, disputes, and refunds.
+              Configure payroll settings and execute payroll runs.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Link

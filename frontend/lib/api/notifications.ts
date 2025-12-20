@@ -52,14 +52,23 @@ export async function getNotifications(): Promise<Notification[]> {
       createdAt: notif.createdAt ? new Date(notif.createdAt) : new Date(),
       updatedAt: notif.updatedAt ? new Date(notif.updatedAt) : undefined,
       source: notif.source,
+      title: notif.title,
+      data: notif.data, // Include assignment data for shift expiry notifications
     }));
 
     console.log(`Transformed ${transformed.length} notifications`);
     return transformed;
   } catch (error: any) {
+    // Handle timeout errors gracefully (backend may be slow or unavailable)
+    if (error.message?.includes('timeout') || error.code === 'ECONNABORTED') {
+      // Silently return empty array for timeout errors - notifications are optional
+      return [];
+    }
+    
     // Return empty array instead of throwing on 404
     if (error.response?.status === 404) {
       console.log("No notifications found (404 is expected)");
+      // Silently return empty array for 404 - notifications endpoint may not be implemented
       return [];
     }
     console.error("Failed to fetch notifications:", error);
@@ -68,6 +77,17 @@ export async function getNotifications(): Promise<Notification[]> {
       status: error.response?.status,
       data: error.response?.data,
     });
+    
+    // Only log non-timeout, non-404 errors
+    if (error.response?.status !== 404 && !error.message?.includes('timeout') && error.code !== 'ECONNABORTED') {
+      console.error('Failed to fetch notifications:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    }
+    
     // Return empty array on error instead of throwing
     return [];
   }

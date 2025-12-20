@@ -28,6 +28,7 @@ import {
   RenewShiftAssignmentDto,
   CancelShiftAssignmentDto,
   PostponeShiftAssignmentDto,
+  ReassignShiftAssignmentDto,
   CreateScheduleRuleDto,
   DefineFlexibleSchedulingRulesDto,
 } from '../DTOs/shift.dtos';
@@ -273,6 +274,20 @@ export class ShiftAndScheduleController {
     @CurrentUser() user: any,
   ) {
     return this.shiftScheduleService.postponeShiftAssignment(dto, user.userId);
+  }
+
+  // ===== NEW: Reassign Shift Assignment =====
+  @Post('shift/assignment/reassign')
+  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  async reassignShiftAssignment(
+    @Body() dto: ReassignShiftAssignmentDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.shiftScheduleService.reassignShiftAssignment(
+      dto.assignmentId,
+      dto.newEmployeeId,
+      user.userId,
+    );
   }
 
   // ===== NEW: Check and Update Expired Assignments =====

@@ -17,6 +17,52 @@ import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
 
+// Helper function to extract job details from application
+// Handles all possible nested structures from the backend
+const getJobDetails = (application: Application | null) => {
+  if (!application) {
+    return { title: "Unknown Position", department: "Unknown Department", location: "Unknown Location", openings: 0 };
+  }
+  
+  const app = application as any;
+  
+  // Try all possible paths for the job title
+  const title = 
+    app.requisitionId?.templateId?.title ||
+    app.requisitionId?.template?.title ||
+    app.requisition?.templateId?.title ||
+    app.requisition?.template?.title ||
+    app.jobRequisition?.templateId?.title ||
+    app.jobRequisition?.template?.title ||
+    "Unknown Position";
+  
+  // Try all possible paths for department
+  const department = 
+    app.requisitionId?.templateId?.department ||
+    app.requisitionId?.template?.department ||
+    app.requisition?.templateId?.department ||
+    app.requisition?.template?.department ||
+    app.jobRequisition?.templateId?.department ||
+    app.jobRequisition?.template?.department ||
+    "Unknown Department";
+  
+  // Try all possible paths for location
+  const location = 
+    app.requisitionId?.location ||
+    app.requisition?.location ||
+    app.jobRequisition?.location ||
+    "Unknown Location";
+  
+  // Try all possible paths for openings
+  const openings = 
+    app.requisitionId?.openings ||
+    app.requisition?.openings ||
+    app.jobRequisition?.openings ||
+    0;
+  
+  return { title, department, location, openings };
+};
+
 export default function ApplicationsPage() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
@@ -359,7 +405,7 @@ export default function ApplicationsPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
                           <h3 className="text-lg font-semibold text-gray-900">
-                            {application.requisition?.template?.title || "Job Opening"}
+                            {getJobDetails(application).title}
                           </h3>
                           <StatusBadge status={application.status} type="application" />
                           {isReferral(application) && (
@@ -384,14 +430,14 @@ export default function ApplicationsPage() {
                           <div>
                             <p className="text-xs font-medium text-gray-500 uppercase mb-1">Job Details</p>
                             <p className="text-sm text-gray-900">
-                              {application.requisition?.template?.department || "N/A"}
+                              {getJobDetails(application).department}
                             </p>
                             <p className="text-xs text-gray-600">
-                              Location: {application.requisition?.location || "N/A"}
+                              Location: {getJobDetails(application).location}
                             </p>
-                            {application.requisition?.openings && (
+                            {getJobDetails(application).openings > 0 && (
                               <p className="text-xs text-gray-600">
-                                Openings: {application.requisition.openings}
+                                Openings: {getJobDetails(application).openings}
                               </p>
                             )}
                           </div>
@@ -612,7 +658,7 @@ export default function ApplicationsPage() {
                     'Unknown'}
                 </p>
                 <p className="text-xs text-gray-600">
-                  Position: {selectedApplication.requisition?.template?.title || 'N/A'}
+                  Position: {getJobDetails(selectedApplication).title}
                 </p>
               </div>
             )}
@@ -672,7 +718,7 @@ export default function ApplicationsPage() {
                   <div>
                     <span className="text-gray-600">Position:</span>
                     <span className="ml-2 font-medium">
-                      {selectedApplication.requisition?.template?.title || 'N/A'}
+                      {getJobDetails(selectedApplication).title}
                     </span>
                   </div>
                 </div>

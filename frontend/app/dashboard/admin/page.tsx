@@ -14,7 +14,7 @@ import {
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
+  useRequireAuth([SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN]);
 
   return (
     <div className="container mx-auto px-6 py-8">

@@ -58,9 +58,10 @@ export class NotificationAndSyncController {
     @Param('employeeId') employeeId: string,
     @CurrentUser() user: any,
   ) {
-    // Self-access check: employees can only view their own notifications
+    // Self-access check: Allow DEPARTMENT_HEAD to access their own data
     if (
       user.roles.includes(SystemRole.DEPARTMENT_EMPLOYEE) &&
+      !user.roles.includes(SystemRole.DEPARTMENT_HEAD) &&
       user.userId !== employeeId
     ) {
       throw new Error('Access denied');

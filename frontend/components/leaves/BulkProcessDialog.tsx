@@ -169,18 +169,28 @@ export default function BulkProcessDialog({
     }
   };
 
+  // Helper function to check if a request is finalized
+  const isFinalized = (request: LeaveRequest): boolean => {
+    if (!request.approvalFlow || request.approvalFlow.length === 0) {
+      return false;
+    }
+    // Check if approvalFlow contains an HR Manager approval (finalization)
+    return request.approvalFlow.some(
+      (approval) =>
+        approval.role === "HR Manager" && approval.status?.toLowerCase() === "approved"
+    );
+  };
+
   // ENHANCED: Filter requests based on action type
   const getFilteredRequests = () => {
     if (action === "finalize") {
-      // Only show approved requests for finalization
-      return leaveRequests.filter((req) => req.status?.toLowerCase() === "approved");
-    } else if (action === "approve") {
-      // ENHANCED: Show both pending (to approve) and approved (to finalize) requests
+      // Only show approved requests that are NOT finalized yet
       return leaveRequests.filter(
-        (req) =>
-          req.status?.toLowerCase() === "pending" ||
-          req.status?.toLowerCase() === "approved"
+        (req) => req.status?.toLowerCase() === "approved" && !isFinalized(req)
       );
+    } else if (action === "approve") {
+      // Only show pending requests for approval (not approved requests)
+      return leaveRequests.filter((req) => req.status?.toLowerCase() === "pending");
     } else {
       // For reject, show pending requests only
       return leaveRequests.filter((req) => req.status?.toLowerCase() === "pending");
@@ -217,7 +227,7 @@ export default function BulkProcessDialog({
               {action === "finalize"
                 ? "Select approved leave requests to finalize (updates records and payroll)"
                 : action === "approve"
-                ? "Select pending requests to approve, or approved requests to finalize. The system will handle each request based on its current status."
+                ? "Select pending requests to approve in bulk"
                 : "Select pending leave requests to reject in bulk"}
             </p>
           </div>
@@ -254,8 +264,6 @@ export default function BulkProcessDialog({
               <p className="text-sm text-gray-500 text-center py-4">
                 No {action === "finalize" 
                   ? "approved" 
-                  : action === "approve"
-                  ? "pending or approved"
                   : "pending"} requests available for this action.
               </p>
             ) : (
@@ -288,11 +296,7 @@ export default function BulkProcessDialog({
                         {/* ENHANCED: Show what action will be taken */}
                         {action === "approve" && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                            {request.status?.toLowerCase() === "pending"
-                              ? "→ Will Approve"
-                              : request.status?.toLowerCase() === "approved"
-                              ? "→ Will Finalize"
-                              : ""}
+                            → Will Approve
                           </span>
                         )}
                       </div>

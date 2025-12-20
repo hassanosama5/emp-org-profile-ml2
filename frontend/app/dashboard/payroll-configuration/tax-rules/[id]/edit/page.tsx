@@ -2,10 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useRequireAuth } from '@/lib/hooks/use-auth';
+import { SystemRole } from '@/types';
 import { taxRulesApi } from '@/lib/api/payroll-configuration/tax-rules';
 import { TaxRule } from '@/lib/api/payroll-configuration/types';
 
 export default function EditTaxRulePage() {
+  // Only Legal Admin can edit tax rules
+  useRequireAuth(SystemRole.LEGAL_POLICY_ADMIN, '/dashboard');
+  
   const params = useParams();
   const router = useRouter();
   const taxRuleId = params.id as string;

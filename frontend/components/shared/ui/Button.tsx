@@ -60,11 +60,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       );
     }
 
+    // Normalize disabled to always be a boolean to prevent hydration mismatches
+    const isDisabled = !!(disabled || isLoading);
+
     return (
       <button
         ref={ref}
         className={buttonClasses}
-        disabled={disabled || isLoading}
+        disabled={isDisabled}
         {...props}
       >
         {isLoading && (

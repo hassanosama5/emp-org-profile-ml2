@@ -47,6 +47,10 @@ import {
   Candidate,
   CandidateSchema,
 } from '../employee-profile/models/candidate.schema';
+import {
+  Department,
+  DepartmentSchema,
+} from '../organization-structure/models/department.schema';
 import { PayrollExecutionModule } from '../payroll-execution/payroll-execution.module';
 import { TimeManagementModule } from '../time-management/time-management.module';
 import { PayrollConfigurationModule } from '../payroll-configuration/payroll-configuration.module';
@@ -77,6 +81,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
       { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
       { name: AppraisalRecord.name, schema: AppraisalRecordSchema },
+      { name: Department.name, schema: DepartmentSchema }, // CHANGED - Added for panel member filtering
     ]),
     EmployeeProfileModule,
     OrganizationStructureModule,

@@ -3,12 +3,16 @@
 import { useMemo } from "react";
 
 interface AttendanceRecord {
-  id: string;
-  date: string;
-  clockInTime?: string;
-  clockOutTime?: string;
-  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'INCOMPLETE';
+  _id?: string;
+  id?: string;
+  date: string | Date;
+  clockIn?: string | Date;
+  clockOut?: string | Date;
+  clockInTime?: string | Date;
+  clockOutTime?: string | Date;
+  totalWorkMinutes?: number;
   duration?: number;
+  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'INCOMPLETE' | 'COMPLETE' | 'CORRECTION_PENDING';
 }
 
 interface AttendanceSummaryCardProps {
@@ -27,8 +31,12 @@ export function AttendanceSummaryCard({ records = [] }: AttendanceSummaryCardPro
     };
 
     records.forEach(record => {
+      // Support both backend field names and legacy names
+      const workDuration = record.totalWorkMinutes || record.duration;
+      
       switch (record.status) {
         case 'PRESENT':
+        case 'COMPLETE':
           stats.present++;
           break;
         case 'ABSENT':
@@ -38,11 +46,12 @@ export function AttendanceSummaryCard({ records = [] }: AttendanceSummaryCardPro
           stats.late++;
           break;
         case 'INCOMPLETE':
+        case 'CORRECTION_PENDING':
           stats.incomplete++;
           break;
       }
-      if (record.duration) {
-        stats.totalHours += record.duration / 60;
+      if (workDuration) {
+        stats.totalHours += workDuration / 60;
       }
     });
 

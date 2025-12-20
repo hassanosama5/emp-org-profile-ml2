@@ -176,6 +176,31 @@ export default function RecruitmentPage() {
               </CardContent>
             </Card>
 
+            {/* Interview Panel - Only show for regular employees who don't have a specific section */}
+            {!isHR &&
+              !isFinanceStaff &&
+              !isSystemAdmin &&
+              !isDepartmentHead && (
+                <Card className="border-purple-200 bg-purple-50">
+                  <CardHeader>
+                    <CardTitle className="text-purple-900">
+                      📋 My Interview Panel
+                    </CardTitle>
+                    <CardDescription className="text-purple-700">
+                      View interviews where you are a panel member and submit
+                      feedback
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Link href="/dashboard/recruitment/my-panel-interviews">
+                      <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                        View Panel Interviews
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+
             <Card>
               <CardHeader>
                 <CardTitle>My Referrals</CardTitle>
@@ -210,7 +235,7 @@ export default function RecruitmentPage() {
         {isFinanceStaff && !isHR && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Finance Clearance Tasks
+              Finance Tasks
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="border-green-200 bg-green-50">
@@ -227,6 +252,26 @@ export default function RecruitmentPage() {
                   <Link href="/dashboard/recruitment/offboarding-checklists">
                     <Button className="w-full bg-green-600 hover:bg-green-700">
                       View Clearance Tasks
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* ADDED: My Interview Panel for Finance Staff when they are panel members */}
+              <Card className="border-purple-200 bg-purple-50">
+                <CardHeader>
+                  <CardTitle className="text-purple-900">
+                    📋 My Interview Panel
+                  </CardTitle>
+                  <CardDescription className="text-purple-700">
+                    View interviews where you are a panel member and submit
+                    feedback
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link href="/dashboard/recruitment/my-panel-interviews">
+                    <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                      View Panel Interviews
                     </Button>
                   </Link>
                 </CardContent>
@@ -365,18 +410,22 @@ export default function RecruitmentPage() {
                 </CardContent>
               </Card>
 
-              {/* Offer Letters */}
-              <Card className="hover:shadow-lg transition-shadow border-2 border-blue-200">
+              {/* My Interview Panel for HR Managers */}
+              <Card className="hover:shadow-lg transition-shadow border-2 border-purple-200 bg-purple-50">
                 <CardHeader>
-                  <CardTitle>Offer Letters</CardTitle>
-                  <CardDescription>
-                    Generate, send, and collect electronically signed offer
-                    letters from candidates
+                  <CardTitle className="text-purple-900">
+                    📋 My Interview Panel
+                  </CardTitle>
+                  <CardDescription className="text-purple-700">
+                    View interviews where you are a panel member and submit
+                    feedback
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Link href="/dashboard/recruitment/offer-letters">
-                    <Button className="w-full">Manage Offer Letters</Button>
+                  <Link href="/dashboard/recruitment/my-panel-interviews">
+                    <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                      View Panel Interviews
+                    </Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -441,25 +490,7 @@ export default function RecruitmentPage() {
                 </CardContent>
               </Card>
 
-              {/* Talent Pool - Browse all candidates with resumes */}
-              <Card className="hover:shadow-lg transition-shadow border-2 border-indigo-200 bg-indigo-50">
-                <CardHeader>
-                  <CardTitle className="text-indigo-800">
-                    🎯 Talent Pool
-                  </CardTitle>
-                  <CardDescription className="text-indigo-700">
-                    Browse and search all candidates with resumes in the
-                    organization's talent pool
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/dashboard/recruitment/talent-pool">
-                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
-                      View Talent Pool
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+              {/* REMOVED: Talent Pool button - not needed per user request */}
 
               {/* Referrals */}
               <Card className="hover:shadow-lg transition-shadow border-2 border-gray-200">
@@ -537,25 +568,29 @@ export default function RecruitmentPage() {
                 </Card>
               )}
 
-              {/* Talent Pool - Browse all candidates with resumes */}
-              <Card className="border-indigo-200 bg-indigo-50">
-                <CardHeader>
-                  <CardTitle className="text-indigo-800">
-                    🎯 Talent Pool
-                  </CardTitle>
-                  <CardDescription className="text-indigo-700">
-                    Browse and search all candidates with resumes in the
-                    organization's talent pool
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/dashboard/recruitment/talent-pool">
-                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
-                      View Talent Pool
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+              {/* CHANGED - HR Employee can send offers and reject candidates */}
+              {isHREmployee && (
+                <Card className="border-green-200 bg-green-50">
+                  <CardHeader>
+                    <CardTitle className="text-green-800">
+                      📧 Send Offers
+                    </CardTitle>
+                    <CardDescription className="text-green-700">
+                      Create and send job offers to candidates. Reject
+                      candidates before finalization.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Link href="/dashboard/recruitment/hr-employee-offers">
+                      <Button className="w-full bg-green-600 hover:bg-green-700">
+                        Manage Offers
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* REMOVED: Talent Pool button - not needed per user request */}
 
               <Card>
                 <CardHeader>
@@ -696,6 +731,26 @@ export default function RecruitmentPage() {
                   <Link href="/dashboard/recruitment/offboarding-checklists">
                     <Button className="w-full bg-red-600 hover:bg-red-700">
                       View IT Clearance
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* ADDED: My Interview Panel for System Admin when they are panel members */}
+              <Card className="border-purple-200 bg-purple-50">
+                <CardHeader>
+                  <CardTitle className="text-purple-900">
+                    📋 My Interview Panel
+                  </CardTitle>
+                  <CardDescription className="text-purple-700">
+                    View interviews where you are a panel member and submit
+                    feedback
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link href="/dashboard/recruitment/my-panel-interviews">
+                    <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                      View Panel Interviews
                     </Button>
                   </Link>
                 </CardContent>

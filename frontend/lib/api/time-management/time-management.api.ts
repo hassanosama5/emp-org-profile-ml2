@@ -190,7 +190,7 @@ export const timeManagementApi = {
   ): Promise<TimeException> => {
     return await api.post("/time-management/time-exception/reject", {
       timeExceptionId: exceptionId,
-      rejectionReason,
+      rejectionReason: rejectionReason?.trim(),
     });
   },
 
@@ -230,6 +230,29 @@ export const timeManagementApi = {
   // GET pending exceptions for current user
   getMyPendingExceptions: async (): Promise<TimeException[]> => {
     return await api.get("/time-management/time-exceptions/my-pending");
+  },
+
+  // POST request overtime approval
+  requestOvertimeApproval: async (data: {
+    employeeId: string;
+    attendanceRecordId: string;
+    requestedMinutes: number;
+    reason: string;
+    assignedTo: string;
+  }): Promise<TimeException> => {
+    return await api.post("/time-management/overtime/request", data);
+  },
+
+  // POST create time exception
+  createTimeException: async (data: {
+    employeeId: string;
+    type: TimeExceptionType;
+    attendanceRecordId: string;
+    assignedTo: string;
+    status: TimeExceptionStatus;
+    reason: string;
+  }): Promise<TimeException> => {
+    return await api.post("/time-management/time-exception", data);
   },
 
   // ===== Reports APIs =====
@@ -277,9 +300,74 @@ export const timeManagementApi = {
     return await api.get(`/time-management/missed-punches${queryString ? `?${queryString}` : ""}`);
   },
 
-  // GET repeated lateness
+  // GET repeated lateness (deprecated - use getLatenesDisciplinaryFlags)
   getRepeatedLateness: async (): Promise<any> => {
     return await api.get("/time-management/repeated-lateness");
+  },
+
+  // ===== Lateness Disciplinary Tracking APIs =====
+
+  // GET all lateness disciplinary flags for HR review
+  getLatenesDisciplinaryFlags: async (filters?: {
+    status?: 'PENDING' | 'RESOLVED' | 'ESCALATED';
+    severity?: 'WARNING' | 'WRITTEN_WARNING' | 'FINAL_WARNING' | 'SUSPENSION';
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.severity) params.append('severity', filters.severity);
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    const queryString = params.toString();
+    return await api.get(`/time-management/lateness/flags${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // GET employee lateness history
+  getEmployeeLatenessHistory: async (employeeId: string, filters?: {
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    const queryString = params.toString();
+    return await api.get(`/time-management/lateness/history/${employeeId}${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // POST flag employee for repeated lateness (manual)
+  flagEmployeeForRepeatedLateness: async (data: {
+    employeeId: string;
+    occurrenceCount: number;
+    periodDays: number;
+    severity: 'WARNING' | 'WRITTEN_WARNING' | 'FINAL_WARNING' | 'SUSPENSION';
+    notes?: string;
+  }): Promise<any> => {
+    return await api.post('/time-management/lateness/flag', data);
+  },
+
+  // GET lateness pattern analysis
+  analyzeLatenessPatterns: async (employeeId: string, periodDays?: number): Promise<any> => {
+    const params = new URLSearchParams();
+    if (periodDays) params.append('periodDays', periodDays.toString());
+    const queryString = params.toString();
+    return await api.get(`/time-management/lateness/patterns/${employeeId}${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // POST resolve lateness flag
+  resolveLatenessFlag: async (data: {
+    flagId: string;
+    resolution: 'ACKNOWLEDGED' | 'DISMISSED' | 'ESCALATED';
+    notes?: string;
+  }): Promise<any> => {
+    return await api.post('/time-management/lateness/flag/resolve', data);
+  },
+
+  // POST manually trigger repeated lateness check
+  triggerRepeatedLatenessCheck: async (): Promise<any> => {
+    return await api.post('/time-management/lateness/check', {});
   },
 
   // GET escalation alerts
@@ -305,19 +393,33 @@ export const timeManagementApi = {
   },
 
   // POST sync data
-  syncData: async (): Promise<any> => {
-    return await api.post("/time-management/sync-data");
+  syncData: async (body?: {
+    syncDate?: Date | string;
+    modules?: Array<'payroll' | 'leaves' | 'benefits'>;
+  }): Promise<any> => {
+    return await api.post("/time-management/sync-data", body || {});
   },
 
   // GET sync status
-  getSyncStatus: async (): Promise<any> => {
-    return await api.get("/time-management/sync-status");
+  getSyncStatus: async (filters?: {
+    startDate?: Date | string;
+    endDate?: Date | string;
+  }): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append("startDate", new Date(filters.startDate).toISOString());
+    if (filters?.endDate) params.append("endDate", new Date(filters.endDate).toISOString());
+    const qs = params.toString();
+    return await api.get(`/time-management/sync-status${qs ? `?${qs}` : ""}`);
   },
 
-  // ===== Attendance CSV Import (for HR/System Admin) =====
+  // ===== Attendance Import (CSV/Excel) =====
 
   importAttendanceFromCsv: async (csv: string): Promise<any> => {
     return await api.post("/time-management/attendance/import-csv", { csv });
+  },
+
+  importAttendanceFromExcel: async (excelData: string): Promise<any> => {
+    return await api.post("/time-management/attendance/import-excel", { excelData });
   },
 
   // ===== Manual Attendance Recording (Department Head) =====
@@ -343,6 +445,147 @@ export const timeManagementApi = {
     finalisedForPayroll: boolean;
   }): Promise<any> => {
     return await api.put(`/time-management/attendance/${recordId}`, data);
+  },
+
+  // ===== Shift Assignment Management APIs =====
+
+  // Renew shift assignment
+  renewShiftAssignment: async (data: {
+    assignmentId: string;
+    newEndDate?: string;
+    note?: string;
+  }): Promise<any> => {
+    return await api.post('/shift-schedule/shift/assignment/renew', data);
+  },
+
+  // Reassign shift assignment to different employee
+  reassignShiftAssignment: async (data: {
+    assignmentId: string;
+    newEmployeeId: string;
+    reason?: string;
+  }): Promise<any> => {
+    return await api.post('/shift-schedule/shift/assignment/reassign', data);
+  },
+
+  // Cancel shift assignment
+  cancelShiftAssignment: async (data: {
+    assignmentId: string;
+    reason?: string;
+  }): Promise<any> => {
+    return await api.post('/shift-schedule/shift/assignment/cancel', data);
+  },
+
+  // ===== Lateness Management APIs =====
+
+  // Scan existing attendance records for lateness and create LATE exceptions
+  scanExistingForLateness: async (data?: {
+    employeeId?: string;
+    days?: number;
+  }): Promise<any> => {
+    // Longer timeout for bulk scanning operation (can take 60+ seconds)
+    return await api.post('/time-management/lateness/scan-existing', data || {}, {
+      timeout: 120000, // 2 minutes
+    });
+  },
+
+  // Manually trigger repeated lateness check
+  manuallyCheckRepeatedLateness: async (): Promise<any> => {
+    // Longer timeout for checking all employees (can take 30+ seconds)
+    return await api.post('/time-management/lateness/check', {}, {
+      timeout: 60000, // 1 minute
+    });
+  },
+
+  // ===== US16: VACATION-ATTENDANCE INTEGRATION APIs =====
+
+  // Create attendance records for approved leave
+  createLeaveAttendanceRecords: async (data: {
+    employeeId: string;
+    leaveRequestId: string;
+    startDate: string;
+    endDate: string;
+    leaveType: string;
+    durationDays: number;
+  }): Promise<any> => {
+    return await api.post('/time-management/leave-attendance/create', data);
+  },
+
+  // Get employee's leave-attendance integration status
+  getEmployeeLeaveAttendanceStatus: async (
+    employeeId: string,
+    filters?: { startDate?: string; endDate?: string }
+  ): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    const queryString = params.toString();
+    return await api.get(
+      `/time-management/leave-attendance/status/${employeeId}${queryString ? `?${queryString}` : ''}`
+    );
+  },
+
+  // Validate shift assignment against approved leaves
+  validateShiftAgainstLeave: async (data: {
+    employeeId: string;
+    shiftStartDate: string;
+    shiftEndDate: string;
+  }): Promise<any> => {
+    return await api.post('/time-management/leave-attendance/validate-shift', data);
+  },
+
+  // Get department vacation-attendance summary
+  getDepartmentVacationSummary: async (
+    departmentId: string,
+    month?: number,
+    year?: number
+  ): Promise<any> => {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryString = params.toString();
+    return await api.get(
+      `/time-management/leave-attendance/department-summary/${departmentId}${queryString ? `?${queryString}` : ''}`
+    );
+  },
+
+  // ===== US18: Payroll Cut-off Escalation APIs =====
+
+  // Trigger manual payroll cut-off escalation
+  triggerPayrollEscalation: async (): Promise<{
+    success: boolean;
+    message: string;
+    payrollCutoffDate: string;
+    daysUntilCutoff: number;
+    escalatedExceptions: number;
+    escalatedCorrections: number;
+    pendingLeaves: number;
+    notificationsSent: number;
+  }> => {
+    return await api.post('/time-management/payroll-escalation/trigger', {}, { timeout: 60000 });
+  },
+
+  // Get payroll readiness status
+  getPayrollReadinessStatus: async (): Promise<{
+    payrollCutoffDate: string;
+    daysUntilCutoff: number;
+    status: 'READY' | 'WARNING' | 'CRITICAL';
+    pendingExceptions: number;
+    pendingCorrections: number;
+    pendingLeaves: number;
+    escalatedExceptions: number;
+    escalatedCorrections: number;
+  }> => {
+    return await api.get('/time-management/payroll-escalation/status');
+  },
+
+  // TEST ONLY: Reset escalated items to pending
+  resetEscalatedToPending: async (): Promise<{
+    success: boolean;
+    message: string;
+    resetExceptions: number;
+    resetCorrections: number;
+  }> => {
+    return await api.post('/time-management/payroll-escalation/reset-to-pending', {});
   },
 };
 

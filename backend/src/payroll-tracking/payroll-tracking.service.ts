@@ -54,6 +54,9 @@ import {
 } from './enums/payroll-tracking-enum';
 import { SystemRole } from '../employee-profile/enums/employee-profile.enums';
 import { ConfigStatus } from '../payroll-configuration/enums/payroll-configuration-enums';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import { EmployeeSystemRole } from '../employee-profile/models/employee-system-role.schema';
 
 @Injectable()
 export class PayrollTrackingService {
@@ -87,6 +90,12 @@ export class PayrollTrackingService {
     private readonly positionModel: Model<PositionDocument>,
     @InjectModel(PositionAssignment.name)
     private readonly positionAssignmentModel: Model<PositionAssignmentDocument>,
+    @InjectModel(EmployeeSystemRole.name)
+    private readonly employeeSystemRoleModel: Model<any>,
+    @InjectModel('NotificationLog')
+    private readonly notificationLogModel: Model<any>,
+    @Inject(NotificationsService)
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // Helper method to generate unique IDs
@@ -267,7 +276,7 @@ export class PayrollTrackingService {
    * 
    * Security Rule:
    * - DEPARTMENT_EMPLOYEE can only access their own data
-   * - PAYROLL_SPECIALIST, FINANCE_STAFF, and SYSTEM_ADMIN can access any employee's data
+   * - PAYROLL_SPECIALIST, PAYROLL_MANAGER, FINANCE_STAFF, and SYSTEM_ADMIN can access any employee's data
    * 
    * @param requestedEmployeeId - The employee ID being accessed
    * @param authenticatedUserId - The authenticated user's ID (from req.user)
@@ -297,6 +306,7 @@ export class PayrollTrackingService {
       (role) =>
         role === SystemRole.DEPARTMENT_EMPLOYEE &&
         !userRoles.includes(SystemRole.PAYROLL_SPECIALIST) &&
+        !userRoles.includes(SystemRole.PAYROLL_MANAGER) &&
         !userRoles.includes(SystemRole.FINANCE_STAFF) &&
         !userRoles.includes(SystemRole.SYSTEM_ADMIN),
     );
@@ -308,7 +318,7 @@ export class PayrollTrackingService {
       );
     }
 
-    // Staff roles (PAYROLL_SPECIALIST, FINANCE_STAFF, SYSTEM_ADMIN) can access any employee's data
+    // Staff roles (PAYROLL_SPECIALIST, PAYROLL_MANAGER, FINANCE_STAFF, SYSTEM_ADMIN) can access any employee's data
     // No additional validation needed
   }
 
@@ -365,13 +375,63 @@ export class PayrollTrackingService {
   }
 
   /**
-   * Notification method for QA/testing purposes
-   * This method handles notifications for various payroll tracking events.
-   * Logs notifications for QA/testing purposes. This is a standalone method
-   * that does not integrate with any external notification service.
+   * Get all employees with a specific role
+   */
+  private async getEmployeesByRole(role: SystemRole): Promise<string[]> {
+    try {
+      console.log(`[getEmployeesByRole] Searching for employees with role: ${role}`);
+      
+      // Try both exact match and case-insensitive match
+      const systemRoles = await this.employeeSystemRoleModel
+        .find({
+          roles: { $in: [role] },
+          isActive: true,
+        })
+        .select('employeeProfileId roles')
+        .lean()
+        .exec();
+
+      console.log(`[getEmployeesByRole] Found ${systemRoles.length} employees with role ${role}`);
+      
+      if (systemRoles.length === 0) {
+        // Try case-insensitive search as fallback
+        console.log(`[getEmployeesByRole] Trying case-insensitive search...`);
+        const allRoles = await this.employeeSystemRoleModel
+          .find({ isActive: true })
+          .select('employeeProfileId roles')
+          .lean()
+          .exec();
+        
+        const matchingRoles = allRoles.filter((sr: any) => {
+          return sr.roles && sr.roles.some((r: string) => 
+            r.toLowerCase() === role.toLowerCase()
+          );
+        });
+        
+        console.log(`[getEmployeesByRole] Found ${matchingRoles.length} employees with case-insensitive match`);
+        
+        return matchingRoles.map((sr: any) => sr.employeeProfileId.toString());
+      }
+
+      const employeeIds = systemRoles.map((sr: any) => {
+        const empId = sr.employeeProfileId;
+        return empId instanceof Types.ObjectId ? empId.toString() : String(empId);
+      });
+      
+      console.log(`[getEmployeesByRole] Returning ${employeeIds.length} employee IDs:`, employeeIds);
+      return employeeIds;
+    } catch (error: any) {
+      console.error(`[getEmployeesByRole] Error fetching employees with role ${role}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Notification method that integrates with the NotificationsService
+   * This method sends notifications to users through the centralized notification system.
    * 
-   * @param notificationType - Type of notification (e.g., 'DISPUTE_APPROVED', 'CLAIM_APPROVED', 'REFUND_PROCESSED')
-   * @param recipientId - Employee ID of the notification recipient
+   * @param notificationType - Type of notification from NotificationType enum
+   * @param recipientId - Employee ID of the notification recipient (or 'FINANCE_STAFF' for all finance staff)
    * @param recipientRole - Role of the recipient (e.g., 'FINANCE_STAFF', 'DEPARTMENT_EMPLOYEE')
    * @param message - Notification message
    * @param metadata - Additional metadata about the notification (optional)
@@ -384,29 +444,72 @@ export class PayrollTrackingService {
     metadata?: Record<string, any>,
   ): Promise<void> {
     try {
-      // Convert recipientId to string for logging
+      // Convert recipientId to string for processing
       const recipientIdStr = recipientId instanceof Types.ObjectId 
         ? recipientId.toString() 
         : recipientId;
 
-      // Log notification for QA/testing purposes
-      // This method logs notifications to console for testing and QA purposes
-      // In a real-world scenario, these logs can be:
-      // 1. Captured by logging services (e.g., Winston, Pino)
-      // 2. Stored in application logs
-      // 3. Used for debugging and audit purposes
-      
-      const notificationLog = {
-        type: notificationType,
-        recipientId: recipientIdStr,
-        recipientRole,
-        message,
-        metadata: metadata || {},
-        timestamp: new Date().toISOString(),
-      };
+      // If recipientId is 'FINANCE_STAFF', get all finance staff employees
+      if (recipientIdStr === 'FINANCE_STAFF' || recipientRole === 'FINANCE_STAFF') {
+        console.log('[PAYROLL_TRACKING_NOTIFICATION] Notifying all finance staff...');
+        const financeStaffIds = await this.getEmployeesByRole(SystemRole.FINANCE_STAFF);
+        
+        if (financeStaffIds.length === 0) {
+          console.warn('[PAYROLL_TRACKING_NOTIFICATION] No finance staff found to notify');
+          console.warn('[PAYROLL_TRACKING_NOTIFICATION] This might mean:');
+          console.warn('  1. No employees have the FINANCE_STAFF role assigned');
+          console.warn('  2. The role name does not match exactly');
+          console.warn('  3. All finance staff have isActive=false');
+          return;
+        }
 
-      // Log to console for QA/testing
-      console.log('[PAYROLL_TRACKING_NOTIFICATION]', JSON.stringify(notificationLog, null, 2));
+        console.log(`[PAYROLL_TRACKING_NOTIFICATION] Creating notifications for ${financeStaffIds.length} finance staff members`);
+
+        // Send notification to each finance staff member
+        const notifications = financeStaffIds.map(async (staffId: string) => {
+          try {
+            if (!Types.ObjectId.isValid(staffId)) {
+              console.error(`[PAYROLL_TRACKING_NOTIFICATION] Invalid employee ID: ${staffId}`);
+              return;
+            }
+            
+            const notification = await this.notificationLogModel.create({
+              to: new Types.ObjectId(staffId),
+              type: notificationType,
+              message: message,
+              isRead: false,
+            });
+            
+            console.log(`[PAYROLL_TRACKING_NOTIFICATION] ✅ Created notification ${notification._id} for finance staff ${staffId}`);
+            return notification;
+          } catch (err: any) {
+            console.error(`[PAYROLL_TRACKING_NOTIFICATION] ❌ Error creating notification for ${staffId}:`, err?.message || err);
+            console.error(`[PAYROLL_TRACKING_NOTIFICATION] Error details:`, err);
+          }
+        });
+
+        const results = await Promise.all(notifications);
+        const successful = results.filter(r => r !== undefined).length;
+        console.log(`[PAYROLL_TRACKING_NOTIFICATION] ✅ Successfully sent ${successful} out of ${notifications.length} notifications to finance staff`);
+        return;
+      }
+
+      // For individual recipients, create notification directly
+      if (recipientIdStr && Types.ObjectId.isValid(recipientIdStr)) {
+        try {
+          await this.notificationLogModel.create({
+            to: new Types.ObjectId(recipientIdStr),
+            type: notificationType,
+            message: message,
+            isRead: false,
+          });
+          console.log(`[PAYROLL_TRACKING_NOTIFICATION] Sent notification to ${recipientIdStr}`);
+        } catch (err: any) {
+          console.error(`[PAYROLL_TRACKING_NOTIFICATION] Error creating notification:`, err);
+        }
+      } else {
+        console.warn(`[PAYROLL_TRACKING_NOTIFICATION] Invalid recipient ID: ${recipientIdStr}`);
+      }
 
     } catch (error: any) {
       // Don't throw error - notifications should not break the main workflow
@@ -517,13 +620,28 @@ export class PayrollTrackingService {
         throw new BadRequestException('Claim ID is required');
       }
 
-      const claim = await this.claimModel
-        .findOne({ claimId })
-        .populate('employeeId', 'firstName lastName employeeNumber')
-        .populate('payrollSpecialistId', 'firstName lastName')
-        .populate('payrollManagerId', 'firstName lastName')
-        .populate('financeStaffId', 'firstName lastName')
-        .exec();
+      // Try to find by MongoDB _id first (if it's a valid ObjectId)
+      let claim = null;
+      if (Types.ObjectId.isValid(claimId)) {
+        claim = await this.claimModel
+          .findById(claimId)
+          .populate('employeeId', 'firstName lastName employeeNumber')
+          .populate('payrollSpecialistId', 'firstName lastName')
+          .populate('payrollManagerId', 'firstName lastName')
+          .populate('financeStaffId', 'firstName lastName')
+          .exec();
+      }
+      
+      // If not found by _id, try by claimId string
+      if (!claim) {
+        claim = await this.claimModel
+          .findOne({ claimId })
+          .populate('employeeId', 'firstName lastName employeeNumber')
+          .populate('payrollSpecialistId', 'firstName lastName')
+          .populate('payrollManagerId', 'firstName lastName')
+          .populate('financeStaffId', 'firstName lastName')
+          .exec();
+      }
 
     if (!claim) {
       throw new NotFoundException(`Claim with ID ${claimId} not found`);
@@ -554,19 +672,74 @@ export class PayrollTrackingService {
       throw new NotFoundException(`Claim with ID ${claimId} not found`);
     }
 
+      // Only allow updates if claim is still under review (employees can only update before resolution)
+      if (claim.status !== ClaimStatus.UNDER_REVIEW) {
+        throw new BadRequestException(
+          `Cannot update claim. Claim status is ${claim.status}. Only claims under review can be updated.`,
+        );
+      }
+
+      // Validate employee ownership: employees can only update their own claims
+      // System admins can update any claim (handled by controller role check)
+      const claimEmployeeId = claim.employeeId instanceof Types.ObjectId
+        ? claim.employeeId.toString()
+        : (claim.employeeId as any)?._id?.toString() || String(claim.employeeId);
+      
+      const currentUserProfile = await this.employeeProfileService.findOne(currentUserId);
+      if (!currentUserProfile) {
+        throw new NotFoundException('Current user profile not found');
+      }
+
+      // Check if current user has staff/admin roles
+      const userSystemRole = await this.employeeSystemRoleModel.findOne({
+        employeeProfileId: new Types.ObjectId(currentUserId),
+        isActive: true,
+      }).exec();
+
+      const userRoles = userSystemRole?.roles || [];
+      const isStaff = userRoles.some(
+        (role) =>
+          role === SystemRole.PAYROLL_SPECIALIST ||
+          role === SystemRole.PAYROLL_MANAGER ||
+          role === SystemRole.FINANCE_STAFF ||
+          role === SystemRole.SYSTEM_ADMIN
+      );
+
+      // If user is not staff/admin and doesn't own the claim, deny access
+      const currentUserEmployeeId = (currentUserProfile as any)._id?.toString() || currentUserId;
+      if (!isStaff && currentUserEmployeeId !== claimEmployeeId) {
+        throw new ForbiddenException('You can only update your own claims');
+      }
+
+      // Calculate effective amount (use updated amount if provided, otherwise current amount)
+      const effectiveAmount = updateClaimDTO.amount !== undefined 
+        ? updateClaimDTO.amount 
+        : claim.amount;
+
       // Validate update data
       if (updateClaimDTO.amount !== undefined && updateClaimDTO.amount <= 0) {
         throw new BadRequestException('Amount must be greater than 0');
       }
+
+      // Prevent reducing claim amount below approved amount
+      if (updateClaimDTO.amount !== undefined && claim.approvedAmount) {
+        if (updateClaimDTO.amount < claim.approvedAmount) {
+          throw new BadRequestException(
+            `Cannot reduce claim amount to ${updateClaimDTO.amount} because it is below the approved amount (${claim.approvedAmount})`,
+          );
+        }
+      }
+
       if (updateClaimDTO.approvedAmount !== undefined) {
         if (updateClaimDTO.approvedAmount <= 0) {
           throw new BadRequestException(
             'Approved amount must be greater than 0',
           );
         }
-        if (updateClaimDTO.approvedAmount > claim.amount) {
+        // Use effective amount (accounts for concurrent amount updates)
+        if (updateClaimDTO.approvedAmount > effectiveAmount) {
           throw new BadRequestException(
-            'Approved amount cannot exceed the original claim amount',
+            `Approved amount (${updateClaimDTO.approvedAmount}) cannot exceed the claim amount (${effectiveAmount})`,
           );
         }
       }
@@ -644,14 +817,35 @@ export class PayrollTrackingService {
         employeeId,
         false,
       );
-      return await this.claimModel
-        .find({ employeeId: validEmployeeId })
-      .populate('employeeId', 'firstName lastName employeeNumber')
+
+      console.log(`[getClaimsByEmployeeId] Querying claims for employeeId: ${employeeId}, validEmployeeId: ${validEmployeeId}`);
+
+      // Build query with multiple formats
+      const queryConditions: any[] = [
+        { employeeId: validEmployeeId }
+      ];
+      
+      // Try with original employeeId as ObjectId if valid
+      if (Types.ObjectId.isValid(employeeId)) {
+        queryConditions.push({ employeeId: new Types.ObjectId(employeeId) });
+      }
+      
+      // Try with original employeeId as string
+      queryConditions.push({ employeeId: employeeId });
+
+      // Try multiple query formats to handle different storage formats
+      let claims = await this.claimModel
+        .find({ $or: queryConditions })
+        .populate('employeeId', 'firstName lastName employeeNumber')
         .populate('payrollSpecialistId', 'firstName lastName')
         .populate('payrollManagerId', 'firstName lastName')
-      .populate('financeStaffId', 'firstName lastName')
-      .sort({ createdAt: -1 })
-      .exec();
+        .populate('financeStaffId', 'firstName lastName')
+        .sort({ createdAt: -1 })
+        .exec();
+
+      console.log(`[getClaimsByEmployeeId] Found ${claims.length} claims for employeeId: ${employeeId}`);
+
+      return claims;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -683,6 +877,24 @@ export class PayrollTrackingService {
     } catch (error: any) {
       throw new BadRequestException(
         `Failed to retrieve pending claims: ${error?.message || 'Unknown error'}`,
+      );
+    }
+  }
+
+  // Get all claims (for payroll staff to view all claims regardless of status)
+  async getAllClaims() {
+    try {
+      return await this.claimModel
+        .find({})
+        .populate('employeeId', 'firstName lastName employeeNumber')
+        .populate('payrollSpecialistId', 'firstName lastName')
+        .populate('payrollManagerId', 'firstName lastName')
+        .populate('financeStaffId', 'firstName lastName')
+        .sort({ createdAt: -1 })
+        .exec();
+    } catch (error: any) {
+      throw new BadRequestException(
+        `Failed to retrieve all claims: ${error?.message || 'Unknown error'}`,
       );
     }
   }
@@ -846,6 +1058,17 @@ export class PayrollTrackingService {
         'payslipId',
       );
       
+      // Security: Verify that the payslip belongs to the employee
+      const payslip = await this.payslipModel
+        .findOne({ _id: payslipId, employeeId })
+        .exec();
+      
+      if (!payslip) {
+        throw new NotFoundException(
+          `Payslip with ID ${createDisputeDTO.payslipId} not found for employee ${createDisputeDTO.employeeId}. You can only dispute your own payslips.`,
+        );
+      }
+      
       const disputeId = await this.generateDisputeId();
       const newDispute = new this.disputeModel({
         ...createDisputeDTO,
@@ -982,6 +1205,38 @@ export class PayrollTrackingService {
         );
       }
 
+      // Validate employee ownership: employees can only update their own disputes
+      // System admins can update any dispute (handled by controller role check)
+      const disputeEmployeeId = dispute.employeeId instanceof Types.ObjectId
+        ? dispute.employeeId.toString()
+        : (dispute.employeeId as any)?._id?.toString() || String(dispute.employeeId);
+      
+      const currentUserProfile = await this.employeeProfileService.findOne(currentUserId);
+      if (!currentUserProfile) {
+        throw new NotFoundException('Current user profile not found');
+      }
+
+      // Check if current user has staff/admin roles
+      const userSystemRole = await this.employeeSystemRoleModel.findOne({
+        employeeProfileId: new Types.ObjectId(currentUserId),
+        isActive: true,
+      }).exec();
+
+      const userRoles = userSystemRole?.roles || [];
+      const isStaff = userRoles.some(
+        (role) =>
+          role === SystemRole.PAYROLL_SPECIALIST ||
+          role === SystemRole.PAYROLL_MANAGER ||
+          role === SystemRole.FINANCE_STAFF ||
+          role === SystemRole.SYSTEM_ADMIN
+      );
+
+      // If user is not staff/admin and doesn't own the dispute, deny access
+      const currentUserEmployeeId = (currentUserProfile as any)._id?.toString() || currentUserId;
+      if (!isStaff && currentUserEmployeeId !== disputeEmployeeId) {
+        throw new ForbiddenException('You can only update your own disputes');
+      }
+
       // Validate update data
       if (updateDisputeDTO.description !== undefined) {
         if (updateDisputeDTO.description.trim().length === 0) {
@@ -1086,15 +1341,36 @@ export class PayrollTrackingService {
         employeeId,
         false,
       );
-      return await this.disputeModel
-        .find({ employeeId: validEmployeeId })
-      .populate('employeeId', 'firstName lastName employeeNumber')
+
+      console.log(`[getDisputesByEmployeeId] Querying disputes for employeeId: ${employeeId}, validEmployeeId: ${validEmployeeId}`);
+
+      // Build query with multiple formats
+      const queryConditions: any[] = [
+        { employeeId: validEmployeeId }
+      ];
+      
+      // Try with original employeeId as ObjectId if valid
+      if (Types.ObjectId.isValid(employeeId)) {
+        queryConditions.push({ employeeId: new Types.ObjectId(employeeId) });
+      }
+      
+      // Try with original employeeId as string
+      queryConditions.push({ employeeId: employeeId });
+
+      // Try multiple query formats to handle different storage formats
+      let disputes = await this.disputeModel
+        .find({ $or: queryConditions })
+        .populate('employeeId', 'firstName lastName employeeNumber')
         .populate('payrollSpecialistId', 'firstName lastName')
         .populate('payrollManagerId', 'firstName lastName')
-      .populate('financeStaffId', 'firstName lastName')
-      .populate('payslipId')
-      .sort({ createdAt: -1 })
-      .exec();
+        .populate('financeStaffId', 'firstName lastName')
+        .populate('payslipId')
+        .sort({ createdAt: -1 })
+        .exec();
+
+      console.log(`[getDisputesByEmployeeId] Found ${disputes.length} disputes for employeeId: ${employeeId}`);
+
+      return disputes;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -1127,6 +1403,25 @@ export class PayrollTrackingService {
     } catch (error: any) {
       throw new BadRequestException(
         `Failed to retrieve pending disputes: ${error?.message || 'Unknown error'}`,
+      );
+    }
+  }
+
+  // Get all disputes (for payroll staff to view all disputes regardless of status)
+  async getAllDisputes() {
+    try {
+      return await this.disputeModel
+        .find({})
+        .populate('employeeId', 'firstName lastName employeeNumber')
+        .populate('payrollSpecialistId', 'firstName lastName')
+        .populate('payrollManagerId', 'firstName lastName')
+        .populate('financeStaffId', 'firstName lastName')
+        .populate('payslipId')
+        .sort({ createdAt: -1 })
+        .exec();
+    } catch (error: any) {
+      throw new BadRequestException(
+        `Failed to retrieve all disputes: ${error?.message || 'Unknown error'}`,
       );
     }
   }
@@ -1304,14 +1599,14 @@ export class PayrollTrackingService {
             `Claim must be approved before creating a refund. Current status: ${claim.status}`,
           );
         }
-        // Check if refund already exists for this claim
+        // Check if refund already exists for this claim (pending OR paid)
         const existingRefund = await this.refundModel.findOne({
           claimId: createRefundDTO.claimId,
-          status: RefundStatus.PENDING,
+          status: { $in: [RefundStatus.PENDING, RefundStatus.PAID] },
         });
         if (existingRefund) {
           throw new BadRequestException(
-            'A pending refund already exists for this claim',
+            `A refund already exists for this claim (status: ${existingRefund.status}). Cannot create duplicate refunds.`,
           );
       }
     }
@@ -1329,14 +1624,14 @@ export class PayrollTrackingService {
             `Dispute must be approved before creating a refund. Current status: ${dispute.status}`,
           );
         }
-        // Check if refund already exists for this dispute
+        // Check if refund already exists for this dispute (pending OR paid)
         const existingRefund = await this.refundModel.findOne({
           disputeId: createRefundDTO.disputeId,
-          status: RefundStatus.PENDING,
+          status: { $in: [RefundStatus.PENDING, RefundStatus.PAID] },
         });
         if (existingRefund) {
           throw new BadRequestException(
-            'A pending refund already exists for this dispute',
+            `A refund already exists for this dispute (status: ${existingRefund.status}). Cannot create duplicate refunds.`,
           );
         }
     }
@@ -1414,6 +1709,12 @@ export class PayrollTrackingService {
    */
   async getRefundById(refundId: string) {
     try {
+      // Reject reserved route keywords that should not be treated as refund IDs
+      const reservedKeywords = ['all', 'pending', 'employee'];
+      if (reservedKeywords.includes(refundId?.toLowerCase())) {
+        throw new BadRequestException(`'${refundId}' is a reserved keyword and cannot be used as a refund ID`);
+      }
+      
       if (!refundId || !Types.ObjectId.isValid(refundId)) {
         throw new BadRequestException('Valid refund ID is required');
       }
@@ -1456,6 +1757,13 @@ export class PayrollTrackingService {
       throw new NotFoundException(`Refund with ID ${refundId} not found`);
     }
 
+      // Prevent ALL updates to paid refunds (paid refunds are immutable)
+      if (refund.status === RefundStatus.PAID) {
+        throw new BadRequestException(
+          'Cannot update a refund that has already been paid. Paid refunds are immutable.',
+        );
+      }
+
       // Validate update data
       if (updateRefundDTO.refundDetails) {
         if (
@@ -1474,14 +1782,6 @@ export class PayrollTrackingService {
 
       // Prevent status changes that violate business rules
       if (updateRefundDTO.status) {
-        if (
-          refund.status === RefundStatus.PAID &&
-          updateRefundDTO.status !== RefundStatus.PAID
-        ) {
-          throw new BadRequestException(
-            'Cannot change status of a paid refund',
-          );
-        }
         if (
           refund.status === RefundStatus.PENDING &&
           updateRefundDTO.status === RefundStatus.PAID &&
@@ -1584,15 +1884,112 @@ export class PayrollTrackingService {
         false,
       );
 
-      return await this.refundModel
-        .find({ employeeId: validEmployeeId })
-      .populate('employeeId', 'firstName lastName employeeNumber')
-      .populate('financeStaffId', 'firstName lastName')
-      .populate('claimId')
-      .populate('disputeId')
-      .populate('paidInPayrollRunId')
-      .sort({ createdAt: -1 })
-      .exec();
+      console.log(`[getRefundsByEmployeeId] Querying refunds for employeeId: ${employeeId}, validEmployeeId: ${validEmployeeId}`);
+
+      // Build query with multiple formats
+      const queryConditions: any[] = [
+        { employeeId: validEmployeeId }
+      ];
+      
+      // Try with original employeeId as ObjectId if valid
+      if (Types.ObjectId.isValid(employeeId)) {
+        queryConditions.push({ employeeId: new Types.ObjectId(employeeId) });
+      }
+      
+      // Try with original employeeId as string
+      queryConditions.push({ employeeId: employeeId });
+
+      // Query refunds using the validated employeeId (which is an ObjectId)
+      // Try multiple query formats to handle different storage formats
+      let refunds = await this.refundModel
+        .find({ $or: queryConditions })
+        .populate('employeeId', 'firstName lastName employeeNumber')
+        .populate('financeStaffId', 'firstName lastName')
+        .populate('claimId')
+        .populate('disputeId')
+        .populate('paidInPayrollRunId')
+        .sort({ createdAt: -1 })
+        .exec();
+
+      console.log(`[getRefundsByEmployeeId] Found ${refunds.length} refunds by direct employeeId query`);
+
+      // If no refunds found directly, also check refunds associated with employee's claims/disputes
+      // This handles cases where refunds might be linked via claimId/disputeId
+      if (refunds.length === 0) {
+        // Get all claims and disputes for this employee
+        const employeeClaims = await this.claimModel.find({ 
+          $or: [
+            { employeeId: validEmployeeId },
+            { employeeId: new Types.ObjectId(employeeId) }
+          ]
+        }).select('_id').exec();
+        
+        const employeeDisputes = await this.disputeModel.find({ 
+          $or: [
+            { employeeId: validEmployeeId },
+            { employeeId: new Types.ObjectId(employeeId) }
+          ]
+        }).select('_id').exec();
+        
+        console.log(`[getRefundsByEmployeeId] Found ${employeeClaims.length} claims and ${employeeDisputes.length} disputes for employee`);
+        
+        const claimIds = employeeClaims.map(c => c._id);
+        const disputeIds = employeeDisputes.map(d => d._id);
+        
+        if (claimIds.length > 0 || disputeIds.length > 0) {
+          const query: any = {
+            $or: []
+          };
+          
+          if (claimIds.length > 0) {
+            query.$or.push({ claimId: { $in: claimIds } });
+          }
+          if (disputeIds.length > 0) {
+            query.$or.push({ disputeId: { $in: disputeIds } });
+          }
+          
+          if (query.$or.length > 0) {
+            console.log(`[getRefundsByEmployeeId] Querying refunds by claimIds (${claimIds.length}) and disputeIds (${disputeIds.length})`);
+            refunds = await this.refundModel
+              .find(query)
+              .populate('employeeId', 'firstName lastName employeeNumber')
+              .populate('financeStaffId', 'firstName lastName')
+              .populate('claimId')
+              .populate('disputeId')
+              .populate('paidInPayrollRunId')
+              .sort({ createdAt: -1 })
+              .exec();
+            console.log(`[getRefundsByEmployeeId] Found ${refunds.length} refunds via claims/disputes query`);
+          }
+        }
+      }
+
+      // Also try to find ALL refunds and filter by employeeId from populated data (last resort)
+      if (refunds.length === 0) {
+        console.log(`[getRefundsByEmployeeId] Trying to find all refunds and filter by employee...`);
+        const allRefunds = await this.refundModel
+          .find({})
+          .populate('employeeId', 'firstName lastName employeeNumber')
+          .populate('claimId')
+          .populate('disputeId')
+          .exec();
+        
+        console.log(`[getRefundsByEmployeeId] Total refunds in database: ${allRefunds.length}`);
+        
+        // Filter refunds where employeeId matches (handling both ObjectId and populated objects)
+        refunds = allRefunds.filter((refund: any) => {
+          const refundEmployeeId = refund.employeeId?._id?.toString() || refund.employeeId?.toString() || String(refund.employeeId);
+          const targetEmployeeId = validEmployeeId.toString();
+          const targetEmployeeIdString = employeeId;
+          return refundEmployeeId === targetEmployeeId || refundEmployeeId === targetEmployeeIdString;
+        });
+        
+        console.log(`[getRefundsByEmployeeId] Filtered to ${refunds.length} refunds matching employee`);
+      }
+
+      console.log(`[getRefundsByEmployeeId] Final result: ${refunds.length} refunds for employeeId: ${employeeId}`);
+      
+      return refunds;
     } catch (error: any) {
       if (
         error instanceof BadRequestException ||
@@ -1633,6 +2030,25 @@ export class PayrollTrackingService {
     } catch (error: any) {
       throw new BadRequestException(
         `Failed to retrieve pending refunds: ${error?.message || 'Unknown error'}`,
+      );
+    }
+  }
+
+  // Get all refunds (for finance staff to view all refunds regardless of status)
+  async getAllRefunds() {
+    try {
+      return await this.refundModel
+        .find({})
+        .populate('employeeId', 'firstName lastName employeeNumber')
+        .populate('financeStaffId', 'firstName lastName')
+        .populate('claimId')
+        .populate('disputeId')
+        .populate('paidInPayrollRunId')
+        .sort({ createdAt: -1 })
+        .exec();
+    } catch (error: any) {
+      throw new BadRequestException(
+        `Failed to retrieve all refunds: ${error?.message || 'Unknown error'}`,
       );
     }
   }
@@ -1905,7 +2321,7 @@ export class PayrollTrackingService {
         : (employeeIdValue as any)?._id?.toString() || String(employeeIdValue);
       
       await this.sendNotification(
-        'CLAIM_REJECTED',
+        NotificationType.CLAIM_REJECTED,
         employeeId,
         'DEPARTMENT_EMPLOYEE',
         `Your expense claim ${claimId} has been rejected. Reason: ${rejectClaimBySpecialistDTO.rejectionReason}`,
@@ -2078,7 +2494,7 @@ export class PayrollTrackingService {
         : (employeeIdValue as any)?._id?.toString() || String(employeeIdValue);
       
       await this.sendNotification(
-        'DISPUTE_REJECTED',
+        NotificationType.DISPUTE_REJECTED,
         employeeId,
         'DEPARTMENT_EMPLOYEE',
         `Your payroll dispute ${disputeId} has been rejected. Reason: ${rejectDisputeBySpecialistDTO.rejectionReason}`,
@@ -2160,13 +2576,11 @@ export class PayrollTrackingService {
       }
 
       // Notify finance staff that a dispute has been approved and is ready for refund processing
-      // Get all finance staff (in a real system, you'd query for users with FINANCE_STAFF role)
-      // For now, we'll notify that finance staff should check approved disputes
       await this.sendNotification(
-        'DISPUTE_APPROVED_FOR_FINANCE',
-        'FINANCE_STAFF', // This would be a list of finance staff IDs in production
+        NotificationType.DISPUTE_APPROVED_FOR_FINANCE,
         'FINANCE_STAFF',
-        `A new dispute ${disputeId} has been approved and is ready for refund processing. Employee: ${(updatedDispute.employeeId as any)?.firstName || ''} ${(updatedDispute.employeeId as any)?.lastName || ''}`,
+        'FINANCE_STAFF',
+        `A new dispute ${disputeId} has been approved by the Payroll Manager and is ready for refund processing. Employee: ${(updatedDispute.employeeId as any)?.firstName || ''} ${(updatedDispute.employeeId as any)?.lastName || ''}`,
         {
           disputeId: updatedDispute.disputeId,
           employeeId: (() => {
@@ -2186,7 +2600,7 @@ export class PayrollTrackingService {
         : (employeeIdValue as any)?._id?.toString() || String(employeeIdValue);
       
       await this.sendNotification(
-        'DISPUTE_APPROVED',
+        NotificationType.DISPUTE_APPROVED,
         employeeId,
         'DEPARTMENT_EMPLOYEE',
         `Your payroll dispute ${disputeId} has been fully approved by the payroll manager. Finance staff will process your refund.`,
@@ -2263,12 +2677,14 @@ export class PayrollTrackingService {
         );
       }
 
-      // Notify finance staff that a claim has been approved and is ready for refund processing
+      // REQ: As Finance staff, I want to view and get notified with approved expense claims, so that adjustments can be done.
+      // Notify all finance staff that a claim has been approved and is ready for refund processing
+      console.log(`[confirmClaimApproval] Notifying finance staff about approved claim ${claimId}`);
       await this.sendNotification(
-        'CLAIM_APPROVED_FOR_FINANCE',
-        'FINANCE_STAFF', // This would be a list of finance staff IDs in production
+        NotificationType.CLAIM_APPROVED_FOR_FINANCE,
         'FINANCE_STAFF',
-        `A new expense claim ${claimId} has been approved and is ready for refund processing. Employee: ${(updatedClaim.employeeId as any)?.firstName || ''} ${(updatedClaim.employeeId as any)?.lastName || ''}. Amount: ${updatedClaim.approvedAmount || updatedClaim.amount}`,
+        'FINANCE_STAFF',
+        `New Approved Expense Claim: ${claimId} - Employee: ${(updatedClaim.employeeId as any)?.firstName || ''} ${(updatedClaim.employeeId as any)?.lastName || ''} (${(updatedClaim.employeeId as any)?.employeeNumber || 'N/A'}) - Amount: $${(updatedClaim.approvedAmount || updatedClaim.amount).toFixed(2)} - Ready for refund processing`,
         {
           claimId: updatedClaim.claimId,
           employeeId: (() => {
@@ -2277,10 +2693,13 @@ export class PayrollTrackingService {
               ? empId.toString()
               : (empId as any)?._id?.toString() || String(empId);
           })(),
+          employeeName: `${(updatedClaim.employeeId as any)?.firstName || ''} ${(updatedClaim.employeeId as any)?.lastName || ''}`,
+          employeeNumber: (updatedClaim.employeeId as any)?.employeeNumber || 'N/A',
           approvedAmount: updatedClaim.approvedAmount || updatedClaim.amount,
           status: ClaimStatus.APPROVED,
         },
       );
+      console.log(`[confirmClaimApproval] Finance staff notification sent for claim ${claimId}`);
 
       // Also notify employee that claim has been fully approved
       const employeeIdValue = updatedClaim.employeeId;
@@ -2289,10 +2708,10 @@ export class PayrollTrackingService {
         : (employeeIdValue as any)?._id?.toString() || String(employeeIdValue);
       
       await this.sendNotification(
-        'CLAIM_APPROVED',
+        NotificationType.CLAIM_APPROVED,
         employeeId,
         'DEPARTMENT_EMPLOYEE',
-        `Your expense claim ${claimId} has been fully approved by the payroll manager. Finance staff will process your refund of ${updatedClaim.approvedAmount || updatedClaim.amount}.`,
+        `Your expense claim ${claimId} has been fully approved by the payroll manager. Finance staff will process your refund of $${(updatedClaim.approvedAmount || updatedClaim.amount).toFixed(2)}.`,
         {
           claimId: updatedClaim.claimId,
           approvedAmount: updatedClaim.approvedAmount || updatedClaim.amount,
@@ -2378,14 +2797,14 @@ export class PayrollTrackingService {
         );
       }
 
-      // Check if refund already exists for this dispute
+      // Check if refund already exists for this dispute (pending OR paid)
       const existingRefund = await this.refundModel.findOne({
         disputeId: dispute._id,
-        status: RefundStatus.PENDING,
+        status: { $in: [RefundStatus.PENDING, RefundStatus.PAID] },
       });
       if (existingRefund) {
         throw new BadRequestException(
-          'A pending refund already exists for this dispute',
+          `A refund already exists for this dispute (status: ${existingRefund.status}). Cannot create duplicate refunds.`,
         );
       }
 
@@ -2434,14 +2853,14 @@ export class PayrollTrackingService {
         );
       }
 
-      // Check if refund already exists for this claim
+      // Check if refund already exists for this claim (pending OR paid)
       const existingRefund = await this.refundModel.findOne({
         claimId: claim._id,
-        status: RefundStatus.PENDING,
+        status: { $in: [RefundStatus.PENDING, RefundStatus.PAID] },
       });
       if (existingRefund) {
         throw new BadRequestException(
-          'A pending refund already exists for this claim',
+          `A refund already exists for this claim (status: ${existingRefund.status}). Cannot create duplicate refunds.`,
         );
       }
 
@@ -2599,6 +3018,206 @@ export class PayrollTrackingService {
       }
       throw new BadRequestException(
         `Failed to retrieve payslip: ${error?.message || 'Unknown error'}`,
+      );
+    }
+  }
+
+  // REQ-PY-1: Employees download a specific payslip as PDF
+  async downloadPayslipAsPDF(payslipId: string, employeeId: string): Promise<Buffer> {
+    try {
+      const validPayslipId = this.validateObjectId(payslipId, 'payslipId');
+      const validEmployeeId = await this.validateEmployeeExists(employeeId, false);
+
+      // Get payslip with populated data
+      const payslip = await this.payslipModel
+        .findOne({ _id: validPayslipId, employeeId: validEmployeeId })
+        .populate('employeeId', 'firstName lastName employeeNumber fullName')
+        .populate('payrollRunId', 'runId payrollPeriod status entity')
+        .exec();
+
+      if (!payslip) {
+        throw new NotFoundException(
+          `Payslip with ID ${payslipId} not found for this employee`,
+        );
+      }
+
+      // Get employee details
+      const employee = await this.employeeProfileService.findOne(employeeId);
+      if (!employee) {
+        throw new NotFoundException('Employee not found');
+      }
+
+      // Get payroll run for period information
+      const payrollRun = await this.payrollRunsModel.findById(payslip.payrollRunId).exec();
+      const periodDate = payrollRun
+        ? new Date(payrollRun.payrollPeriod)
+        : new Date();
+      const periodMonth = periodDate.toLocaleString('default', {
+        month: 'long',
+        year: 'numeric',
+      });
+
+      // Check if pdfkit is available
+      let PDFDocument: any;
+      try {
+        PDFDocument = require('pdfkit');
+      } catch (e) {
+        throw new BadRequestException(
+          'PDF generation is not available. Please contact system administrator.',
+        );
+      }
+
+      // Generate PDF in memory
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      // Collect PDF data
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      
+      // Generate PDF content
+      doc.fontSize(20).text('PAYSLIP', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(12);
+      doc.text(
+        `Employee: ${employee.fullName || `${employee.firstName} ${employee.lastName}`}`,
+      );
+      doc.text(`Employee Number: ${employee.employeeNumber}`);
+      doc.text(`Period: ${periodMonth}`);
+      if (payrollRun?.runId) {
+        doc.text(`Payroll Run: ${payrollRun.runId}`);
+      }
+      doc.moveDown();
+
+      // Earnings section
+      doc.fontSize(14).text('EARNINGS', { underline: true });
+      doc.fontSize(10);
+      doc.text(`Base Salary: $${payslip.earningsDetails.baseSalary.toFixed(2)}`);
+
+      if (
+        payslip.earningsDetails.allowances &&
+        payslip.earningsDetails.allowances.length > 0
+      ) {
+        payslip.earningsDetails.allowances.forEach((allowance: any) => {
+          doc.text(
+            `  ${allowance.allowanceName || 'Allowance'}: $${(allowance.amount || 0).toFixed(2)}`,
+          );
+        });
+      }
+
+      if (
+        payslip.earningsDetails.bonuses &&
+        payslip.earningsDetails.bonuses.length > 0
+      ) {
+        payslip.earningsDetails.bonuses.forEach((bonus: any) => {
+          doc.text(`  ${bonus.bonusName || 'Bonus'}: $${(bonus.amount || 0).toFixed(2)}`);
+        });
+      }
+
+      if (
+        payslip.earningsDetails.benefits &&
+        payslip.earningsDetails.benefits.length > 0
+      ) {
+        payslip.earningsDetails.benefits.forEach((benefit: any) => {
+          doc.text(`  ${benefit.benefitName || 'Benefit'}: $${(benefit.amount || 0).toFixed(2)}`);
+        });
+      }
+
+      if (
+        payslip.earningsDetails.refunds &&
+        payslip.earningsDetails.refunds.length > 0
+      ) {
+        payslip.earningsDetails.refunds.forEach((refund: any) => {
+          doc.text(
+            `  Refund: $${(refund.refundAmount || 0).toFixed(2)} - ${refund.refundDescription || ''}`,
+          );
+        });
+      }
+
+      doc.moveDown();
+      doc
+        .fontSize(12)
+        .text(`Total Gross Salary: $${payslip.totalGrossSalary.toFixed(2)}`, {
+          underline: true,
+        });
+
+      // Deductions section
+      doc.moveDown();
+      doc.fontSize(14).text('DEDUCTIONS', { underline: true });
+      doc.fontSize(10);
+
+      if (
+        payslip.deductionsDetails.taxes &&
+        payslip.deductionsDetails.taxes.length > 0
+      ) {
+        payslip.deductionsDetails.taxes.forEach((tax: any) => {
+          doc.text(
+            `  ${tax.taxName || 'Tax'} (${tax.taxRate || 0}%): $${(tax.taxAmount || 0).toFixed(2)}`,
+          );
+        });
+      }
+
+      if (
+        payslip.deductionsDetails.insurances &&
+        payslip.deductionsDetails.insurances.length > 0
+      ) {
+        payslip.deductionsDetails.insurances.forEach((insurance: any) => {
+          doc.text(
+            `  ${insurance.insuranceName || 'Insurance'}: $${(insurance.employeeContribution || 0).toFixed(2)}`,
+          );
+        });
+      }
+
+      if (payslip.deductionsDetails.penalties) {
+        const penalties = payslip.deductionsDetails.penalties as any;
+        if (penalties.missingHoursDeduction) {
+          doc.text(`  Missing Hours Deduction: $${penalties.missingHoursDeduction.toFixed(2)}`);
+        }
+        if (penalties.missingDaysDeduction) {
+          doc.text(`  Missing Days Deduction: $${penalties.missingDaysDeduction.toFixed(2)}`);
+        }
+        if (penalties.unpaidLeaveDeduction) {
+          doc.text(`  Unpaid Leave Deduction: $${penalties.unpaidLeaveDeduction.toFixed(2)}`);
+        }
+        if (penalties.totalPenalties) {
+          doc.text(`  Total Penalties: $${penalties.totalPenalties.toFixed(2)}`);
+        }
+      }
+
+      doc.moveDown();
+      doc
+        .fontSize(12)
+        .text(`Total Deductions: $${(payslip.totaDeductions || 0).toFixed(2)}`, {
+          underline: true,
+        });
+
+      // Summary
+      doc.moveDown();
+      doc.fontSize(16).text('NET PAY', { align: 'center', underline: true });
+      doc
+        .fontSize(18)
+        .text(`$${payslip.netPay.toFixed(2)}`, { align: 'center' });
+
+      doc.end();
+
+      // Wait for PDF to be generated and return buffer
+      return new Promise<Buffer>((resolve, reject) => {
+        doc.on('end', () => {
+          const pdfBuffer = Buffer.concat(chunks);
+          resolve(pdfBuffer);
+        });
+        doc.on('error', (error) => {
+          reject(error);
+        });
+      });
+    } catch (error: any) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to generate PDF: ${error?.message || 'Unknown error'}`,
       );
     }
   }
@@ -2961,14 +3580,20 @@ export class PayrollTrackingService {
         throw new NotFoundException('No payslip found for this employee');
       }
 
+      // Enrich tax deductions with full tax rule details (including laws/rules from description)
+      const taxDeductions = payslip.deductionsDetails?.taxes || [];
+      const enrichedTaxDeductions = await Promise.all(
+        taxDeductions.map((tax: any) => this.enrichTaxDeductionWithConfiguration(tax)),
+      );
+
       return {
         payslipId: payslip._id,
         payrollPeriod: payslip.payrollRunId,
-        taxDeductions: payslip.deductionsDetails?.taxes || [],
-        totalTaxDeductions: payslip.deductionsDetails?.taxes?.reduce(
-          (sum: number, tax: any) => sum + (tax.amount || 0),
+        taxDeductions: enrichedTaxDeductions,
+        totalTaxDeductions: enrichedTaxDeductions.reduce(
+          (sum: number, tax: any) => sum + (tax.amount || tax.taxAmount || 0),
           0,
-        ) || 0,
+        ),
       };
     } catch (error: any) {
       if (
@@ -4400,5 +5025,363 @@ export class PayrollTrackingService {
         `Failed to generate payroll summary by departments: ${error?.message || 'Unknown error'}`,
       );
     }
+  }
+
+  // ==================== EXPORT METHODS ====================
+
+  /**
+   * Export tax/insurance/benefits report as CSV
+   */
+  async exportTaxInsuranceBenefitsReportAsCSV(
+    period: 'month' | 'year',
+    date?: Date,
+    departmentId?: string,
+  ): Promise<string> {
+    const reportData = await this.getTaxInsuranceBenefitsReport(period, date, departmentId);
+    return this.formatReportAsCSV(reportData, 'Tax, Insurance & Benefits Report');
+  }
+
+  /**
+   * Export tax/insurance/benefits report as PDF
+   */
+  async exportTaxInsuranceBenefitsReportAsPDF(
+    period: 'month' | 'year',
+    date?: Date,
+    departmentId?: string,
+  ): Promise<Buffer> {
+    const reportData = await this.getTaxInsuranceBenefitsReport(period, date, departmentId);
+    return this.formatReportAsPDF(reportData, 'Tax, Insurance & Benefits Report');
+  }
+
+  /**
+   * Export payroll summary as CSV
+   */
+  async exportPayrollSummaryAsCSV(
+    period: 'month' | 'year',
+    date?: Date,
+    departmentId?: string,
+  ): Promise<string> {
+    const summaryData = await this.getPayrollSummary(period, date, departmentId);
+    return this.formatSummaryAsCSV(summaryData, period === 'month' ? 'Month-End Payroll Summary' : 'Year-End Payroll Summary');
+  }
+
+  /**
+   * Export payroll summary as PDF
+   */
+  async exportPayrollSummaryAsPDF(
+    period: 'month' | 'year',
+    date?: Date,
+    departmentId?: string,
+  ): Promise<Buffer> {
+    const summaryData = await this.getPayrollSummary(period, date, departmentId);
+    return this.formatSummaryAsPDF(summaryData, period === 'month' ? 'Month-End Payroll Summary' : 'Year-End Payroll Summary');
+  }
+
+  /**
+   * Format report data as CSV
+   */
+  private formatReportAsCSV(data: any, reportTitle: string): string {
+    const lines: string[] = [];
+    
+    // Header
+    lines.push(reportTitle);
+    lines.push(`Generated: ${new Date().toISOString()}`);
+    if (data.period) lines.push(`Period: ${data.period}`);
+    if (data.startDate) lines.push(`Start Date: ${data.startDate}`);
+    if (data.endDate) lines.push(`End Date: ${data.endDate}`);
+    if (data.department) lines.push(`Department: ${data.department.name}`);
+    lines.push('');
+
+    // Summary
+    if (data.summary) {
+      lines.push('Summary');
+      lines.push('Field,Value');
+      Object.entries(data.summary).forEach(([key, value]) => {
+        lines.push(`${key},${value}`);
+      });
+      lines.push('');
+    }
+
+    // Taxes
+    if (data.taxes && data.taxes.breakdown) {
+      lines.push('Tax Breakdown');
+      lines.push('Tax Name,Amount');
+      Object.entries(data.taxes.breakdown).forEach(([taxName, amount]) => {
+        lines.push(`${taxName},${amount}`);
+      });
+      lines.push(`Total Taxes,${data.taxes.total || 0}`);
+      lines.push('');
+    }
+
+    // Insurance
+    if (data.insurance && data.insurance.breakdown) {
+      lines.push('Insurance Breakdown');
+      lines.push('Insurance Type,Employee Contribution,Employer Contribution,Total');
+      Object.entries(data.insurance.breakdown).forEach(([insuranceName, details]: [string, any]) => {
+        const employee = details.employee || 0;
+        const employer = details.employer || 0;
+        const total = employee + employer;
+        lines.push(`${insuranceName},${employee},${employer},${total}`);
+      });
+      lines.push(`Total Employee Contributions,${data.insurance.totalEmployeeContributions || 0}`);
+      lines.push(`Total Employer Contributions,${data.insurance.totalEmployerContributions || 0}`);
+      lines.push(`Total Insurance,${data.insurance.total || 0}`);
+      lines.push('');
+    }
+
+    // Benefits
+    if (data.benefits) {
+      lines.push('Benefits');
+      lines.push('Total Benefits');
+      lines.push(`${data.benefits.total || 0}`);
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Format summary data as CSV
+   */
+  private formatSummaryAsCSV(data: any, summaryTitle: string): string {
+    const lines: string[] = [];
+    
+    // Header
+    lines.push(summaryTitle);
+    lines.push(`Generated: ${new Date().toISOString()}`);
+    if (data.period) lines.push(`Period: ${data.period}`);
+    if (data.startDate) lines.push(`Start Date: ${data.startDate}`);
+    if (data.endDate) lines.push(`End Date: ${data.endDate}`);
+    lines.push('');
+
+    // Summary
+    if (data.summary) {
+      lines.push('Summary');
+      lines.push('Field,Value');
+      Object.entries(data.summary).forEach(([key, value]) => {
+        lines.push(`${key},${value}`);
+      });
+      lines.push('');
+    }
+
+    // Employee breakdown
+    if (data.employees && data.employees.length > 0) {
+      lines.push('Employee Breakdown');
+      lines.push('Employee Number,Employee Name,Department,Gross Salary,Deductions,Net Pay');
+      data.employees.forEach((emp: any) => {
+        const employeeNumber = emp.employee?.employeeNumber || 'N/A';
+        const employeeName = emp.employee ? `${emp.employee.firstName} ${emp.employee.lastName}` : 'N/A';
+        const department = emp.department?.name || 'N/A';
+        const grossSalary = emp.grossSalary || 0;
+        const deductions = emp.deductions || 0;
+        const netPay = emp.netPay || 0;
+        lines.push(`${employeeNumber},${employeeName},${department},${grossSalary},${deductions},${netPay}`);
+      });
+      lines.push('');
+    }
+
+    // Department breakdown
+    if (data.departments && data.departments.length > 0) {
+      lines.push('Department Breakdown');
+      lines.push('Department Name,Employee Count,Total Gross Salary,Total Deductions,Total Net Pay');
+      data.departments.forEach((dept: any) => {
+        const deptName = dept.department?.name || 'N/A';
+        const empCount = dept.employeeCount || 0;
+        const totalGross = dept.totalGrossSalary || 0;
+        const totalDeductions = dept.totalDeductions || 0;
+        const totalNetPay = dept.totalNetPay || 0;
+        lines.push(`${deptName},${empCount},${totalGross},${totalDeductions},${totalNetPay}`);
+      });
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Format report data as PDF
+   */
+  private async formatReportAsPDF(data: any, reportTitle: string): Promise<Buffer> {
+    let PDFDocument: any;
+    try {
+      PDFDocument = require('pdfkit');
+    } catch (e) {
+      throw new BadRequestException(
+        'PDF generation is not available. Please contact system administrator.',
+      );
+    }
+
+    const doc = new PDFDocument({ margin: 50 });
+    const chunks: Buffer[] = [];
+
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+    // Header
+    doc.fontSize(20).text(reportTitle, { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+    if (data.period) doc.text(`Period: ${data.period}`, { align: 'center' });
+    if (data.startDate) doc.text(`Start Date: ${new Date(data.startDate).toLocaleDateString()}`, { align: 'center' });
+    if (data.endDate) doc.text(`End Date: ${new Date(data.endDate).toLocaleDateString()}`, { align: 'center' });
+    if (data.department) doc.text(`Department: ${data.department.name}`, { align: 'center' });
+    doc.moveDown(1);
+
+    // Summary
+    if (data.summary) {
+      doc.fontSize(14).text('Summary', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(10);
+      Object.entries(data.summary).forEach(([key, value]) => {
+        doc.text(`${key}: ${value}`, { indent: 20 });
+      });
+      doc.moveDown(1);
+    }
+
+    // Taxes
+    if (data.taxes && data.taxes.breakdown) {
+      doc.fontSize(14).text('Tax Breakdown', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(10);
+      Object.entries(data.taxes.breakdown).forEach(([taxName, amount]: [string, any]) => {
+        doc.text(`${taxName}: ${amount}`, { indent: 20 });
+      });
+      doc.text(`Total Taxes: ${data.taxes.total || 0}`, { indent: 20, bold: true });
+      doc.moveDown(1);
+    }
+
+    // Insurance
+    if (data.insurance && data.insurance.breakdown) {
+      doc.fontSize(14).text('Insurance Breakdown', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(10);
+      Object.entries(data.insurance.breakdown).forEach(([insuranceName, details]: [string, any]) => {
+        const employee = details.employee || 0;
+        const employer = details.employer || 0;
+        const total = employee + employer;
+        doc.text(`${insuranceName}:`, { indent: 20 });
+        doc.text(`  Employee: ${employee}`, { indent: 40 });
+        doc.text(`  Employer: ${employer}`, { indent: 40 });
+        doc.text(`  Total: ${total}`, { indent: 40 });
+      });
+      doc.text(`Total Employee Contributions: ${data.insurance.totalEmployeeContributions || 0}`, { indent: 20, bold: true });
+      doc.text(`Total Employer Contributions: ${data.insurance.totalEmployerContributions || 0}`, { indent: 20, bold: true });
+      doc.text(`Total Insurance: ${data.insurance.total || 0}`, { indent: 20, bold: true });
+      doc.moveDown(1);
+    }
+
+    // Benefits
+    if (data.benefits) {
+      doc.fontSize(14).text('Benefits', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(10);
+      doc.text(`Total Benefits: ${data.benefits.total || 0}`, { indent: 20, bold: true });
+    }
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        resolve(pdfBuffer);
+      });
+      doc.on('error', (error: any) => {
+        reject(new BadRequestException(`Failed to generate PDF: ${error?.message || 'Unknown error'}`));
+      });
+    });
+  }
+
+  /**
+   * Format summary data as PDF
+   */
+  private async formatSummaryAsPDF(data: any, summaryTitle: string): Promise<Buffer> {
+    let PDFDocument: any;
+    try {
+      PDFDocument = require('pdfkit');
+    } catch (e) {
+      throw new BadRequestException(
+        'PDF generation is not available. Please contact system administrator.',
+      );
+    }
+
+    const doc = new PDFDocument({ margin: 50 });
+    const chunks: Buffer[] = [];
+
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+    // Header
+    doc.fontSize(20).text(summaryTitle, { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+    if (data.period) doc.text(`Period: ${data.period}`, { align: 'center' });
+    if (data.startDate) doc.text(`Start Date: ${new Date(data.startDate).toLocaleDateString()}`, { align: 'center' });
+    if (data.endDate) doc.text(`End Date: ${new Date(data.endDate).toLocaleDateString()}`, { align: 'center' });
+    doc.moveDown(1);
+
+    // Summary
+    if (data.summary) {
+      doc.fontSize(14).text('Summary', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(10);
+      Object.entries(data.summary).forEach(([key, value]) => {
+        doc.text(`${key}: ${value}`, { indent: 20 });
+      });
+      doc.moveDown(1);
+    }
+
+    // Employee breakdown (first 50 to avoid PDF being too large)
+    if (data.employees && data.employees.length > 0) {
+      doc.fontSize(14).text('Employee Breakdown', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(9);
+      const employeesToShow = data.employees.slice(0, 50);
+      employeesToShow.forEach((emp: any, index: number) => {
+        const employeeNumber = emp.employee?.employeeNumber || 'N/A';
+        const employeeName = emp.employee ? `${emp.employee.firstName} ${emp.employee.lastName}` : 'N/A';
+        const department = emp.department?.name || 'N/A';
+        const grossSalary = emp.grossSalary || 0;
+        const deductions = emp.deductions || 0;
+        const netPay = emp.netPay || 0;
+        
+        doc.text(`${index + 1}. ${employeeNumber} - ${employeeName} (${department})`, { indent: 20 });
+        doc.text(`   Gross: ${grossSalary} | Deductions: ${deductions} | Net Pay: ${netPay}`, { indent: 40 });
+        doc.moveDown(0.2);
+      });
+      if (data.employees.length > 50) {
+        doc.text(`... and ${data.employees.length - 50} more employees`, { indent: 20, italic: true });
+      }
+      doc.moveDown(1);
+    }
+
+    // Department breakdown
+    if (data.departments && data.departments.length > 0) {
+      doc.fontSize(14).text('Department Breakdown', { underline: true });
+      doc.moveDown(0.3);
+      doc.fontSize(10);
+      data.departments.forEach((dept: any) => {
+        const deptName = dept.department?.name || 'N/A';
+        const empCount = dept.employeeCount || 0;
+        const totalGross = dept.totalGrossSalary || 0;
+        const totalDeductions = dept.totalDeductions || 0;
+        const totalNetPay = dept.totalNetPay || 0;
+        
+        doc.text(`${deptName}:`, { indent: 20, bold: true });
+        doc.text(`  Employees: ${empCount}`, { indent: 40 });
+        doc.text(`  Total Gross Salary: ${totalGross}`, { indent: 40 });
+        doc.text(`  Total Deductions: ${totalDeductions}`, { indent: 40 });
+        doc.text(`  Total Net Pay: ${totalNetPay}`, { indent: 40 });
+        doc.moveDown(0.3);
+      });
+    }
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        resolve(pdfBuffer);
+      });
+      doc.on('error', (error: any) => {
+        reject(new BadRequestException(`Failed to generate PDF: ${error?.message || 'Unknown error'}`));
+      });
+    });
   }
 }

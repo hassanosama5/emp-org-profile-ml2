@@ -155,8 +155,9 @@ export class EmployeeProfileService {
     // This allows transferring already-hashed passwords from candidate → employee
     // Only process if hashedPassword wasn't already set from candidate logic above
     if (!hashedPassword && createEmployeeDto.password) {
-      const isAlreadyHashed = createEmployeeDto.password.startsWith('$2a$') || 
-                               createEmployeeDto.password.startsWith('$2b$');
+      const isAlreadyHashed =
+        createEmployeeDto.password.startsWith('$2a$') ||
+        createEmployeeDto.password.startsWith('$2b$');
       if (isAlreadyHashed) {
         // Password is already hashed (e.g., transferred from candidate)
         hashedPassword = createEmployeeDto.password;
@@ -191,7 +192,7 @@ export class EmployeeProfileService {
     const defaultRole = new this.systemRoleModel({
       _id: new Types.ObjectId(),
       employeeProfileId: savedEmployee._id,
-      roles: [SystemRole.DEPARTMENT_EMPLOYEE],
+      roles: [assignedRole],
       isActive: true,
     });
     await defaultRole.save();
@@ -269,8 +270,60 @@ export class EmployeeProfileService {
       this.employeeModel.countDocuments(filter).exec(),
     ]);
 
+    // Fetch system roles for all employees and attach them
+    const employeeIds = employees.map((emp: any) => {
+      // Handle both ObjectId and string formats
+      return emp._id instanceof Types.ObjectId
+        ? emp._id
+        : new Types.ObjectId(emp._id);
+    });
+
+    const systemRoles = await this.systemRoleModel
+      .find({
+        employeeProfileId: { $in: employeeIds },
+        isActive: true,
+      })
+      .lean()
+      .exec();
+
+    // Create a map of employeeId -> system roles for quick lookup
+    const rolesMap = new Map<
+      string,
+      { roles: SystemRole[]; permissions: string[]; isActive: boolean }
+    >();
+    systemRoles.forEach((role: any) => {
+      const empId = role.employeeProfileId
+        ? role.employeeProfileId instanceof Types.ObjectId
+          ? role.employeeProfileId.toString()
+          : String(role.employeeProfileId)
+        : null;
+      if (empId) {
+        rolesMap.set(empId, {
+          roles: role.roles || [],
+          permissions: role.permissions || [],
+          isActive: role.isActive,
+        });
+      }
+    });
+
+    // Attach system roles to each employee
+    const employeesWithRoles = employees.map((emp: any) => {
+      const empId =
+        emp._id instanceof Types.ObjectId
+          ? emp._id.toString()
+          : String(emp._id);
+      const systemRole = rolesMap.get(empId);
+      return {
+        ...emp,
+        systemRoles: systemRole
+          ? systemRole.roles.map((role: SystemRole) => ({ role }))
+          : [],
+        roles: systemRole ? systemRole.roles : [],
+      };
+    });
+
     return {
-      data: employees,
+      data: employeesWithRoles,
       meta: {
         total,
         page,
@@ -319,7 +372,9 @@ export class EmployeeProfileService {
   }
 
   // Helper method for probationary appraisals
-  async findEmployeesByStatus(status: EmployeeStatus | string): Promise<EmployeeProfile[]> {
+  async findEmployeesByStatus(
+    status: EmployeeStatus | string,
+  ): Promise<EmployeeProfile[]> {
     return this.employeeModel
       .find({ status: status as EmployeeStatus })
       .select('-password')
@@ -328,7 +383,9 @@ export class EmployeeProfileService {
   }
 
   // Helper method to find employees by position
-  async findEmployeesByPosition(positionId: string): Promise<EmployeeProfile[]> {
+  async findEmployeesByPosition(
+    positionId: string,
+  ): Promise<EmployeeProfile[]> {
     return this.employeeModel
       .find({
         primaryPositionId: new Types.ObjectId(positionId),
@@ -398,18 +455,21 @@ export class EmployeeProfileService {
         // In a real system, this would trigger API calls to Payroll and Time Management modules
         console.log(
           `[System Integration] Employee ${updatedEmployee.employeeNumber} status changed from ${employee.status} to ${newStatus}. ` +
-          `Integration points: Payroll module should block payments if TERMINATED/SUSPENDED. ` +
-          `Time Management module should block time tracking if TERMINATED.`,
+            `Integration points: Payroll module should block payments if TERMINATED/SUSPENDED. ` +
+            `Time Management module should block time tracking if TERMINATED.`,
         );
         // Note: Actual API calls to Payroll/Time Management would go here
         // For now, we log the integration point
       }
 
       // System Integration: Log pay grade change for Payroll sync
-      if (updateEmployeeDto.payGradeId && updateEmployeeDto.payGradeId !== employee.payGradeId?.toString()) {
+      if (
+        updateEmployeeDto.payGradeId &&
+        updateEmployeeDto.payGradeId !== employee.payGradeId?.toString()
+      ) {
         console.log(
           `[System Integration] Pay grade changed for employee ${updatedEmployee.employeeNumber}. ` +
-          `Payroll module should update salary calculations.`,
+            `Payroll module should update salary calculations.`,
         );
         // Note: Actual API call to Payroll would go here
       }
@@ -1060,8 +1120,12 @@ export class EmployeeProfileService {
                   delete changes.primaryPositionId;
                 } else {
                   // Convert to ObjectId for MongoDB
-                  changes.primaryPositionId = new Types.ObjectId(changes.primaryPositionId);
-                  console.log(`✅ Valid position ID, converted to ObjectId: ${changes.primaryPositionId}`);
+                  changes.primaryPositionId = new Types.ObjectId(
+                    changes.primaryPositionId,
+                  );
+                  console.log(
+                    `✅ Valid position ID, converted to ObjectId: ${changes.primaryPositionId}`,
+                  );
                 }
               }
 
@@ -1073,8 +1137,12 @@ export class EmployeeProfileService {
                   delete changes.primaryDepartmentId;
                 } else {
                   // Convert to ObjectId for MongoDB
-                  changes.primaryDepartmentId = new Types.ObjectId(changes.primaryDepartmentId);
-                  console.log(`✅ Valid department ID, converted to ObjectId: ${changes.primaryDepartmentId}`);
+                  changes.primaryDepartmentId = new Types.ObjectId(
+                    changes.primaryDepartmentId,
+                  );
+                  console.log(
+                    `✅ Valid department ID, converted to ObjectId: ${changes.primaryDepartmentId}`,
+                  );
                 }
               }
 

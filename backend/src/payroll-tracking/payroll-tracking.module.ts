@@ -11,6 +11,7 @@ import { EmployeeProfileModule } from '../employee-profile/employee-profile.modu
 import { LeavesModule } from '../leaves/leaves.module';
 import { TimeManagementModule } from '../time-management/time-management.module';
 import { OrganizationStructureModule } from '../organization-structure/organization-structure.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import {
   EmployeeProfile,
   EmployeeProfileSchema,
@@ -28,6 +29,7 @@ import {
   EmployeeSystemRole,
   EmployeeSystemRoleSchema,
 } from '../employee-profile/models/employee-system-role.schema';
+import { NotificationLogSchema } from '../time-management/models/notification-log.schema';
 
 /**
  * Payroll Tracking Module
@@ -46,6 +48,7 @@ import {
     LeavesModule, // For leave encashment and unpaid leave data (REQ-PY-5, REQ-PY-11)
     forwardRef(() => TimeManagementModule), // For attendance records and time exceptions (REQ-PY-10)
     OrganizationStructureModule, // For department reports (REQ-PY-38)
+    NotificationsModule, // For sending notifications to users
     // Circular dependency with PayrollExecutionModule (both reference each other)
     forwardRef(() => PayrollExecutionModule),
     // Mongoose schemas registration
@@ -70,6 +73,8 @@ import {
       { name: PositionAssignment.name, schema: PositionAssignmentSchema },
       // EmployeeSystemRole for role-based authorization
       { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
+      // NotificationLog for notifications
+      { name: 'NotificationLog', schema: NotificationLogSchema },
     ]),
   ],
   controllers: [PayrollTrackingController],

@@ -238,110 +238,222 @@ export default function LeavePoliciesPage() {
         onClose={hideToast}
       />
 
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Leave Policies</h1>
-          <p className="text-gray-600 mt-1">
-            Configure accrual rates, carry-over, and eligibility rules
-          </p>
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-3 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">Leave Policies</h1>
+            <p className="text-gray-600 mt-1">
+              Configure accrual rates, carry-over, and eligibility rules
+            </p>
+          </div>
         </div>
-        <Button onClick={handleOpenCreate}>Create Policy</Button>
+        <div className="flex justify-end mt-4">
+          <Button 
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Policy
+          </Button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500">Loading...</p>
-        </div>
-      ) : policies.length === 0 ? (
-        <Card>
+        <Card className="border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50">
           <CardContent className="py-12 text-center">
-            <p className="text-gray-500 mb-4">
-              No policies found. Create your first policy to get started.
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-400 to-blue-500 rounded-full mb-4 animate-pulse">
+              <svg className="w-8 h-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <p className="text-indigo-700 font-semibold text-lg">Loading policies...</p>
+          </CardContent>
+        </Card>
+      ) : policies.length === 0 ? (
+        <Card className="border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50">
+          <CardContent className="py-12 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-400 to-blue-500 rounded-full mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-gray-700 font-medium text-lg mb-2">
+              No policies found
             </p>
-            <Button onClick={handleOpenCreate}>Create Policy</Button>
+            <p className="text-gray-500 mb-6">
+              Create your first policy to get started.
+            </p>
+            <Button 
+              onClick={handleOpenCreate}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Policy
+            </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Leave Type</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Accrual Method</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Monthly Rate</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Yearly Rate</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Max Carry Forward</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Min Notice Days</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Eligibility Rules</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {policies.map((policy) => (
-                <tr key={policy._id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">
-                    {leaveTypes.find((t) => t._id === policy.leaveTypeId.toString())?.name || policy.leaveTypeId}
-                  </td>
-                  <td className="py-3 px-4 capitalize">{policy.accrualMethod}</td>
-                  <td className="py-3 px-4">{policy.monthlyRate}</td>
-                  <td className="py-3 px-4">{policy.yearlyRate}</td>
-                  <td className="py-3 px-4">{policy.maxCarryForward}</td>
-                  <td className="py-3 px-4">{policy.minNoticeDays}</td>
-                  <td className="py-3 px-4">
-                    {policy.eligibility ? (
-                      <div className="text-xs space-y-1">
-                        {policy.eligibility.minTenureMonths && (
-                          <div className="text-gray-600">
-                            Min Tenure: {policy.eligibility.minTenureMonths} months
+        <Card className="border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <CardTitle className="text-white text-xl">Leave Policies Management</CardTitle>
+                <CardDescription className="text-indigo-100">
+                  {policies.length} polic{policies.length !== 1 ? 'ies' : 'y'} configured
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gradient-to-r from-indigo-100 to-blue-100 border-b-2 border-indigo-300">
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Leave Type</th>
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Accrual Method</th>
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Monthly Rate</th>
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Yearly Rate</th>
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Max Carry Forward</th>
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Min Notice Days</th>
+                    <th className="text-left py-4 px-6 font-bold text-indigo-900">Eligibility Rules</th>
+                    <th className="text-right py-4 px-6 font-bold text-indigo-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {policies.map((policy, index) => {
+                    const isEven = index % 2 === 0;
+                    const leaveTypeName = leaveTypes.find((t) => t._id === policy.leaveTypeId.toString())?.name || policy.leaveTypeId;
+                    return (
+                      <tr 
+                        key={policy._id} 
+                        className={`border-b border-indigo-100 transition-all duration-200 ${
+                          isEven 
+                            ? 'bg-white hover:bg-gradient-to-r hover:from-indigo-50 hover:to-blue-50' 
+                            : 'bg-gradient-to-r from-indigo-50/50 to-blue-50/50 hover:bg-gradient-to-r hover:from-indigo-100 hover:to-blue-100'
+                        }`}
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-gradient-to-br from-indigo-400 to-blue-500 rounded-lg">
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <span className="font-bold text-gray-900 capitalize">{leaveTypeName}</span>
                           </div>
-                        )}
-                        {Array.isArray(policy.eligibility.positionsAllowed) &&
-                          policy.eligibility.positionsAllowed.length > 0 && (
-                            <div className="text-gray-600">
-                              Positions: {policy.eligibility.positionsAllowed.join(", ")}
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 capitalize">
+                            {policy.accrualMethod}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="font-semibold text-gray-900">{policy.monthlyRate}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="font-semibold text-gray-900">{policy.yearlyRate}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="font-semibold text-gray-900">{policy.maxCarryForward}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gradient-to-r from-orange-100 to-amber-100 text-orange-800">
+                            {policy.minNoticeDays} day{policy.minNoticeDays !== 1 ? 's' : ''}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          {policy.eligibility ? (
+                            <div className="text-xs space-y-1.5">
+                              {policy.eligibility.minTenureMonths && (
+                                <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 font-medium">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  Min Tenure: {policy.eligibility.minTenureMonths} months
+                                </div>
+                              )}
+                              {Array.isArray(policy.eligibility.positionsAllowed) &&
+                                policy.eligibility.positionsAllowed.length > 0 && (
+                                  <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 font-medium">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    Positions: {policy.eligibility.positionsAllowed.join(", ")}
+                                  </div>
+                                )}
+                              {Array.isArray(policy.eligibility.contractTypesAllowed) &&
+                                policy.eligibility.contractTypesAllowed.length > 0 && (
+                                  <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-800 font-medium">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Contracts: {policy.eligibility.contractTypesAllowed.join(", ")}
+                                  </div>
+                                )}
+                              {!policy.eligibility.minTenureMonths &&
+                                (!Array.isArray(policy.eligibility.positionsAllowed) ||
+                                  policy.eligibility.positionsAllowed.length === 0) &&
+                                (!Array.isArray(policy.eligibility.contractTypesAllowed) ||
+                                  policy.eligibility.contractTypesAllowed.length === 0) && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 italic text-xs">
+                                    No restrictions
+                                  </span>
+                                )}
                             </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 italic text-xs">
+                              No restrictions
+                            </span>
                           )}
-                        {Array.isArray(policy.eligibility.contractTypesAllowed) &&
-                          policy.eligibility.contractTypesAllowed.length > 0 && (
-                            <div className="text-gray-600">
-                              Contracts: {policy.eligibility.contractTypesAllowed.join(", ")}
-                            </div>
-                          )}
-                        {!policy.eligibility.minTenureMonths &&
-                          (!Array.isArray(policy.eligibility.positionsAllowed) ||
-                            policy.eligibility.positionsAllowed.length === 0) &&
-                          (!Array.isArray(policy.eligibility.contractTypesAllowed) ||
-                            policy.eligibility.contractTypesAllowed.length === 0) && (
-                            <div className="text-gray-400 italic">No restrictions</div>
-                          )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-xs italic">No restrictions</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEdit(policy)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenDelete(policy)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEdit(policy)}
+                              className="border-indigo-300 text-indigo-700 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-blue-50 hover:border-indigo-400 transition-all duration-200"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenDelete(policy)}
+                              className="border-red-300 text-red-700 hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 hover:border-red-400 transition-all duration-200"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Create/Edit Modal */}
@@ -524,13 +636,13 @@ export default function LeavePoliciesPage() {
                                 ],
                               });
                             } else {
-                              setEligibilityData({
-                                ...eligibilityData,
+                    setEligibilityData({
+                      ...eligibilityData,
                                 positionsAllowed: eligibilityData.positionsAllowed.filter(
                                   (code) => code !== position.code
                                 ),
                               });
-                            }
+                  }
                           }}
                           className="mr-2"
                         />

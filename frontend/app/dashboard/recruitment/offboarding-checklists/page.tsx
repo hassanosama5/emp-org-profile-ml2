@@ -35,6 +35,9 @@ import { Toast, useToast } from "@/components/leaves/Toast";
 // OFF-010: Multi-department exit clearance sign-offs
 // BR 13(a,b,c): Clearance checklist required across departments
 // ============================================================================
+// CHANGED: Merged FACILITIES and ADMIN into HR_EMPLOYEE
+// Note: Items should dynamically match what was assigned during onboarding
+// ============================================================================
 const DEPARTMENT_ITEMS: { [key: string]: string[] } = {
   // LINE_MANAGER (Department Head) - Work transition & handover
   LINE_MANAGER: [
@@ -52,33 +55,30 @@ const DEPARTMENT_ITEMS: { [key: string]: string[] } = {
     "System login credentials deactivated",
     "Software licenses recovered",
     "Shared drive access removed",
-    "Company laptop collected",
-    "Mobile phone/device collected",
+    "Company laptop collected (if issued)",
+    "Mobile phone/device collected (if issued)",
   ],
   
   // FINANCE (Finance Staff/Payroll) - Financial clearance
   FINANCE: [
     "Expense reports submitted and cleared",
-    "Company credit card returned",
+    "Company credit card returned (if issued)",
     "Outstanding loans/advances settled",
     "Petty cash accounted for",
     "Travel advances cleared",
     "Final salary calculation prepared",
   ],
   
-  // FACILITIES (HR Employee) - Physical workspace clearance
-  FACILITIES: [
+  // HR_EMPLOYEE - Combined FACILITIES + ADMIN items
+  // Physical workspace, ID, and access items (all handled by HR Employee)
+  HR_EMPLOYEE: [
     "Desk/Workspace cleared and cleaned",
-    "Parking pass/permit returned",
+    "Parking pass/permit returned (if issued)",
     "Building access card deactivated",
-    "Office keys returned",
-  ],
-  
-  // ADMIN (HR Employee) - ID & physical access items
-  ADMIN: [
+    "Office keys returned (if issued)",
     "Employee ID badge returned",
-    "Access cards/Key fobs returned",
-    "Locker cleared and key returned",
+    "Access cards/Key fobs returned (if issued)",
+    "Locker cleared and key returned (if assigned)",
     "Company uniform returned (if applicable)",
     "Business cards collected",
   ],
@@ -127,13 +127,13 @@ export default function OffboardingChecklistsPage() {
                          userRoles.includes(SystemRole.PAYROLL_SPECIALIST);
 
   // Department permissions - who can UPDATE which department
+  // CHANGED: Merged FACILITIES + ADMIN into HR_EMPLOYEE
   const canUpdateDepartment = (department: string): boolean => {
     switch (department.toUpperCase()) {
       case 'HR': return isHRManager;
       case 'IT': return isSystemAdmin;
       case 'FINANCE': return isFinanceStaff;
-      case 'FACILITIES': return isHREmployee;
-      case 'ADMIN': return isHREmployee;
+      case 'HR_EMPLOYEE': return isHREmployee;
       case 'LINE_MANAGER': return isDepartmentHead;
       default: return false;
     }
@@ -141,6 +141,7 @@ export default function OffboardingChecklistsPage() {
 
   // Get departments visible to current user
   // HR Manager sees ALL departments, others see only their own
+  // CHANGED: Merged FACILITIES + ADMIN into HR_EMPLOYEE
   const getVisibleDepartments = (): string[] => {
     if (isHRManager) {
       return Object.keys(DEPARTMENT_ITEMS); // HR Manager sees all
@@ -151,10 +152,7 @@ export default function OffboardingChecklistsPage() {
     if (isSystemAdmin) visible.push('IT');
     if (isDepartmentHead) visible.push('LINE_MANAGER');
     if (isFinanceStaff) visible.push('FINANCE');
-    if (isHREmployee) {
-      visible.push('FACILITIES');
-      visible.push('ADMIN');
-    }
+    if (isHREmployee) visible.push('HR_EMPLOYEE');
     return visible;
   };
 
@@ -341,13 +339,13 @@ export default function OffboardingChecklistsPage() {
   };
 
   // Get department icon
+  // CHANGED: Merged FACILITIES + ADMIN into HR_EMPLOYEE
   const getDepartmentIcon = (department: string) => {
     switch (department?.toUpperCase()) {
       case "IT": return "💻";
       case "HR": return "👤";
       case "FINANCE": return "💰";
-      case "FACILITIES": return "🏢";
-      case "ADMIN": return "📋";
+      case "HR_EMPLOYEE": return "🏢";
       case "LINE_MANAGER": return "👔";
       default: return "📁";
     }

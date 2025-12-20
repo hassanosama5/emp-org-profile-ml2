@@ -6,6 +6,9 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { recruitmentApi } from "@/lib/api/recruitment/recruitment";
+import { departmentsApi } from "@/lib/api/organization-structure/departments.api";
+import { positionsApi } from "@/lib/api/organization-structure/positions.api";
+import { DepartmentResponseDto, PositionResponseDto } from "@/types/organization-structure";
 import {
   Application,
   ApplicationStatus,
@@ -21,9 +24,35 @@ import { Textarea } from "@/components/leaves/Textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { Input } from "@/components/shared/ui/Input";
+import { Select } from "@/components/leaves/Select";
 import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
+
+// Helper function to extract job details from application
+const getJobDetails = (application: Application | null) => {
+  if (!application) {
+    return { title: "Unknown Position", department: "Unknown Department", location: "Unknown Location" };
+  }
+  const app = application as any;
+  const title = 
+    app.requisitionId?.templateId?.title ||
+    app.requisitionId?.template?.title ||
+    app.requisition?.templateId?.title ||
+    app.requisition?.template?.title ||
+    "Unknown Position";
+  const department = 
+    app.requisitionId?.templateId?.department ||
+    app.requisitionId?.template?.department ||
+    app.requisition?.templateId?.department ||
+    app.requisition?.template?.department ||
+    "Unknown Department";
+  const location = 
+    app.requisitionId?.location ||
+    app.requisition?.location ||
+    "Unknown Location";
+  return { title, department, location };
+};
 
 export default function JobOffersApprovalsPage() {
   const { user } = useAuth();
@@ -58,7 +87,20 @@ export default function JobOffersApprovalsPage() {
     startDate: "",
     workEmail: "",
     employeeNumber: "",
+    // CHANGED - Added fields to integrate with employee-profile subsystem
+    contractType: undefined,
+    workType: undefined,
+    primaryDepartmentId: undefined,
+    supervisorPositionId: undefined,
   });
+  
+  // CHANGED - State for organization structure data (departments & positions)
+  const [departments, setDepartments] = useState<DepartmentResponseDto[]>([]);
+  const [positions, setPositions] = useState<PositionResponseDto[]>([]);
+  const [loadingOrgData, setLoadingOrgData] = useState(false);
+  
+  // CHANGED - State for CV viewing
+  const [viewingResume, setViewingResume] = useState<string | null>(null);
   
   // ONB-002: Contract status tracking - HR needs to see if candidate uploaded contract
   const [contractStatuses, setContractStatuses] = useState<Record<string, {
@@ -66,6 +108,9 @@ export default function JobOffersApprovalsPage() {
     hasSignedDocument: boolean;
     message: string;
   }>>({});
+  
+  // CHANGED - Track which applications already have employees created (prevent duplicates)
+  const [employeeExistsMap, setEmployeeExistsMap] = useState<Record<string, boolean>>({});
 
   // =============================================================
   // SORTING AND FILTERING STATE
@@ -113,6 +158,26 @@ export default function JobOffersApprovalsPage() {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // CHANGED - Load organization structure data (departments & positions)
+  useEffect(() => {
+    const loadOrgData = async () => {
+      try {
+        setLoadingOrgData(true);
+        const [depts, pos] = await Promise.all([
+          departmentsApi.getAllDepartments(),
+          positionsApi.getAllPositions(),
+        ]);
+        setDepartments(depts);
+        setPositions(pos);
+      } catch (error) {
+        console.error("Failed to load organization data:", error);
+      } finally {
+        setLoadingOrgData(false);
+      }
+    };
+    loadOrgData();
   }, []);
 
   // =============================================================
@@ -164,10 +229,9 @@ export default function JobOffersApprovalsPage() {
       // =============================================================
       const jobsMap = new Map<string, string>();
       offerApps.forEach((app) => {
-        const reqId = app.requisitionId || (app.requisition as any)?._id;
-        const jobTitle = app.requisition?.template?.title || 
-                        (typeof app.requisition === 'object' && (app.requisition as any)?.template?.title) ||
-                        "Unknown Position";
+        const appAny = app as any;
+        const reqId = appAny.requisitionId?._id || app.requisitionId || (app.requisition as any)?._id;
+        const jobTitle = getJobDetails(app).title;
         if (reqId) {
           jobsMap.set(reqId, jobTitle);
         }
@@ -249,9 +313,11 @@ export default function JobOffersApprovalsPage() {
               }
             }
           } catch (error: any) {
-            // "Offer not found" is expected if offer doesn't exist yet - silently skip
+            // 404 "Offer not found" is expected if offer doesn't exist yet - silently skip
+            // This can happen for applications with status "offer" that haven't had offers created yet
+            const status = error?.response?.status;
             const errorMessage = error?.message || '';
-            if (!errorMessage.toLowerCase().includes('not found')) {
+            if (status !== 404 && !errorMessage.toLowerCase().includes('not found')) {
               console.error(`Error loading offer for application ${app._id}:`, error);
             }
           }
@@ -259,6 +325,21 @@ export default function JobOffersApprovalsPage() {
       }
       setOffers(offerMap);
       setContractStatuses(contractStatusMap);
+      
+      // CHANGED - Check which applications already have employees created
+      const employeeStatusMap: Record<string, boolean> = {};
+      for (const app of offerApps) {
+        if (app.status === "hired" || offers[app._id]) {
+          try {
+            const employeeStatus = await recruitmentApi.checkEmployeeExistsForApplication(app._id);
+            employeeStatusMap[app._id] = employeeStatus.employeeExists;
+          } catch (e) {
+            // If check fails, assume no employee exists yet
+            employeeStatusMap[app._id] = false;
+          }
+        }
+      }
+      setEmployeeExistsMap(employeeStatusMap);
     } catch (error: any) {
       showToast(error.message || "Failed to load data", "error");
     } finally {
@@ -595,9 +676,106 @@ export default function JobOffersApprovalsPage() {
   };
 
   const getJobTitle = (application: Application): string => {
-    return application.requisition?.template?.title || 
-           (typeof application.requisition === 'object' && application.requisition?.template?.title) ||
-           "Unknown Position";
+    return getJobDetails(application).title;
+  };
+
+  // CHANGED - Get candidate's resume URL from application
+  const getCandidateResumeUrl = (application: Application): string | null => {
+    const candidate = application.candidate || 
+                     (typeof application.candidateId === 'object' ? application.candidateId : null);
+    return candidate?.resumeUrl || null;
+  };
+
+  // CHANGED - Handle viewing candidate's CV/Resume
+  const handleViewResume = async (application: Application) => {
+    const resumeUrl = getCandidateResumeUrl(application);
+    
+    if (!resumeUrl) {
+      showToast("No CV/Resume available for this candidate", "error");
+      return;
+    }
+
+    try {
+      setViewingResume(application._id);
+      const trimmedUrl = resumeUrl.trim();
+      
+      // Case 1: Full URL (http:// or https://) - open directly in new tab
+      if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+        const newWindow = window.open(trimmedUrl, '_blank');
+        if (!newWindow) {
+          showToast("Popup blocked. Please allow popups to view the CV.", "error");
+          setViewingResume(null);
+          return;
+        }
+        showToast("Opening CV in new tab...", "success");
+        setViewingResume(null);
+        return;
+      }
+      
+      // Case 2: File path (starts with / or contains uploads) - fetch with auth and open
+      if (trimmedUrl.startsWith("/") || trimmedUrl.includes("uploads")) {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+        
+        const baseUrl = API_BASE_URL.replace('/api/v1', '');
+        const fullUrl = `${baseUrl}${trimmedUrl.startsWith('/') ? trimmedUrl : '/' + trimmedUrl}`;
+        
+        const response = await fetch(fullUrl, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch CV: ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        const newWindow = window.open(blobUrl, '_blank');
+        if (!newWindow) {
+          window.URL.revokeObjectURL(blobUrl);
+          showToast("Popup blocked. Please allow popups to view the CV.", "error");
+          setViewingResume(null);
+          return;
+        }
+        
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+        showToast("Opening CV in new tab...", "success");
+        setViewingResume(null);
+        return;
+      }
+      
+      // Case 3: Document ID (MongoDB ObjectId format) - use document API
+      if (/^[0-9a-fA-F]{24}$/.test(trimmedUrl)) {
+        try {
+          const blob = await recruitmentApi.downloadDocument(trimmedUrl);
+          const blobUrl = window.URL.createObjectURL(blob);
+          
+          const newWindow = window.open(blobUrl, '_blank');
+          if (!newWindow) {
+            window.URL.revokeObjectURL(blobUrl);
+            showToast("Popup blocked. Please allow popups to view the CV.", "error");
+            setViewingResume(null);
+            return;
+          }
+          
+          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+          showToast("Opening CV in new tab...", "success");
+          setViewingResume(null);
+          return;
+        } catch (docError: any) {
+          console.error("Error fetching document:", docError);
+          throw new Error("Failed to retrieve CV. It may have been deleted or is inaccessible.");
+        }
+      }
+      
+      throw new Error("Unrecognized CV URL format. Please contact support.");
+      
+    } catch (error: any) {
+      console.error("Error viewing CV:", error);
+      showToast(error.message || "Failed to view CV", "error");
+      setViewingResume(null);
+    }
   };
 
   // =============================================================
@@ -613,6 +791,11 @@ export default function JobOffersApprovalsPage() {
       startDate: new Date().toISOString().split('T')[0],
       workEmail: `${candidateName.toLowerCase().replace(/\s+/g, '.')}@company.com`,
       employeeNumber: suggestedEmployeeNumber,
+      // CHANGED - Initialize new fields for employee-profile integration
+      contractType: undefined,
+      workType: undefined,
+      primaryDepartmentId: undefined,
+      supervisorPositionId: undefined,
     });
     setIsCreateEmployeeModalOpen(true);
   };
@@ -861,6 +1044,19 @@ export default function JobOffersApprovalsPage() {
                       >
                         View Details
                       </Button>
+                      {/* CHANGED - Added View CV button in card */}
+                      {getCandidateResumeUrl(application) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewResume(application)}
+                          disabled={viewingResume === application._id}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="View Candidate CV"
+                        >
+                          {viewingResume === application._id ? "..." : "📄"}
+                        </Button>
+                      )}
                       {needsReview && !offer && (
                         <>
                           <Button
@@ -911,9 +1107,11 @@ export default function JobOffersApprovalsPage() {
                       )}
                       {/* ONB-002: Create Employee button - shows when offer is ACCEPTED + APPROVED */}
                       {/* Contract must be uploaded by candidate before HR can create employee */}
+                      {/* CHANGED - Hide button if employee already exists to prevent duplicates */}
                       {offer && 
                         offer.applicantResponse === OfferResponseStatus.ACCEPTED && 
-                        offer.finalStatus === OfferFinalStatus.APPROVED && (
+                        offer.finalStatus === OfferFinalStatus.APPROVED && 
+                        !employeeExistsMap[application._id] && (
                         (() => {
                           const contractStatus = contractStatuses[offer._id];
                           const hasContract = contractStatus?.hasSignedDocument;
@@ -941,6 +1139,15 @@ export default function JobOffersApprovalsPage() {
                             </div>
                           );
                         })()
+                      )}
+                      {/* CHANGED - Show "Employee Created" indicator when employee already exists */}
+                      {offer && 
+                        offer.applicantResponse === OfferResponseStatus.ACCEPTED && 
+                        offer.finalStatus === OfferFinalStatus.APPROVED && 
+                        employeeExistsMap[application._id] && (
+                        <div className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                          ✓ Employee profile already created
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -975,6 +1182,23 @@ export default function JobOffersApprovalsPage() {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Application Status</label>
                   <StatusBadge status={selectedApplication.status} />
+                </div>
+                {/* CHANGED - Added View CV button */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700">CV/Resume</label>
+                  {getCandidateResumeUrl(selectedApplication) ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewResume(selectedApplication)}
+                      disabled={viewingResume === selectedApplication._id}
+                      className="mt-1 text-blue-600 hover:text-blue-700"
+                    >
+                      {viewingResume === selectedApplication._id ? "Opening..." : "📄 View CV"}
+                    </Button>
+                  ) : (
+                    <p className="text-gray-500 text-sm">No CV uploaded</p>
+                  )}
                 </div>
               </div>
 
@@ -1574,6 +1798,126 @@ export default function JobOffersApprovalsPage() {
                 />
               </div>
 
+              {/* CHANGED - Added Contract Type and Work Type fields */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium text-gray-900 mb-3">📋 Employment Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Contract Type *
+                    </label>
+                    <Select
+                      value={employeeForm.contractType || ""}
+                      onChange={(e) => setEmployeeForm({ 
+                        ...employeeForm, 
+                        contractType: e.target.value as 'FULL_TIME_CONTRACT' | 'PART_TIME_CONTRACT' || undefined 
+                      })}
+                      options={[
+                        { value: "", label: "Select contract type" },
+                        { value: "FULL_TIME_CONTRACT", label: "Full-Time Contract" },
+                        { value: "PART_TIME_CONTRACT", label: "Part-Time Contract" },
+                      ]}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Work Type *
+                    </label>
+                    <Select
+                      value={employeeForm.workType || ""}
+                      onChange={(e) => setEmployeeForm({ 
+                        ...employeeForm, 
+                        workType: e.target.value as 'FULL_TIME' | 'PART_TIME' || undefined 
+                      })}
+                      options={[
+                        { value: "", label: "Select work type" },
+                        { value: "FULL_TIME", label: "Full-Time" },
+                        { value: "PART_TIME", label: "Part-Time" },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* CHANGED - Added Department and Supervisor fields */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium text-gray-900 mb-3">🏢 Organization Assignment</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Department *
+                    </label>
+                    <Select
+                      value={employeeForm.primaryDepartmentId || ""}
+                      onChange={(e) => setEmployeeForm({ ...employeeForm, primaryDepartmentId: e.target.value || undefined })}
+                      disabled={loadingOrgData}
+                      options={[
+                        { value: "", label: loadingOrgData ? "Loading departments..." : "Select department" },
+                        ...departments.map((dept) => ({
+                          value: dept._id,
+                          label: dept.name,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Supervisor Position
+                    </label>
+                    <Select
+                      value={employeeForm.supervisorPositionId || ""}
+                      onChange={(e) => setEmployeeForm({ ...employeeForm, supervisorPositionId: e.target.value || undefined })}
+                      disabled={loadingOrgData}
+                      options={[
+                        { value: "", label: loadingOrgData ? "Loading positions..." : "Select supervisor (optional)" },
+                        ...positions.map((pos) => ({
+                          value: pos._id,
+                          label: pos.title,
+                        })),
+                      ]}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Who this employee will report to
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CHANGED - Added System Role selection for new employees */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium text-gray-900 mb-3">🔐 System Access & Role</h4>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    System Role *
+                  </label>
+                  <Select
+                    value={employeeForm.systemRole || ""}
+                    onChange={(e) => setEmployeeForm({ 
+                      ...employeeForm, 
+                      systemRole: e.target.value as any || undefined 
+                    })}
+                    options={[
+                      { value: "", label: "Auto-detect from job title (recommended)" },
+                      { value: "department employee", label: "Department Employee (Default)" },
+                      { value: "department head", label: "Department Head" },
+                      { value: "HR Manager", label: "HR Manager" },
+                      { value: "HR Employee", label: "HR Employee" },
+                      { value: "HR Admin", label: "HR Admin" },
+                      { value: "Payroll Manager", label: "Payroll Manager" },
+                      { value: "Payroll Specialist", label: "Payroll Specialist" },
+                      { value: "System Admin", label: "System Admin" },
+                      { value: "Legal & Policy Admin", label: "Legal & Policy Admin" },
+                      { value: "Recruiter", label: "Recruiter" },
+                      { value: "Finance Staff", label: "Finance Staff" },
+                    ]}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Determines what dashboards and features this employee can access. 
+                    Leave as "Auto-detect" to let the system determine based on job title.
+                  </p>
+                </div>
+              </div>
+
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-sm text-blue-800">
                   ℹ️ The new employee will be able to log in using the Employee Number above with the same password they used during the application process.
@@ -1595,7 +1939,15 @@ export default function JobOffersApprovalsPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={creatingEmployee || !employeeForm.employeeNumber || !employeeForm.workEmail || !employeeForm.startDate}
+                  disabled={
+                    creatingEmployee || 
+                    !employeeForm.employeeNumber || 
+                    !employeeForm.workEmail || 
+                    !employeeForm.startDate ||
+                    !employeeForm.contractType ||
+                    !employeeForm.workType ||
+                    !employeeForm.primaryDepartmentId
+                  }
                   className="bg-green-600 hover:bg-green-700"
                 >
                   {creatingEmployee ? "Creating Employee..." : "Create Employee & Start Onboarding"}

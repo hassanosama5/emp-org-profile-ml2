@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { timeManagementApi } from "@/lib/api/time-management/time-management.api";
 import {
@@ -238,7 +239,16 @@ export default function AttendanceCorrectionsPage() {
   const isLoading = viewMode === "all" ? loading : loadingPending;
 
   return (
-    <div className="container mx-auto px-6 py-8">
+    <ProtectedRoute
+      allowedRoles={[
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_MANAGER,
+        SystemRole.DEPARTMENT_HEAD,
+        SystemRole.SYSTEM_ADMIN,
+        SystemRole.DEPARTMENT_EMPLOYEE, // Employees can view their own requests
+      ]}
+    >
+      <div className="container mx-auto px-6 py-8">
       <Toast
         message={toast.message}
         type={toast.type}
@@ -622,7 +632,8 @@ export default function AttendanceCorrectionsPage() {
       </Modal>
         </>
       )}
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }
 

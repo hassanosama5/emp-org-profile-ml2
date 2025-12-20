@@ -25,6 +25,32 @@ import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
 
+// Helper function to extract job details from application
+const getJobDetails = (application: any) => {
+  if (!application) {
+    return { title: "Unknown Position", department: "Unknown Department", location: "Unknown Location" };
+  }
+  const app = application as any;
+  const title = 
+    app.requisitionId?.templateId?.title ||
+    app.requisitionId?.template?.title ||
+    app.requisition?.templateId?.title ||
+    app.requisition?.template?.title ||
+    app.requisition?.title ||
+    "Unknown Position";
+  const department = 
+    app.requisitionId?.templateId?.department ||
+    app.requisitionId?.template?.department ||
+    app.requisition?.templateId?.department ||
+    app.requisition?.template?.department ||
+    "Unknown Department";
+  const location = 
+    app.requisitionId?.location ||
+    app.requisition?.location ||
+    "Unknown Location";
+  return { title, department, location };
+};
+
 export default function HRInterviewsPage() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
@@ -61,18 +87,10 @@ export default function HRInterviewsPage() {
     });
   };
   
-  // Users can submit feedback if they have the right role AND are in the panel
+  // CHANGED: ANY user who is in the panel can submit feedback - no role restriction
+  // If you're a panel member, you can submit feedback regardless of your role
   const canUserSubmitFeedback = (interview: any): boolean => {
-    // First check if user has the required role
-    const hasRequiredRole = user?.roles?.some(
-      (role) => ["hr employee", "hr manager", "system admin", "recruiter"].includes(String(role).toLowerCase())
-    );
-    
-    if (!hasRequiredRole) {
-      return false;
-    }
-    
-    // Then check if user is actually in the panel
+    // Only check if user is in the panel - no role restriction
     return isUserInPanel(interview);
   };
   const [scheduleForm, setScheduleForm] = useState<ScheduleInterviewDto>({
@@ -113,12 +131,36 @@ export default function HRInterviewsPage() {
       setLoading(true);
       const apps = await recruitmentApi.getApplications();
       const filteredApps = apps.filter((app) => app.status === "in_process" || app.status === "submitted");
-      setApplications(filteredApps);
+      
+      // Map applications to have consistent 'requisition' property
+      // Backend returns populated 'requisitionId' with 'templateId' inside
+      const mappedApps = filteredApps.map((app: any) => ({
+        ...app,
+        // Create 'requisition' alias from populated 'requisitionId' for easier access
+        requisition: typeof app.requisitionId === 'object' && app.requisitionId ? {
+          ...app.requisitionId,
+          // Map 'templateId' to 'template' for cleaner access
+          template: app.requisitionId.templateId || app.requisitionId.template
+        } : app.requisition,
+        // Also map candidate from candidateId if populated
+        candidate: typeof app.candidateId === 'object' && app.candidateId ? app.candidateId : app.candidate,
+      }));
+      
+      // Sort applications: Referrals first, then others (for priority interview scheduling)
+      const sortedApps = [...mappedApps].sort((a: any, b: any) => {
+        // Referrals should come first (isReferral = true sorts before false)
+        if (a.isReferral && !b.isReferral) return -1;
+        if (!a.isReferral && b.isReferral) return 1;
+        // If both are referrals or both are not, maintain original order
+        return 0;
+      });
+      
+      setApplications(sortedApps);
       
       // Extract interviews from applications if they exist
       // Backend now returns interviews attached to applications
       const allInterviews: any[] = [];
-      filteredApps.forEach((app: any) => {
+      mappedApps.forEach((app: any) => {
         // Handle both array and undefined/null cases
         if (app.interviews && Array.isArray(app.interviews)) {
           app.interviews.forEach((int: any) => {
@@ -167,6 +209,22 @@ export default function HRInterviewsPage() {
     }
   };
 
+  // CHANGED - Load eligible panel members based on application and interview stage
+  const loadEligiblePanelMembers = async (applicationId: string, stage: string) => {
+    try {
+      setLoadingEmployees(true);
+      const eligibleMembers = await recruitmentApi.getEligiblePanelMembers(applicationId, stage);
+      setEmployees(Array.isArray(eligibleMembers) ? eligibleMembers : []);
+    } catch (error: any) {
+      console.error("Failed to load eligible panel members:", error);
+      showToast("Failed to load eligible panel members", "error");
+      // Fallback to HR employees only
+      await loadEmployees();
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
   const loadPanelFeedback = async (interviewId: string) => {
     try {
       const feedback = await recruitmentApi.getInterviewFeedback(interviewId);
@@ -177,12 +235,13 @@ export default function HRInterviewsPage() {
     }
   };
 
-  const handleOpenSchedule = (application: any) => {
+  const handleOpenSchedule = async (application: any) => {
     setSelectedApplication(application);
+    const defaultStage = ApplicationStage.SCREENING;
     // Don't pre-add current user to panel - they will be added automatically when scheduling
     setScheduleForm({
       applicationId: application._id,
-      stage: ApplicationStage.SCREENING,
+      stage: defaultStage,
       scheduledDate: "",
       method: InterviewMethod.VIDEO,
       panel: [], // Empty - current user added automatically in handleScheduleInterview
@@ -192,6 +251,8 @@ export default function HRInterviewsPage() {
     setScheduleDate("");
     setScheduleTime("");
     setIsScheduleModalOpen(true);
+    // CHANGED - Load eligible panel members based on application and default stage
+    await loadEligiblePanelMembers(application._id, defaultStage);
   };
 
   const handleOpenPanelView = async (application: any, interview: any) => {
@@ -317,8 +378,24 @@ export default function HRInterviewsPage() {
   const loadAssessmentCriteria = async (application: any) => {
     setLoadingCriteria(true);
     try {
-      // Get job requisition ID from application
-      const requisitionId = application.requisitionId || application.requisition?._id;
+      // First try to use already populated requisition data
+      const template = application.requisition?.template;
+      if (template?.skills && template.skills.length > 0) {
+        setAssessmentCriteria(template.skills);
+        setLoadingCriteria(false);
+        return;
+      }
+      if (template?.qualifications && template.qualifications.length > 0) {
+        setAssessmentCriteria(template.qualifications.slice(0, 5));
+        setLoadingCriteria(false);
+        return;
+      }
+
+      // Fallback: Get job requisition ID from application and fetch
+      const requisitionId = typeof application.requisitionId === 'object' 
+        ? application.requisitionId?._id 
+        : application.requisitionId || application.requisition?._id;
+      
       if (!requisitionId) {
         // No requisition, use default criteria
         setAssessmentCriteria(["Technical Skills", "Communication", "Problem Solving", "Cultural Fit"]);
@@ -327,11 +404,16 @@ export default function HRInterviewsPage() {
 
       // Fetch job requisition to get template
       const jobRequisitions = await recruitmentApi.getJobRequisitions();
-      const job = jobRequisitions.find((j: any) => j._id === requisitionId);
+      const job = jobRequisitions.find((j: any) => 
+        j._id === requisitionId || j._id === String(requisitionId)
+      );
       
       if (job?.template?.skills && job.template.skills.length > 0) {
         // Use skills from job template as assessment criteria
         setAssessmentCriteria(job.template.skills);
+      } else if (typeof job?.templateId === 'object' && job.templateId?.skills && (job.templateId as any).skills.length > 0) {
+        // Backend might return templateId as populated object instead of template
+        setAssessmentCriteria((job.templateId as any).skills);
       } else if (job?.template?.qualifications && job.template.qualifications.length > 0) {
         // Fallback to qualifications if no skills defined
         setAssessmentCriteria(job.template.qualifications.slice(0, 5));
@@ -348,30 +430,98 @@ export default function HRInterviewsPage() {
     }
   };
 
+  // State to track if user has existing feedback
+  const [existingFeedbackLoaded, setExistingFeedbackLoaded] = useState(false);
+  const [isUpdatingFeedback, setIsUpdatingFeedback] = useState(false);
+
   const handleOpenFeedback = async (application: any, interview?: any) => {
     setSelectedApplication(application);
-    // If interview is provided, use it; otherwise try to find the first scheduled interview
-    if (interview) {
-      setSelectedInterview(interview);
-    } else {
-      // Find the first scheduled interview for this application
-      const appInterviews = interviews.filter(
-        (int: any) => int.applicationId === application._id && int.status === 'scheduled'
-      );
+    setExistingFeedbackLoaded(false);
+    setIsUpdatingFeedback(false);
+    
+    let selectedInt = interview;
+    
+    // If interview is provided, use it; otherwise try to find an interview for this application
+    if (!interview) {
+      // Find any interview for this application (scheduled or completed - user may want to add more feedback)
+      // Use string comparison to handle ObjectId comparison issues
+      const applicationIdStr = String(application._id);
+      const appInterviews = interviews.filter((int: any) => {
+        const intAppId = typeof int.applicationId === 'object' 
+          ? int.applicationId?.toString() 
+          : String(int.applicationId);
+        // Accept scheduled, completed, or in_progress interviews
+        return intAppId === applicationIdStr && 
+               ['scheduled', 'completed', 'in_progress'].includes(int.status);
+      });
+      
       if (appInterviews.length > 0) {
-        setSelectedInterview(appInterviews[0]);
+        // Prefer scheduled interviews, then completed
+        const scheduledInterview = appInterviews.find((int: any) => int.status === 'scheduled');
+        selectedInt = scheduledInterview || appInterviews[0];
       } else {
-        setSelectedInterview(null);
+        selectedInt = null;
       }
     }
     
-    // Reset form state
+    setSelectedInterview(selectedInt);
+    
+    // Reset form state first
     setFeedbackForm({ score: 0, comments: "" });
     setSkillScores({});
     setGeneralComments("");
     
     // Load assessment criteria from job template
     await loadAssessmentCriteria(application);
+    
+    // Check if user already submitted feedback and pre-fill the form
+    if (selectedInt?._id) {
+      try {
+        const feedback = await recruitmentApi.getInterviewFeedback(selectedInt._id);
+        const currentUserId = user?.id || user?.userId || (user as any)?._id;
+        
+        // Find current user's feedback
+        const myFeedback = Array.isArray(feedback) 
+          ? feedback.find((fb: any) => {
+              const fbInterviewerId = typeof fb.interviewerId === 'object' 
+                ? fb.interviewerId?.toString() || fb.interviewerId?._id?.toString()
+                : String(fb.interviewerId);
+              return fbInterviewerId === String(currentUserId);
+            })
+          : null;
+        
+        if (myFeedback) {
+          setIsUpdatingFeedback(true);
+          
+          // Try to parse structured comments
+          try {
+            if (myFeedback.comments && myFeedback.comments.startsWith('{')) {
+              const parsed = JSON.parse(myFeedback.comments);
+              if (parsed.skillScores) {
+                setSkillScores(parsed.skillScores);
+              }
+              if (parsed.generalComments) {
+                setGeneralComments(parsed.generalComments);
+              }
+            } else if (myFeedback.comments) {
+              setGeneralComments(myFeedback.comments);
+            }
+          } catch (e) {
+            // Not JSON, use as plain comments
+            if (myFeedback.comments) {
+              setGeneralComments(myFeedback.comments);
+            }
+          }
+          
+          setFeedbackForm({ score: myFeedback.score || 0, comments: myFeedback.comments || "" });
+        }
+        
+        setExistingFeedbackLoaded(true);
+      } catch (error) {
+        console.error("Failed to load existing feedback:", error);
+        setExistingFeedbackLoaded(true);
+      }
+    }
     
     setIsFeedbackModalOpen(true);
   };
@@ -490,7 +640,7 @@ export default function HRInterviewsPage() {
                     <div className="flex-1">
                       {/* CHANGED - Added text-gray-900 for visibility */}
                       <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                        {application.requisition?.template?.title || "Job Opening"}
+                        {getJobDetails(application).title}
                       </h3>
                       {/* CHANGED - Handle candidateId as populated object or string */}
                       <p className="text-sm text-gray-600 mb-2">
@@ -500,6 +650,15 @@ export default function HRInterviewsPage() {
                             ? (application.candidateId as any)?.fullName || (application.candidateId as any)?.firstName || 'Unknown'
                             : application.candidateId || 'Unknown')
                         }
+                        {/* Show star indicator for referred candidates - priority for earlier interview */}
+                        {application.isReferral && (
+                          <span 
+                            className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" 
+                            title="Referred Candidate - Priority for Earlier Interview"
+                          >
+                            ⭐ Referral
+                          </span>
+                        )}
                       </p>
                       <p className="text-sm text-gray-600 mb-2">
                         Status: <StatusBadge status={application.status} type="application" />
@@ -544,7 +703,7 @@ export default function HRInterviewsPage() {
                                             'Unknown'
                                           : 'Loading...';
                                         return (
-                                          <span
+                                          <span 
                                             key={idx}
                                             className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
                                           >
@@ -644,9 +803,14 @@ export default function HRInterviewsPage() {
                 </label>
                 <Select
                   value={scheduleForm.stage}
-                  onChange={(e) =>
-                    setScheduleForm({ ...scheduleForm, stage: e.target.value as ApplicationStage })
-                  }
+                  onChange={(e) => {
+                    const newStage = e.target.value as ApplicationStage;
+                    setScheduleForm({ ...scheduleForm, stage: newStage, panel: [] }); // Reset panel when stage changes
+                    // CHANGED - Reload eligible panel members when stage changes
+                    if (selectedApplication?._id) {
+                      loadEligiblePanelMembers(selectedApplication._id, newStage);
+                    }
+                  }}
                   options={[
                     { value: ApplicationStage.SCREENING, label: "Screening" },
                     { value: ApplicationStage.DEPARTMENT_INTERVIEW, label: "Department Interview" },
@@ -713,14 +877,21 @@ export default function HRInterviewsPage() {
                 </div>
               )}
 
-              {/* Panel Members Selection - HR Employees Only */}
+              {/* CHANGED - Panel Members Selection - Based on Interview Stage */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Panel Members (HR Employees Only) *
+                  Panel Members *
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  Select HR Employees to conduct the interview. You are automatically included.
+                  {scheduleForm.stage === ApplicationStage.DEPARTMENT_INTERVIEW
+                    ? "Select from HR Employees and employees from the job's department. You are automatically included."
+                    : "Select HR Employees to conduct the interview. You are automatically included."}
                 </p>
+                {scheduleForm.stage === ApplicationStage.DEPARTMENT_INTERVIEW && (
+                  <p className="text-xs text-blue-600 mb-2">
+                    💡 Department Interview: Showing HR employees + department employees
+                  </p>
+                )}
                 {loadingEmployees ? (
                   <p className="text-sm text-gray-500">Loading employees...</p>
                 ) : (
@@ -792,8 +963,13 @@ export default function HRInterviewsPage() {
                               <span className="text-sm text-gray-700 flex-1">
                                 {employeeName}
                               </span>
-                              {employee.department && (
-                                <span className="text-xs text-gray-500">
+                              {/* CHANGED - Show badge for HR vs Department employee */}
+                              {employee.isHR ? (
+                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                                  HR
+                                </span>
+                              ) : employee.department && (
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                                   {typeof employee.department === 'object' 
                                     ? employee.department.name 
                                     : employee.department}
@@ -850,8 +1026,15 @@ export default function HRInterviewsPage() {
                 </p>
                 <p className="text-sm text-blue-700">
                   <strong>Position:</strong>{" "}
-                  {selectedApplication.requisition?.template?.title || "Position"}
+                  {getJobDetails(selectedApplication).title}
                 </p>
+                {/* Show interview stage if available */}
+                {selectedInterview?.stage && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    <strong>Interview Stage:</strong>{" "}
+                    {selectedInterview.stage.replace("_", " ").toUpperCase()}
+                  </p>
+                )}
               </div>
             )}
 
@@ -860,6 +1043,16 @@ export default function HRInterviewsPage() {
                 <p className="text-sm text-yellow-800">
                   <strong>Note:</strong> You need to schedule an interview first before submitting feedback. 
                   The interview ID is required to submit feedback.
+                </p>
+              </div>
+            )}
+
+            {/* Show notice if updating existing feedback */}
+            {selectedInterview && isUpdatingFeedback && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>📝 Updating Previous Feedback:</strong> You have already submitted feedback for this interview. 
+                  Your previous scores are pre-filled below. Any changes will update your existing feedback.
                 </p>
               </div>
             )}
@@ -1011,7 +1204,7 @@ export default function HRInterviewsPage() {
                 onClick={handleSubmitFeedback}
                 disabled={!selectedInterview || Object.keys(skillScores).length < assessmentCriteria.length}
               >
-                Submit Assessment
+                {isUpdatingFeedback ? "Update Assessment" : "Submit Assessment"}
               </Button>
             </div>
           </div>

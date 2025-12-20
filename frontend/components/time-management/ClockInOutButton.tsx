@@ -260,7 +260,8 @@ export function ClockInOutButton() {
         return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     };
 
-    if (loading) {
+    // Prevent hydration mismatch: don't render button until hydrated
+    if (loading || !isHydrated) {
         return (
             <div className="bg-white rounded-lg shadow p-6">
                 <div className="animate-pulse">
@@ -307,7 +308,7 @@ export function ClockInOutButton() {
                             <div>
                                 <p className="text-sm text-green-700 font-medium">Currently Clocked In</p>
                                 <p className="text-xs text-green-600 mt-1">
-                                    Since {clockInTime?.toLocaleTimeString()}
+                                    {clockInTime ? `Since ${clockInTime.toLocaleTimeString()}` : 'Since --:--:--'}
                                 </p>
                             </div>
                             <div className="text-2xl font-mono font-bold text-green-700">
@@ -319,7 +320,7 @@ export function ClockInOutButton() {
 
                 <button
                     onClick={isClockedIn ? handleClockOut : handleClockIn}
-                    disabled={actionLoading || (!isClockedIn && !canClockIn)}
+                    disabled={!!(actionLoading || (!isClockedIn && !canClockIn))}
                     className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-colors ${isClockedIn
                             ? "bg-red-600 hover:bg-red-700 disabled:bg-red-400"
                             : "bg-green-600 hover:bg-green-700 disabled:bg-green-400"

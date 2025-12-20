@@ -77,9 +77,8 @@ export function SchedulingRulesForm({
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  // Check if user can manage scheduling rules (HR Manager per BR-TM-03)
-  const canManageRules = user?.roles?.includes(SystemRole.HR_MANAGER) ||
-                         user?.roles?.includes(SystemRole.SYSTEM_ADMIN);
+  // Check if user can manage scheduling rules (Only HR Manager per BR-TM-03)
+  const canManageRules = user?.roles?.includes(SystemRole.HR_MANAGER);
 
   // Form state
   const [name, setName] = useState(scheduleRule?.name || "");
@@ -176,7 +175,7 @@ export function SchedulingRulesForm({
       <Card>
         <CardContent className="py-12 text-center">
           <p className="text-red-500">
-            Access Denied: Only HR Manager or System Admin can manage scheduling rules.
+            Access Denied: Only HR Manager can manage scheduling rules.
           </p>
         </CardContent>
       </Card>

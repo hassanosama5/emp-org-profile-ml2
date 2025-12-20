@@ -12,10 +12,17 @@ export enum NotificationType {
   SHIFT_EXPIRY_ALERT = 'SHIFT_EXPIRY_ALERT',
   SHIFT_EXPIRY_BULK_ALERT = 'SHIFT_EXPIRY_BULK_ALERT',
   SHIFT_RENEWAL_CONFIRMATION = 'SHIFT_RENEWAL_CONFIRMATION',
+  SHIFT_REASSIGNMENT_CONFIRMATION = 'SHIFT_REASSIGNMENT_CONFIRMATION',
   SHIFT_ARCHIVE_NOTIFICATION = 'SHIFT_ARCHIVE_NOTIFICATION',
   MISSED_PUNCH = 'missed_punch',
   MISSED_PUNCH_EMPLOYEE_ALERT = 'MISSED_PUNCH_EMPLOYEE_ALERT',
   MISSED_PUNCH_MANAGER_ALERT = 'MISSED_PUNCH_MANAGER_ALERT',
+  
+  // Repeated Lateness Notifications
+  REPEATED_LATENESS_FLAGGED = 'REPEATED_LATENESS_FLAGGED',
+  
+  // Payroll Cut-off Escalation Notifications
+  PAYROLL_CUTOFF_ESCALATION_ALERT = 'PAYROLL_CUTOFF_ESCALATION_ALERT',
 
   // Recruitment Module Notifications - Interview Panel
   INTERVIEW_PANEL_INVITATION = 'INTERVIEW_PANEL_INVITATION',
@@ -39,6 +46,14 @@ export enum NotificationType {
   // Recruitment Module Notifications - Candidate notifications
   APPLICATION_ACCEPTED = 'APPLICATION_ACCEPTED',
   APPLICATION_REJECTED = 'APPLICATION_REJECTED',
+
+  // Payroll Tracking Module Notifications
+  DISPUTE_APPROVED_FOR_FINANCE = 'dispute_approved_for_finance',
+  CLAIM_APPROVED_FOR_FINANCE = 'claim_approved_for_finance',
+  DISPUTE_APPROVED = 'dispute_approved',
+  CLAIM_APPROVED = 'claim_approved',
+  DISPUTE_REJECTED = 'dispute_rejected',
+  CLAIM_REJECTED = 'claim_rejected',
 }
 
 export interface Notification {

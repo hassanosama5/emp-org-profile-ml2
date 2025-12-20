@@ -29,9 +29,8 @@ const SHIFT_TYPE_SUGGESTIONS = [
   { name: "Normal", description: "Standard working hours (e.g., 9 AM - 5 PM)" },
   { name: "Split", description: "Shift with a break in between (e.g., 9 AM - 1 PM, 4 PM - 8 PM)" },
   { name: "Overnight", description: "Night shift spanning two days (e.g., 10 PM - 6 AM)" },
+  { name: "Mission", description: "Special assignment or mission-based shift" },
   { name: "Rotational", description: "Rotating between different shift times" },
-  { name: "Flexible", description: "Flexible working hours within a range" },
-  { name: "Part-Time", description: "Reduced hours shift" },
 ];
 
 export function ShiftTypeForm({ shiftType, onSuccess, onCancel }: ShiftTypeFormProps) {

@@ -1,17 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Disabling Turbopack to resolve font loading issues
-  // This will force Next.js to use Webpack instead.
-  // Remove this if Turbopack becomes stable with next/font/google.
   reactStrictMode: true,
   
-  webpack: (config, { isServer }) => {
-    // Important: return the modified config
-    return config;
-  },
+  // Remove webpack config since we're using Turbopack
+  // If you need webpack, use: npm run build -- --webpack
+  // webpack: (config, { isServer }) => {
+  //   return config;
+  // },
   
-  // Add this line to resolve the build error
+  // Add empty turbopack config to silence the warning
+  // This allows Turbopack to work with default settings
   turbopack: {},
+  
+  // Configure to handle font loading issues
+  experimental: {
+    // This helps with font loading in some cases
+    optimizePackageImports: ['lucide-react'],
+  },
   
   // Other Next.js configurations can go here
 };

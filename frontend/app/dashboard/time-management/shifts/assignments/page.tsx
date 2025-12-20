@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { SystemRole } from "@/types";
-import { shiftScheduleApi, fetchShifts, fetchDepartments, fetchPositions } from "@/lib/api/time-management/shift-schedule.api";
+import { shiftScheduleApi, fetchShifts, fetchDepartments, fetchPositions, ScheduleRule } from "@/lib/api/time-management/shift-schedule.api";
 import {
   ShiftAssignment,
   AssignShiftToEmployeeDto,
@@ -49,10 +49,10 @@ export default function ShiftAssignmentsPage() {
     shiftId: "",
     startDate: "",
     endDate: "",
-    status: ShiftAssignmentStatus.PENDING,
+    status: ShiftAssignmentStatus.ENTERED,
   } as AssignShiftToEmployeeDto);
   const [updateFormData, setUpdateFormData] = useState<UpdateShiftAssignmentDto>({
-    status: ShiftAssignmentStatus.PENDING,
+    status: ShiftAssignmentStatus.ENTERED,
     startDate: new Date(),
     endDate: new Date(),
   });
@@ -69,6 +69,7 @@ export default function ShiftAssignmentsPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
+  const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   useEffect(() => {
@@ -79,19 +80,22 @@ export default function ShiftAssignmentsPage() {
   const loadDropdownOptions = async () => {
     try {
       setLoadingOptions(true);
-      const [shiftsData, departmentsData, positionsData] = await Promise.all([
+      const [shiftsData, departmentsData, positionsData, scheduleRulesData] = await Promise.all([
         fetchShifts(true), // Active shifts only
         fetchDepartments(true), // Active departments only
         fetchPositions(true), // Active positions only
+        shiftScheduleApi.getScheduleRules(true), // Active schedule rules only
       ]);
       
       console.log("Shifts data:", shiftsData);
       console.log("Departments data:", departmentsData);
       console.log("Positions data:", positionsData);
+      console.log("Schedule Rules data:", scheduleRulesData);
       
       setShifts(shiftsData || []);
       setDepartments(departmentsData || []);
       setPositions(positionsData || []);
+      setScheduleRules(scheduleRulesData || []);
     } catch (error: any) {
       console.error("Failed to load dropdown options:", error);
       showToast(`Failed to load options: ${error.message}`, "error");
@@ -119,7 +123,7 @@ export default function ShiftAssignmentsPage() {
       shiftId: "",
       startDate: "",
       endDate: "",
-      status: ShiftAssignmentStatus.PENDING,
+      status: ShiftAssignmentStatus.ENTERED,
     } as AssignShiftToEmployeeDto);
     setErrors({});
     setIsCreateModalOpen(true);
@@ -249,12 +253,18 @@ export default function ShiftAssignmentsPage() {
     switch (status) {
       case ShiftAssignmentStatus.APPROVED:
         return "text-green-600 bg-green-50";
-      case ShiftAssignmentStatus.PENDING:
-        return "text-yellow-600 bg-yellow-50";
-      case ShiftAssignmentStatus.CANCELLED:
+      case ShiftAssignmentStatus.ENTERED:
+        return "text-gray-600 bg-gray-100";
+      case ShiftAssignmentStatus.SUBMITTED:
+        return "text-blue-600 bg-blue-50";
+      case ShiftAssignmentStatus.REJECTED:
         return "text-red-600 bg-red-50";
+      case ShiftAssignmentStatus.CANCELLED:
+        return "text-orange-600 bg-orange-50";
+      case ShiftAssignmentStatus.POSTPONED:
+        return "text-yellow-600 bg-yellow-50";
       case ShiftAssignmentStatus.EXPIRED:
-        return "text-gray-600 bg-gray-50";
+        return "text-purple-600 bg-purple-50";
       default:
         return "text-gray-600 bg-gray-50";
     }
@@ -328,6 +338,21 @@ export default function ShiftAssignmentsPage() {
     return "N/A";
   };
 
+  const getScheduleRuleDisplay = (scheduleRuleId: any): string => {
+    if (!scheduleRuleId) return "N/A";
+    if (typeof scheduleRuleId === 'string') {
+      // Try to find in loaded schedule rules
+      const rule = scheduleRules.find((r: ScheduleRule) => r._id === scheduleRuleId);
+      if (rule) return `${rule.name} (${rule.pattern})`;
+      return scheduleRuleId;
+    }
+    if (typeof scheduleRuleId === 'object' && scheduleRuleId !== null) {
+      // Handle populated schedule rule object
+      if (scheduleRuleId.name) return `${scheduleRuleId.name} (${scheduleRuleId.pattern || ''})`;
+      if (scheduleRuleId._id) return String(scheduleRuleId._id);
+    }
+    return "N/A";
+  };
   return (
     <div className="container mx-auto px-6 py-8">
       <Toast
@@ -363,9 +388,12 @@ export default function ShiftAssignmentsPage() {
               })}
               options={[
                 { value: "", label: "All Statuses" },
-                { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+                { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+                { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
                 { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+                { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
                 { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+                { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
                 { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
               ]}
               placeholder="Filter by status"
@@ -455,7 +483,8 @@ export default function ShiftAssignmentsPage() {
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Department</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Position</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Shift ID</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Shift</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Schedule Rule</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Start Date</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">End Date</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
@@ -469,6 +498,7 @@ export default function ShiftAssignmentsPage() {
                   <td className="py-3 px-4">{getDepartmentDisplay(assignment.departmentId)}</td>
                   <td className="py-3 px-4">{getPositionDisplay(assignment.positionId)}</td>
                   <td className="py-3 px-4">{getShiftDisplay(assignment.shiftId)}</td>
+                  <td className="py-3 px-4">{getScheduleRuleDisplay(assignment.scheduleRuleId)}</td>
                   <td className="py-3 px-4">{formatDate(assignment.startDate)}</td>
                   <td className="py-3 px-4">{formatDate(assignment.endDate)}</td>
                   <td className="py-3 px-4">
@@ -524,7 +554,7 @@ export default function ShiftAssignmentsPage() {
                   shiftId: "",
                   startDate: "",
                   endDate: "",
-                  status: ShiftAssignmentStatus.PENDING,
+                  status: ShiftAssignmentStatus.ENTERED,
                 } as AssignShiftToEmployeeDto);
               } else if (e.target.value === 'department') {
                 setFormData({
@@ -532,7 +562,7 @@ export default function ShiftAssignmentsPage() {
                   shiftId: "",
                   startDate: undefined,
                   endDate: undefined,
-                  status: ShiftAssignmentStatus.PENDING,
+                  status: ShiftAssignmentStatus.ENTERED,
                 } as AssignShiftToDepartmentDto);
               } else {
                 setFormData({
@@ -540,7 +570,7 @@ export default function ShiftAssignmentsPage() {
                   shiftId: "",
                   startDate: undefined,
                   endDate: undefined,
-                  status: ShiftAssignmentStatus.PENDING,
+                  status: ShiftAssignmentStatus.ENTERED,
                 } as AssignShiftToPositionDto);
               }
             }}
@@ -604,15 +634,36 @@ export default function ShiftAssignmentsPage() {
               </div>
               <Select
                 label="Status *"
-                value={(formData as AssignShiftToEmployeeDto).status || ShiftAssignmentStatus.PENDING}
+                value={(formData as AssignShiftToEmployeeDto).status || ShiftAssignmentStatus.ENTERED}
                 onChange={(e) => setFormData({
                   ...formData,
                   status: e.target.value as ShiftAssignmentStatus,
                 } as AssignShiftToEmployeeDto)}
                 options={[
-                  { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+                  { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+                  { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
                   { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+                  { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
+                  { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+                  { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
+                  { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
                 ]}
+              />
+              <Select
+                label="Schedule Rule (Optional)"
+                value={(formData as AssignShiftToEmployeeDto).scheduleRuleId || ""}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  scheduleRuleId: e.target.value,
+                } as AssignShiftToEmployeeDto)}
+                options={[
+                  { value: "", label: "Select a schedule rule..." },
+                  ...scheduleRules.map((rule: ScheduleRule) => ({
+                    value: rule._id,
+                    label: `${rule.name} (${rule.pattern})`,
+                  })),
+                ]}
+                disabled={loadingOptions || scheduleRules.length === 0}
               />
             </>
           )}
@@ -675,14 +726,19 @@ export default function ShiftAssignmentsPage() {
               </div>
               <Select
                 label="Status *"
-                value={(formData as AssignShiftToDepartmentDto).status || ShiftAssignmentStatus.PENDING}
+                value={(formData as AssignShiftToDepartmentDto).status || ShiftAssignmentStatus.ENTERED}
                 onChange={(e) => setFormData({
                   ...formData,
                   status: e.target.value as ShiftAssignmentStatus,
                 } as AssignShiftToDepartmentDto)}
                 options={[
-                  { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+                  { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+                  { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
                   { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+                  { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
+                  { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+                  { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
+                  { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
                 ]}
               />
             </>
@@ -746,14 +802,19 @@ export default function ShiftAssignmentsPage() {
               </div>
               <Select
                 label="Status *"
-                value={(formData as AssignShiftToPositionDto).status || ShiftAssignmentStatus.PENDING}
+                value={(formData as AssignShiftToPositionDto).status || ShiftAssignmentStatus.ENTERED}
                 onChange={(e) => setFormData({
                   ...formData,
                   status: e.target.value as ShiftAssignmentStatus,
                 } as AssignShiftToPositionDto)}
                 options={[
-                  { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+                  { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+                  { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
                   { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+                  { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
+                  { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+                  { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
+                  { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
                 ]}
               />
             </>
@@ -793,9 +854,12 @@ export default function ShiftAssignmentsPage() {
               status: e.target.value as ShiftAssignmentStatus,
             })}
             options={[
-              { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+              { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+              { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
               { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+              { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
               { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+              { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
               { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
             ]}
           />

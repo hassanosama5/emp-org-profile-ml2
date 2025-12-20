@@ -16,14 +16,22 @@ type AuthState = {
   updateUser: (updates: Partial<User>) => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  loading: false,
-  error: null,
+export const useAuthStore = create<AuthState>((set, get) => {
+  // Initialize with empty state - user will be fetched asynchronously
+  return {
+    user: null,
+    token: null, // Token is in HTTP-only cookie, not accessible from JS
+    isAuthenticated: false,
+    loading: false,
+    error: null,
 
   initialize: async () => {
+    // Don't initialize if we already have a user (e.g., from login)
+    const currentState = get();
+    if (currentState.user && currentState.isAuthenticated) {
+      return;
+    }
+    
     // Set loading to true initially to prevent premature redirects
     set({ loading: true });
     
@@ -45,9 +53,12 @@ export const useAuthStore = create<AuthState>((set) => ({
           loading: false,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       // Failed to fetch user - not authenticated
-      // Silently fail - don't log errors for unauthenticated users
+      // 401 errors are expected when user is not logged in - don't log them
+      if (error?.status !== 401 && process.env.NODE_ENV === 'development') {
+        console.error('Auth initialization error:', error);
+      }
       set({
         isAuthenticated: false,
         loading: false,
@@ -59,6 +70,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null });
     try {
       const res = await authApi.login(data);
+      // Cookie is set by backend, user data is in response
+      // Small delay to ensure cookie is processed by browser
+      await new Promise(resolve => setTimeout(resolve, 100));
       set({
         user: res.user,
         token: null, // Token is in HTTP-only cookie, not stored
@@ -128,4 +142,4 @@ export const useAuthStore = create<AuthState>((set) => ({
       return { user: updatedUser };
     });
   },
-}));
+}});

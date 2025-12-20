@@ -19,7 +19,7 @@ import { NotificationType } from '../enums/notification-type.enum';
 @Injectable()
 export class RecruitmentNotificationsService {
   constructor(
-    @InjectModel('NotificationLog')
+    @InjectModel('ExtendedNotification')
     private notificationLogModel: Model<any>,
   ) {}
 
@@ -39,6 +39,14 @@ export class RecruitmentNotificationsService {
       stage: string;
     },
   ) {
+    console.log('[INTERVIEW_NOTIFICATION] notifyInterviewPanelMembers called with:', {
+      panelMemberIds,
+      interviewDetails: {
+        ...interviewDetails,
+        scheduledDate: interviewDetails.scheduledDate?.toISOString(),
+      },
+    });
+    
     if (!panelMemberIds || panelMemberIds.length === 0) {
       console.log('[INTERVIEW_NOTIFICATION] No panel members to notify');
       return { success: true, notificationsCreated: 0 };
@@ -332,6 +340,14 @@ export class RecruitmentNotificationsService {
       stage: string;
     },
   ) {
+    console.log('[INTERVIEW_NOTIFICATION] notifyCandidateInterviewScheduled called with:', {
+      candidateId,
+      interviewDetails: {
+        ...interviewDetails,
+        scheduledDate: interviewDetails.scheduledDate?.toISOString(),
+      },
+    });
+    
     if (!candidateId) {
       console.log('[INTERVIEW_NOTIFICATION] No candidate ID provided');
       return { success: false, message: 'No candidate ID provided' };
@@ -1065,9 +1081,21 @@ export class RecruitmentNotificationsService {
       startDate: Date;
       totalTasks: number;
       onboardingId: string;
+      // NEW: Specific document upload tasks for the new hire
+      documentUploadTasks?: { name: string; notes?: string; deadline?: Date }[];
     },
   ) {
+    console.log(`[ONBOARDING_NOTIFICATION] notifyNewHireWelcome called with:`, {
+      newHireId,
+      employeeName: welcomeDetails.employeeName,
+      employeeNumber: welcomeDetails.employeeNumber,
+      positionTitle: welcomeDetails.positionTitle,
+      totalTasks: welcomeDetails.totalTasks,
+      documentUploadTasks: welcomeDetails.documentUploadTasks?.length || 0,
+    });
+
     if (!newHireId) {
+      console.log(`[ONBOARDING_NOTIFICATION] No newHireId provided - aborting`);
       return { success: false, message: 'No new hire ID provided' };
     }
 
@@ -1079,6 +1107,20 @@ export class RecruitmentNotificationsService {
         day: 'numeric',
       });
 
+      // Build the document upload tasks section if provided
+      let documentTasksSection = '';
+      if (welcomeDetails.documentUploadTasks && welcomeDetails.documentUploadTasks.length > 0) {
+        const taskLines = welcomeDetails.documentUploadTasks.map((task, index) => {
+          let taskLine = `  ${index + 1}. ${task.name}`;
+          if (task.notes) {
+            taskLine += `\n     📝 ${task.notes}`;
+          }
+          return taskLine;
+        }).join('\n');
+        
+        documentTasksSection = `\n📄 Documents You Need to Upload:\n${taskLines}\n`;
+      }
+
       const message = `🎉 Welcome to the Team, ${welcomeDetails.employeeName}!\n\n` +
         `We're excited to have you join us as ${welcomeDetails.positionTitle}.\n\n` +
         `🔐 Your Login Credentials:\n` +
@@ -1086,12 +1128,13 @@ export class RecruitmentNotificationsService {
         `• Password: Use the same password you created during registration\n\n` +
         `📋 Your Onboarding Summary:\n` +
         `• Start Date: ${formattedStartDate}\n` +
-        `• Total Tasks: ${welcomeDetails.totalTasks} tasks to complete\n\n` +
-        `📌 Next Steps:\n` +
+        `• Total Tasks: ${welcomeDetails.totalTasks} tasks to complete\n` +
+        documentTasksSection +
+        `\n📌 Next Steps:\n` +
         `• Log in with your Employee Number above\n` +
         `• Visit "My Onboarding" to view your task tracker\n` +
-        `• Upload required documents (ID, certifications)\n` +
-        `• Complete tasks before deadlines\n\n` +
+        `• Upload the required documents listed above\n` +
+        `• Complete all tasks before deadlines\n\n` +
         `If you have any questions, contact HR. Welcome aboard! 🚀`;
 
       const notification = await this.notificationLogModel.create({
@@ -1105,12 +1148,17 @@ export class RecruitmentNotificationsService {
           startDate: welcomeDetails.startDate.toISOString(),
           totalTasks: welcomeDetails.totalTasks,
           onboardingId: welcomeDetails.onboardingId,
+          documentUploadTasks: welcomeDetails.documentUploadTasks || [],
           action: 'WELCOME',
         },
         isRead: false,
       });
 
-      console.log(`[ONBOARDING_NOTIFICATION] Sent WELCOME notification to new hire: ${newHireId} (Employee Number: ${welcomeDetails.employeeNumber})`);
+      console.log(`[ONBOARDING_NOTIFICATION] ✅ WELCOME notification CREATED:`, {
+        notificationId: notification._id.toString(),
+        toUserId: newHireId,
+        employeeNumber: welcomeDetails.employeeNumber,
+      });
 
       return {
         success: true,

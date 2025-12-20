@@ -1,3 +1,12 @@
+// Shift name suggestions for quick selection
+const SHIFT_NAME_SUGGESTIONS = [
+  "Fixed Core Hours",
+  "Flex-Time",
+  "Rotational",
+  "Split",
+  "Custom Weekly Patterns",
+  "Overtime",
+];
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -14,6 +23,7 @@ import {
   fetchDepartments,
   fetchPositions,
   fetchEmployees,
+  ScheduleRule,
 } from "@/lib/api/time-management/shift-schedule.api";
 import {
   Shift,
@@ -80,6 +90,7 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
   const [departments, setDepartments] = useState<DropdownOption[]>([]);
   const [positions, setPositions] = useState<DropdownOption[]>([]);
   const [employees, setEmployees] = useState<DropdownOption[]>([]);
+  const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
 
   // Form data for create mode
   const [createData, setCreateData] = useState<{
@@ -87,6 +98,7 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
     departmentId: string;
     positionId: string;
     shiftId: string;
+    scheduleRuleId: string;
     startDate: string;
     endDate: string;
     status: ShiftAssignmentStatus;
@@ -95,9 +107,10 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
     departmentId: "",
     positionId: "",
     shiftId: "",
+    scheduleRuleId: "",
     startDate: "",
     endDate: "",
-    status: ShiftAssignmentStatus.PENDING,
+    status: ShiftAssignmentStatus.ENTERED,
   });
 
   // Form data for update mode
@@ -105,10 +118,12 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
     status: ShiftAssignmentStatus;
     startDate: string;
     endDate: string;
+    scheduleRuleId: string;
   }>({
-    status: ShiftAssignmentStatus.PENDING,
+    status: ShiftAssignmentStatus.ENTERED,
     startDate: "",
     endDate: "",
+    scheduleRuleId: "",
   });
 
   const isEditMode = !!assignment;
@@ -117,16 +132,18 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
   const loadDropdownOptions = useCallback(async () => {
     setLoadingOptions(true);
     try {
-      const [shiftsRes, departmentsRes, positionsRes, employeesRes] = await Promise.all([
+      const [shiftsRes, departmentsRes, positionsRes, employeesRes, scheduleRulesRes] = await Promise.all([
         fetchShifts(true),
         fetchDepartments(true),
         fetchPositions(true),
         fetchEmployees(),
+        shiftScheduleApi.getScheduleRules(true), // Load active schedule rules
       ]);
       setShifts(shiftsRes);
       setDepartments(departmentsRes);
       setPositions(positionsRes);
       setEmployees(Array.isArray(employeesRes) ? employeesRes : []);
+      setScheduleRules(Array.isArray(scheduleRulesRes) ? scheduleRulesRes : []);
     } catch (error) {
       console.error("Error loading dropdown options:", error);
       showToast("Failed to load form options", "error");
@@ -146,6 +163,7 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
         status: assignment.status,
         startDate: assignment.startDate ? formatDateForInput(assignment.startDate) : "",
         endDate: assignment.endDate ? formatDateForInput(assignment.endDate) : "",
+        scheduleRuleId: assignment.scheduleRuleId || "",
       });
     }
   }, [assignment]);
@@ -252,6 +270,7 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
           startDate: createData.startDate,
           endDate: createData.endDate,
           status: createData.status,
+          scheduleRuleId: createData.scheduleRuleId || undefined,
         };
         await shiftScheduleApi.assignShiftToEmployee(dto);
         showToast("Shift assigned to employee successfully", "success");
@@ -293,6 +312,7 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
         status: updateData.status,
         startDate: new Date(updateData.startDate),
         endDate: new Date(updateData.endDate),
+        scheduleRuleId: updateData.scheduleRuleId || undefined,
       };
       await shiftScheduleApi.updateShiftAssignment(assignment._id, dto);
       showToast("Shift assignment updated successfully", "success");
@@ -321,9 +341,10 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
       departmentId: "",
       positionId: "",
       shiftId: "",
+      scheduleRuleId: "",
       startDate: "",
       endDate: "",
-      status: ShiftAssignmentStatus.PENDING,
+      status: ShiftAssignmentStatus.ENTERED,
     });
     setErrors({});
   };
@@ -360,20 +381,60 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
 
       {/* Common - Shift Selection */}
       {!isEditMode && (
-        <Select
-          label="Shift *"
-          value={createData.shiftId}
-          onChange={(e) => setCreateData({ ...createData, shiftId: e.target.value })}
-          options={[
-            { value: "", label: "Select a shift..." },
-            ...shifts.map((shift) => ({
-              value: shift._id,
-              label: shift.name || shift._id,
-            })),
-          ]}
-          error={errors.shiftId}
-          disabled={loadingOptions || shifts.length === 0}
-        />
+        <>
+          <Select
+            label="Shift *"
+            value={createData.shiftId}
+            onChange={(e) => setCreateData({ ...createData, shiftId: e.target.value })}
+            options={[
+              { value: "", label: "Select a shift..." },
+              ...shifts.map((shift) => ({
+                value: shift._id,
+                label: shift.name || shift._id,
+              })),
+            ]}
+            error={errors.shiftId}
+            disabled={loadingOptions || shifts.length === 0}
+          />
+          {/* Shift Name Suggestions */}
+          <div className="mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quick Shift Name Suggestions</label>
+            <div className="flex flex-wrap gap-2">
+              {SHIFT_NAME_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="px-3 py-1.5 text-sm rounded-full border bg-gray-50 border-gray-300 text-gray-700 hover:bg-blue-100 hover:border-blue-500 hover:text-blue-700 transition-colors"
+                  onClick={() => {
+                    // Find a shift with this name and select it if exists
+                    const found = shifts.find((s) => s.name === suggestion);
+                    if (found) {
+                      setCreateData({ ...createData, shiftId: found._id });
+                    }
+                  }}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Click a suggestion to quickly select a shift by name (if available).</p>
+          </div>
+          
+          {/* Schedule Rule Selection */}
+          <Select
+            label="Schedule Rule (Optional)"
+            value={createData.scheduleRuleId}
+            onChange={(e) => setCreateData({ ...createData, scheduleRuleId: e.target.value })}
+            options={[
+              { value: "", label: "Select a schedule rule..." },
+              ...scheduleRules.map((rule) => ({
+                value: rule._id,
+                label: `${rule.name} (${rule.pattern})`,
+              })),
+            ]}
+            disabled={loadingOptions || scheduleRules.length === 0}
+          />
+        </>
       )}
 
       {/* Employee-specific fields */}
@@ -414,8 +475,13 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
             value={createData.status}
             onChange={(e) => setCreateData({ ...createData, status: e.target.value as ShiftAssignmentStatus })}
             options={[
-              { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+              { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+              { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
               { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+              { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
+              { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+              { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
+              { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
             ]}
           />
         </>
@@ -457,8 +523,13 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
             value={createData.status}
             onChange={(e) => setCreateData({ ...createData, status: e.target.value as ShiftAssignmentStatus })}
             options={[
-              { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+              { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+              { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
               { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+              { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
+              { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+              { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
+              { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
             ]}
           />
         </>
@@ -500,8 +571,13 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
             value={createData.status}
             onChange={(e) => setCreateData({ ...createData, status: e.target.value as ShiftAssignmentStatus })}
             options={[
-              { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+              { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+              { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
               { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+              { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
+              { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+              { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
+              { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
             ]}
           />
         </>
@@ -515,11 +591,27 @@ export const ShiftAssignmentForm: React.FC<ShiftAssignmentFormProps> = ({
             value={updateData.status}
             onChange={(e) => setUpdateData({ ...updateData, status: e.target.value as ShiftAssignmentStatus })}
             options={[
-              { value: ShiftAssignmentStatus.PENDING, label: "Pending" },
+              { value: ShiftAssignmentStatus.ENTERED, label: "Entered" },
+              { value: ShiftAssignmentStatus.SUBMITTED, label: "Submitted" },
               { value: ShiftAssignmentStatus.APPROVED, label: "Approved" },
+              { value: ShiftAssignmentStatus.REJECTED, label: "Rejected" },
               { value: ShiftAssignmentStatus.CANCELLED, label: "Cancelled" },
+              { value: ShiftAssignmentStatus.POSTPONED, label: "Postponed" },
               { value: ShiftAssignmentStatus.EXPIRED, label: "Expired" },
             ]}
+          />
+          <Select
+            label="Schedule Rule (Optional)"
+            value={updateData.scheduleRuleId}
+            onChange={(e) => setUpdateData({ ...updateData, scheduleRuleId: e.target.value })}
+            options={[
+              { value: "", label: "Select a schedule rule..." },
+              ...scheduleRules.map((rule) => ({
+                value: rule._id,
+                label: `${rule.name} (${rule.pattern})`,
+              })),
+            ]}
+            disabled={loadingOptions || scheduleRules.length === 0}
           />
           <div className="grid grid-cols-2 gap-4">
             <Input

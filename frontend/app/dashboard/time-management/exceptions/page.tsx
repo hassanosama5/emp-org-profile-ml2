@@ -22,7 +22,22 @@ import { Toast, useToast } from "@/components/leaves/Toast";
 
 export default function TimeExceptionsPage() {
   const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
+  // Allow Department Heads and HR roles to access this page
+  const isHRAdmin = user?.roles?.includes(SystemRole.HR_ADMIN);
+  const isHRManager = user?.roles?.includes(SystemRole.HR_MANAGER);
+  const isDepartmentHead = user?.roles?.includes(SystemRole.DEPARTMENT_HEAD);
+  const isSystemAdmin = user?.roles?.includes(SystemRole.SYSTEM_ADMIN);
+  
+  if (!isHRAdmin && !isHRManager && !isDepartmentHead && !isSystemAdmin) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="text-center py-12">
+          <p className="text-gray-500">Access denied. You need HR Admin, HR Manager, Department Head, or System Admin role.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const { toast, showToast, hideToast } = useToast();
 
   const [exceptions, setExceptions] = useState<TimeException[]>([]);
@@ -40,12 +55,14 @@ export default function TimeExceptionsPage() {
   const [processing, setProcessing] = useState(false);
   const [filters, setFilters] = useState<GetAllTimeExceptionsFilters>({});
   const [viewMode, setViewMode] = useState<"all" | "pending" | "overdue">("all");
+  const [exceptionSection, setExceptionSection] = useState<"all" | "overtime" | "permission" | "exceptions">("all");
   const [thresholdDays, setThresholdDays] = useState<number>(3);
   const [autoEscalateDays, setAutoEscalateDays] = useState<number>(3);
 
   useEffect(() => {
     if (viewMode === "all") {
       loadAllExceptions();
+      setExceptionSection("all"); // Reset section when switching to "all" view
     } else if (viewMode === "pending") {
       loadPendingExceptions();
     } else if (viewMode === "overdue") {
@@ -249,6 +266,33 @@ export default function TimeExceptionsPage() {
     return new Date(date).toLocaleString();
   };
 
+  const getDaysPending = (createdAt: string | Date | undefined): number => {
+    if (!createdAt) return 0;
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - created.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const isOverdue = (createdAt: string | Date | undefined, status: string): boolean => {
+    if (status === TimeExceptionStatus.APPROVED || status === TimeExceptionStatus.REJECTED || status === TimeExceptionStatus.RESOLVED) {
+      return false;
+    }
+    const daysPending = getDaysPending(createdAt);
+    return daysPending >= 3; // Overdue if pending for 3+ days
+  };
+
+  const getOverdueBadge = (createdAt: string | Date | undefined, status: string) => {
+    if (!isOverdue(createdAt, status)) return null;
+    const daysPending = getDaysPending(createdAt);
+    return (
+      <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-300">
+        {daysPending} days overdue
+      </span>
+    );
+  };
+
   const getStatusColor = (status: TimeExceptionStatus) => {
     switch (status) {
       case TimeExceptionStatus.APPROVED:
@@ -448,19 +492,81 @@ export default function TimeExceptionsPage() {
         </Card>
       )}
 
+      {/* Exception Type Sections (only for "all" view) */}
+      {viewMode === "all" && (
+        <Card className="mb-6">
+          <CardContent className="p-0">
+            <div className="flex border-b border-gray-200 overflow-x-auto">
+              <button
+                onClick={() => setExceptionSection("all")}
+                className={`px-6 py-4 font-medium whitespace-nowrap ${
+                  exceptionSection === "all"
+                    ? "border-b-2 border-blue-600 text-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                All Requests
+              </button>
+              <button
+                onClick={() => setExceptionSection("overtime")}
+                className={`px-6 py-4 font-medium whitespace-nowrap ${
+                  exceptionSection === "overtime"
+                    ? "border-b-2 border-blue-600 text-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Overtime Requests
+              </button>
+              <button
+                onClick={() => setExceptionSection("permission")}
+                className={`px-6 py-4 font-medium whitespace-nowrap ${
+                  exceptionSection === "permission"
+                    ? "border-b-2 border-blue-600 text-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Permission Requests
+              </button>
+              <button
+                onClick={() => setExceptionSection("exceptions")}
+                className={`px-6 py-4 font-medium whitespace-nowrap ${
+                  exceptionSection === "exceptions"
+                    ? "border-b-2 border-blue-600 text-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Time Exception Requests
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Exceptions Table */}
       <Card>
         <CardHeader>
           <CardTitle>
             {viewMode === "all"
-              ? "All Time Exceptions"
+              ? exceptionSection === "all"
+                ? "All Time Exceptions"
+                : exceptionSection === "overtime"
+                ? "Overtime Requests"
+                : exceptionSection === "permission"
+                ? "Permission Requests"
+                : "Time Exception Requests"
               : viewMode === "pending"
               ? "My Pending Exceptions"
               : "Overdue Exceptions"}
           </CardTitle>
           <CardDescription>
             {viewMode === "all"
-              ? "View and manage all time exceptions"
+              ? exceptionSection === "all"
+                ? "View and manage all time exceptions"
+                : exceptionSection === "overtime"
+                ? "Review and approve overtime requests from employees"
+                : exceptionSection === "permission"
+                ? "Review and approve permission requests (early in, late out, etc.)"
+                : "Review and approve time exception requests (missed punch, late, early leave, etc.)"
               : viewMode === "pending"
               ? "Review exceptions assigned to you"
               : "View exceptions that need escalation"}
@@ -471,38 +577,75 @@ export default function TimeExceptionsPage() {
             <div className="text-center py-12">
               <p className="text-gray-500">Loading exceptions...</p>
             </div>
-          ) : exceptions.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">
-                {viewMode === "all"
-                  ? "No time exceptions found."
-                  : viewMode === "pending"
-                  ? "No pending exceptions assigned to you."
-                  : "No overdue exceptions found."}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Assigned To</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Reason</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Created</th>
-                    {viewMode === "overdue" && (
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Days Pending</th>
-                    )}
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {exceptions.map((exception) => {
+          ) : (() => {
+            // Filter exceptions based on section
+            let filteredExceptions = exceptions;
+            if (viewMode === "all" && exceptionSection !== "all") {
+              if (exceptionSection === "overtime") {
+                filteredExceptions = exceptions.filter(
+                  (ex) => ex.type === TimeExceptionType.OVERTIME_REQUEST
+                );
+              } else if (exceptionSection === "permission") {
+                filteredExceptions = exceptions.filter(
+                  (ex) =>
+                    ex.type === TimeExceptionType.MANUAL_ADJUSTMENT &&
+                    ex.reason?.includes("PERMISSION REQUEST")
+                );
+              } else if (exceptionSection === "exceptions") {
+                filteredExceptions = exceptions.filter(
+                  (ex) =>
+                    ex.type !== TimeExceptionType.OVERTIME_REQUEST &&
+                    !(ex.type === TimeExceptionType.MANUAL_ADJUSTMENT && ex.reason?.includes("PERMISSION REQUEST"))
+                );
+              }
+            }
+
+            return filteredExceptions.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500">
+                  {viewMode === "all"
+                    ? exceptionSection === "all"
+                      ? "No time exceptions found."
+                      : exceptionSection === "overtime"
+                      ? "No overtime requests found."
+                      : exceptionSection === "permission"
+                      ? "No permission requests found."
+                      : "No time exception requests found."
+                    : viewMode === "pending"
+                    ? "No pending exceptions assigned to you."
+                    : "No overdue exceptions found."}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Assigned To</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Reason</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Created</th>
+                      {viewMode === "overdue" && (
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Days Pending</th>
+                      )}
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredExceptions.map((exception) => {
                     const exceptionId = exception._id || exception.id || "";
                     const employeeDisplay = getEmployeeDisplay(exception.employeeId);
                     const assignedToDisplay = getAssignedToDisplay(exception.assignedTo);
+                    
+                    // Get display type - show "Permission Request" for permission requests
+                    let displayType = getTypeLabel(exception.type);
+                    if (exception.type === TimeExceptionType.MANUAL_ADJUSTMENT && exception.reason?.includes("PERMISSION REQUEST")) {
+                      const reasonParts = exception.reason.split("|");
+                      const typePart = reasonParts.find(p => p.includes("Type:"))?.replace("Type:", "").trim();
+                      displayType = typePart ? `Permission: ${typePart}` : "Permission Request";
+                    }
 
                     return (
                       <tr
@@ -510,25 +653,41 @@ export default function TimeExceptionsPage() {
                         className="border-b border-gray-100 hover:bg-gray-50"
                       >
                         <td className="py-3 px-4">{employeeDisplay}</td>
-                        <td className="py-3 px-4">{getTypeLabel(exception.type)}</td>
+                        <td className="py-3 px-4">{displayType}</td>
                         <td className="py-3 px-4">{assignedToDisplay}</td>
                         <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(
-                              exception.status
-                            )}`}
-                          >
-                            {exception.status}
-                          </span>
+                          <div className="flex items-center">
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(
+                                exception.status
+                              )}`}
+                            >
+                              {exception.status}
+                            </span>
+                            {getOverdueBadge(exception.createdAt, exception.status)}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="max-w-xs truncate" title={exception.reason || "No reason provided"}>
                             {exception.reason || "N/A"}
                           </div>
                         </td>
-                        <td className="py-3 px-4">{formatDate(exception.createdAt)}</td>
+                        <td className="py-3 px-4">
+                          <div>
+                            {formatDate(exception.createdAt)}
+                            {viewMode !== "overdue" && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {getDaysPending(exception.createdAt)} days ago
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         {viewMode === "overdue" && (exception as any).daysPending !== undefined && (
-                          <td className="py-3 px-4">{(exception as any).daysPending} days</td>
+                          <td className="py-3 px-4">
+                            <span className={isOverdue(exception.createdAt, exception.status) ? "text-red-600 font-medium" : ""}>
+                              {(exception as any).daysPending} days
+                            </span>
+                          </td>
                         )}
                         <td className="py-3 px-4">
                           <div className="flex gap-2">
@@ -570,11 +729,12 @@ export default function TimeExceptionsPage() {
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 

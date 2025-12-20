@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/protected-route";
-import { useRequireAuth, useAuth } from "@/lib/hooks/use-auth";
+import { useAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import {
   Card,
@@ -27,14 +27,6 @@ import {
 import { formatDate, getStatusColor } from "@/lib/utils";
 
 export default function TeamPage() {
-  useRequireAuth([
-    SystemRole.DEPARTMENT_HEAD,
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_EMPLOYEE,
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-  ]);
-
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -57,7 +49,19 @@ export default function TeamPage() {
         // Get current user profile
         try {
           const profile = await employeeProfileApi.getMyProfile();
-          setCurrentUserProfile(profile);
+          // Ensure position and department are properly extracted
+          const profileWithExtractedData = {
+            ...profile,
+            primaryPosition: profile?.primaryPosition || 
+              (typeof profile?.primaryPositionId === 'object' && profile?.primaryPositionId ? {
+                title: profile.primaryPositionId.title || profile.primaryPositionId.name || ""
+              } : null),
+            primaryDepartment: profile?.primaryDepartment ||
+              (typeof profile?.primaryDepartmentId === 'object' && profile?.primaryDepartmentId ? {
+                name: profile.primaryDepartmentId.name || profile.primaryDepartmentId.title || ""
+              } : null),
+          };
+          setCurrentUserProfile(profileWithExtractedData);
         } catch (err) {
           console.error("Failed to load current user profile:", err);
         }
@@ -93,7 +97,16 @@ export default function TeamPage() {
   }, []);
 
   return (
-    <ProtectedRoute requiredUserType="employee">
+    <ProtectedRoute
+      requiredUserType="employee"
+      allowedRoles={[
+        SystemRole.DEPARTMENT_HEAD,
+        SystemRole.HR_MANAGER,
+        SystemRole.HR_EMPLOYEE,
+        SystemRole.HR_ADMIN,
+        SystemRole.SYSTEM_ADMIN,
+      ]}
+    >
       <div className="container mx-auto px-4 py-8">
         <Toast
           message={toast.message}
@@ -105,7 +118,7 @@ export default function TeamPage() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
+            <h1 className="text-3xl font-bold text-white-900">My Team</h1>
             <p className="text-gray-600 mt-2">
               View and manage your direct reports and team members
             </p>
@@ -218,23 +231,38 @@ export default function TeamPage() {
                         ) : (
                           <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center border-2 border-white">
                             <span className="text-2xl font-bold text-white">
-                              {(currentUserProfile?.fullName || user?.fullName || "You")?.charAt(0)}
+                              {(
+                                currentUserProfile?.fullName ||
+                                user?.fullName ||
+                                "You"
+                              )?.charAt(0)}
                             </span>
                           </div>
                         )}
                         <div>
                           <p className="font-bold text-lg">
-                            {currentUserProfile?.fullName || user?.fullName || "You"}
+                            {currentUserProfile?.fullName ||
+                              user?.fullName ||
+                              "You"}
                           </p>
                           <p className="text-sm text-blue-100">
-                            {typeof currentUserProfile?.primaryPosition === 'object' && currentUserProfile?.primaryPosition?.title 
-                              ? currentUserProfile.primaryPosition.title 
-                              : typeof currentUserProfile?.primaryPositionId === 'object' && currentUserProfile?.primaryPositionId?.title
-                              ? currentUserProfile.primaryPositionId.title
-                              : "Manager"}
+                            {(() => {
+                              // Try primaryPosition first (populated object)
+                              if (typeof currentUserProfile?.primaryPosition === "object" && currentUserProfile?.primaryPosition?.title) {
+                                return currentUserProfile.primaryPosition.title;
+                              }
+                              // Try primaryPositionId (populated object)
+                              if (typeof currentUserProfile?.primaryPositionId === "object") {
+                                return currentUserProfile.primaryPositionId.title || currentUserProfile.primaryPositionId.name || "Manager";
+                              }
+                              // Fallback
+                              return "Manager";
+                            })()}
                           </p>
                           <p className="text-xs text-blue-200 mt-1">
-                            {currentUserProfile?.employeeNumber || user?.employeeNumber || ""}
+                            {currentUserProfile?.employeeNumber ||
+                              user?.employeeNumber ||
+                              ""}
                           </p>
                         </div>
                       </div>
@@ -254,10 +282,17 @@ export default function TeamPage() {
                     )}
                     <div className="flex flex-wrap justify-center gap-6 mt-6">
                       {team.map((member, index) => (
-                        <div key={member.id || (member as any)._id || member.employeeNumber} className="relative">
+                        <div
+                          key={
+                            member.id ||
+                            (member as any)._id ||
+                            member.employeeNumber
+                          }
+                          className="relative"
+                        >
                           {/* Vertical connector line */}
                           <div className="absolute left-1/2 transform -translate-x-1/2 -top-6 w-px h-6 bg-gray-300"></div>
-                          
+
                           {/* Member Card */}
                           <div className="bg-white border-2 border-gray-200 rounded-lg p-4 shadow-md hover:shadow-lg transition-shadow min-w-[240px]">
                             <div className="flex items-center space-x-3">
@@ -285,7 +320,9 @@ export default function TeamPage() {
                                   {member.departmentName || "—"}
                                 </p>
                                 <div className="mt-2">
-                                  <Badge className={getStatusColor(member.status)}>
+                                  <Badge
+                                    className={getStatusColor(member.status)}
+                                  >
                                     {member.status}
                                   </Badge>
                                 </div>
@@ -325,17 +362,22 @@ export default function TeamPage() {
                       if (e.target.checked) {
                         // Show only direct reports (filter by supervisorPositionId matching current user's position)
                         const currentPositionId =
-                          (currentUserProfile?.primaryPositionId as any)?._id
-                            ?.toString() ||
-                          (currentUserProfile?.primaryPositionId as any)
-                            ?.toString() ||
+                          (
+                            currentUserProfile?.primaryPositionId as any
+                          )?._id?.toString() ||
+                          (
+                            currentUserProfile?.primaryPositionId as any
+                          )?.toString() ||
                           currentUserProfile?.primaryPositionId;
                         if (currentPositionId) {
                           const filtered = allTeamMembers.filter((member) => {
                             const memberSupervisorId =
-                              (member.supervisorPositionId as any)?._id
-                                ?.toString() ||
-                              (member.supervisorPositionId as any)?.toString() ||
+                              (
+                                member.supervisorPositionId as any
+                              )?._id?.toString() ||
+                              (
+                                member.supervisorPositionId as any
+                              )?.toString() ||
                               member.supervisorPositionId;
                             return memberSupervisorId === currentPositionId;
                           });

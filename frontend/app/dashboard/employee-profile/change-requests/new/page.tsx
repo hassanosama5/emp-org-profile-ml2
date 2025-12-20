@@ -2,7 +2,6 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/protected-route";
-import { useRequireAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import { Input } from "@/components/shared/ui/Input";
 import { Textarea } from "@/components/leaves/Textarea";
@@ -28,7 +27,6 @@ import type {
 } from "@/types/organization-structure";
 
 export default function NewChangeRequestPage() {
-  useRequireAuth([SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.RECRUITER]);
   const [subject, setSubject] = useState("");
   const [details, setDetails] = useState("");
   const [changeType, setChangeType] = useState<string>("");
@@ -281,7 +279,17 @@ export default function NewChangeRequestPage() {
   };
 
   return (
-    <ProtectedRoute requiredUserType="employee">
+    <ProtectedRoute
+      requiredUserType="employee"
+      allowedRoles={[
+        SystemRole.DEPARTMENT_EMPLOYEE,
+        SystemRole.RECRUITER,
+        SystemRole.HR_MANAGER,
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_EMPLOYEE,
+        SystemRole.SYSTEM_ADMIN,
+      ]}
+    >
       <div className="container mx-auto px-6 py-8">
         <Toast
           message={toast.message}

@@ -109,6 +109,18 @@ export const employeeProfileApi = {
     return extractData<EmployeeProfile>(response) || response;
   },
 
+  // Get employee roles
+  // COMMENTED OUT: Duplicate - see getEmployeeRoles at line 518 in ROLE MANAGEMENT METHODS section
+  // getEmployeeRoles: async (employeeId: string) => {
+  //   try {
+  //     const response = await api.get(`/employee-profile/${employeeId}/roles`);
+  //     return extractData<any>(response) || response;
+  //   } catch (error: any) {
+  //     console.warn(`Could not fetch roles for employee ${employeeId}:`, error);
+  //     return null;
+  //   }
+  // },
+
   // Submit a change request
   submitChangeRequest: (data: {
     requestDescription: string;
@@ -190,7 +202,11 @@ export const employeeProfileApi = {
         },
       };
     } catch (error: any) {
-      console.error("❌ Error in getAllEmployees:", error.message);
+      // Don't log 403 errors - they're expected when user doesn't have permission
+      // The API client will handle logging for other errors
+      if (error.response?.status !== 403 && error.response?.status !== 401) {
+        console.error("❌ Error in getAllEmployees:", error.message);
+      }
       return {
         data: [],
         meta: {

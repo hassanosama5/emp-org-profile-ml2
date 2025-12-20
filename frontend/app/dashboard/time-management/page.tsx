@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
 import { ClockInOutButton } from "@/components/time-management/ClockInOutButton";
@@ -8,6 +9,8 @@ import { SystemRole } from "@/types";
 
 export default function TimeManagementPage() {
   const { user } = useAuth();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const isHRAdmin = user?.roles?.includes(SystemRole.HR_ADMIN);
   const isSystemAdmin = user?.roles?.includes(SystemRole.SYSTEM_ADMIN);
   const isHRManager = user?.roles?.includes(SystemRole.HR_MANAGER);
@@ -16,17 +19,28 @@ export default function TimeManagementPage() {
   // HR_ADMIN should NOT configure shifts, only HR_MANAGER and SYSTEM_ADMIN can
   const canConfigureShifts = isHRManager || isSystemAdmin;
   const canViewAdminSection = isHRAdmin || isHRManager || isSystemAdmin; // HR_ADMIN can view but not configure
+  const [subtitle, setSubtitle] = useState<string>(
+    "Manage attendance, schedules, shifts, and time tracking",
+  );
+
+  // Avoid hydration mismatches: compute user/role-based subtitle after mount.
+  useEffect(() => {
+    setSubtitle(
+      canConfigureShifts
+        ? "Manage attendance, schedules, shifts, and time tracking"
+        : "Track your attendance and manage your time",
+    );
+  }, [canConfigureShifts]);
+
+  // Prevent hydration mismatch across role-gated dashboard sections
+  if (!mounted) return null;
 
   return (
     <div className="container mx-auto px-6 py-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Time Management</h1>
-        <p className="text-gray-600 mt-1">
-          {canConfigureShifts
-            ? "Manage attendance, schedules, shifts, and time tracking"
-            : "Track your attendance and manage your time"}
-        </p>
+        <p className="text-gray-600 mt-1">{subtitle}</p>
       </div>
 
       {/* Department Head Section - Team Management */}
@@ -146,8 +160,8 @@ export default function TimeManagementPage() {
         </>
       )}
 
-      {/* Employee Section */}
-      {!canConfigureShifts && !isDepartmentHead && (
+      {/* Employee Section - Show for regular employees and department heads */}
+      {!canConfigureShifts && (
         <>
           {/* Clock In/Out */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -185,6 +199,18 @@ export default function TimeManagementPage() {
                   className="block text-blue-600 hover:underline font-medium"
                 >
                   View My Shifts
+                </Link>
+                <Link
+                  href="/dashboard/time-management/attendance/import"
+                  className="block text-blue-600 hover:underline font-medium"
+                >
+                  Import Attendance CSV
+                </Link>
+                <Link
+                  href="/dashboard/time-management/requests"
+                  className="block text-blue-600 hover:underline font-medium"
+                >
+                  Time Requests (Overtime, Permission, Exceptions)
                 </Link>
               </CardContent>
             </Card>
@@ -238,9 +264,72 @@ export default function TimeManagementPage() {
                   </Link>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Import Attendance</CardTitle>
+                  <CardDescription>Upload attendance data from CSV file</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link
+                    href="/dashboard/time-management/attendance/import"
+                    className="text-blue-600 hover:underline font-medium"
+                  >
+                    Import CSV
+                  </Link>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Time Requests</CardTitle>
+                  <CardDescription>Submit and track overtime, permission, and time exception requests</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link
+                    href="/dashboard/time-management/requests"
+                    className="text-blue-600 hover:underline font-medium"
+                  >
+                    Manage All Requests
+                  </Link>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </>
+      )}
+
+      {/* HR Admin Policies Section */}
+      {isHRAdmin && (
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Permission Policies
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="border-l-4 border-l-purple-500">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Permission Policies
+                </CardTitle>
+                <CardDescription>Define permission duration limits and types (Early In, Late Out, Out of Hours, Total)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link 
+                  href="/dashboard/time-management/policies/permission-policies" 
+                  className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                >
+                  Manage Permission Policies →
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
 
       {/* Admin Section */}
@@ -423,26 +512,11 @@ export default function TimeManagementPage() {
               </Link>
             </CardContent>
           </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Permission Rules</CardTitle>
-                    <CardDescription>Define permission duration limits and types (Early In, Late Out, etc.)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Link 
-                      href="/dashboard/time-management/policies/permission-limits" 
-                      className="text-blue-600 hover:underline font-medium"
-                    >
-                      Manage Permission Rules →
-                    </Link>
-                  </CardContent>
-                </Card>
               </div>
             </div>
           )}
 
-        {/* Attendance Data Management (CSV Import) - HR Manager & System Admin only */}
+        {/* Attendance Data Management (CSV Import) - All roles can import */}
         <div className="mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
             <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -514,20 +588,69 @@ export default function TimeManagementPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-                  <CardTitle>Repeated Lateness</CardTitle>
-                  <CardDescription>Monitor repeated lateness for disciplinary tracking</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link 
-                    href="/dashboard/time-management/repeated-lateness" 
-                className="text-blue-600 hover:underline font-medium"
-              >
-                    View Lateness Report →
-              </Link>
-            </CardContent>
-          </Card>
+          {isHRAdmin && (
+            <Card className="border-l-4 border-l-red-500">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Repeated Lateness Tracking
+                </CardTitle>
+                <CardDescription>Flag and track employees with repeated lateness for disciplinary action</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link 
+                  href="/dashboard/time-management/repeated-lateness" 
+                  className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                >
+                  Manage Lateness Flags →
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
+            {/* Leave-Attendance Integration Card */}
+            <Card className="border-l-4 border-l-teal-500">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Leave-Attendance Integration
+                </CardTitle>
+                <CardDescription>View how approved leaves are automatically reflected in attendance records</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link 
+                  href="/dashboard/time-management/leave-attendance" 
+                  className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                >
+                  View Integration →
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Payroll Cut-off Escalation Card */}
+            <Card className="border-l-4 border-l-rose-500">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Payroll Cut-off Escalation
+                </CardTitle>
+                <CardDescription>Monitor and escalate pending time requests before monthly payroll cut-off</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link 
+                  href="/dashboard/time-management/payroll-escalation" 
+                  className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                >
+                  View Status →
+                </Link>
+              </CardContent>
+            </Card>
             </div>
           </div>
 

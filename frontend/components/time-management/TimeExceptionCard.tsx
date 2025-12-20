@@ -143,9 +143,9 @@ export function TimeExceptionCard({
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    const reason = prompt("Rejection reason (required):");
-                    if (reason && reason.trim()) {
-                      onReject(exceptionId, reason.trim());
+                    const reason = prompt("Rejection reason (optional):");
+                    if (reason !== null) {
+                      onReject(exceptionId, reason?.trim() || "");
                     }
                   }}
                 >

@@ -8,7 +8,7 @@ import { useRequireAuth } from "@/lib/hooks/use-auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { LeaveType } from "@/types/leaves";
-import { api } from "@/lib/api/client";
+import { departmentsApi } from "@/lib/api/organization-structure/departments.api";
 
 interface TeamMemberBalance {
   employeeId: string;
@@ -73,29 +73,41 @@ export default function TeamBalancesPage() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get("/organization-structure/departments?isActive=true");
+      console.log("[TeamBalances] Fetching departments...");
+      const departmentsData = await departmentsApi.getAllDepartments({ isActive: true });
+      console.log("[TeamBalances] Received departments:", departmentsData);
+      
       // Handle different response formats
-      let departmentsData = [];
-      if (Array.isArray(response)) {
-        departmentsData = response;
-      } else if (response && typeof response === "object") {
-        if (Array.isArray(response.data)) {
-          departmentsData = response.data;
-        } else if (Array.isArray((response as any).departments)) {
-          departmentsData = (response as any).departments;
-        } else if (Array.isArray((response as any).items)) {
-          departmentsData = (response as any).items;
+      let departmentsList = [];
+      if (Array.isArray(departmentsData)) {
+        departmentsList = departmentsData;
+      } else if (departmentsData && typeof departmentsData === "object") {
+        if (Array.isArray((departmentsData as any).data)) {
+          departmentsList = (departmentsData as any).data;
+        } else if (Array.isArray((departmentsData as any).departments)) {
+          departmentsList = (departmentsData as any).departments;
+        } else if (Array.isArray((departmentsData as any).items)) {
+          departmentsList = (departmentsData as any).items;
         }
       }
       
-      setDepartments(
-        departmentsData.map((dept: any) => ({
-          id: dept._id || dept.id,
-          name: dept.name,
-        }))
-      );
-    } catch (error) {
-      console.warn("Failed to fetch departments:", error);
+      const formattedDepartments = departmentsList.map((dept: any) => ({
+        id: dept._id || dept.id,
+        name: dept.name || dept.departmentName || "Unknown Department",
+      }));
+      
+      console.log("[TeamBalances] Formatted departments:", formattedDepartments);
+      setDepartments(formattedDepartments);
+    } catch (error: any) {
+      console.error("Failed to fetch departments:", error);
+      // Log more details about the error
+      if (error.response) {
+        console.error("Error response status:", error.response.status);
+        console.error("Error response data:", error.response.data);
+        if (error.response.status === 403) {
+          console.warn("Access denied - user may not have permission to view departments");
+        }
+      }
       setDepartments([]);
     }
   };
@@ -234,13 +246,18 @@ export default function TeamBalancesPage() {
                 value={filters.departmentId}
                 onChange={(e) => setFilters({ ...filters, departmentId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={departments.length === 0 && loading}
               >
                 <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
+                {departments.length === 0 && !loading ? (
+                  <option value="" disabled>No departments available</option>
+                ) : (
+                  departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div>

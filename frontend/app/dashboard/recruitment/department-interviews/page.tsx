@@ -11,6 +11,31 @@ import { Application } from "@/types/recruitment";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
 import { Toast, useToast } from "@/components/leaves/Toast";
 
+// Helper function to extract job details from application
+const getJobDetails = (application: Application | null) => {
+  if (!application) {
+    return { title: "Unknown Position", department: "Unknown Department", location: "Unknown Location" };
+  }
+  const app = application as any;
+  const title = 
+    app.requisitionId?.templateId?.title ||
+    app.requisitionId?.template?.title ||
+    app.requisition?.templateId?.title ||
+    app.requisition?.template?.title ||
+    "Unknown Position";
+  const department = 
+    app.requisitionId?.templateId?.department ||
+    app.requisitionId?.template?.department ||
+    app.requisition?.templateId?.department ||
+    app.requisition?.template?.department ||
+    "Unknown Department";
+  const location = 
+    app.requisitionId?.location ||
+    app.requisition?.location ||
+    "Unknown Location";
+  return { title, department, location };
+};
+
 export default function DepartmentInterviewsPage() {
   const { user } = useAuth();
   useRequireAuth(SystemRole.DEPARTMENT_HEAD);
@@ -51,7 +76,15 @@ export default function DepartmentInterviewsPage() {
         }
       }
 
-      setInterviews(interviewData);
+      // Sort interviews: Referrals first, then others (for priority interview scheduling)
+      const sortedInterviewData = [...interviewData].sort((a: any, b: any) => {
+        // Referrals should come first (isReferral = true sorts before false)
+        if (a.application.isReferral && !b.application.isReferral) return -1;
+        if (!a.application.isReferral && b.application.isReferral) return 1;
+        return 0;
+      });
+
+      setInterviews(sortedInterviewData);
     } catch (error: any) {
       showToast(error.message || "Failed to load interviews", "error");
     } finally {
@@ -108,10 +141,19 @@ export default function DepartmentInterviewsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-xl">
-                      {item.application.requisition?.template?.title || "Interview"}
+                      {getJobDetails(item.application).title}
                     </CardTitle>
                     <p className="text-sm text-gray-600 mt-1">
                       Candidate: {item.application.candidate?.fullName || "N/A"}
+                      {/* Show star indicator for referred candidates - priority for earlier interview */}
+                      {item.application.isReferral && (
+                        <span 
+                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" 
+                          title="Referred Candidate - Priority for Earlier Interview"
+                        >
+                          ⭐ Referral
+                        </span>
+                      )}
                     </p>
                   </div>
                   <StatusBadge
@@ -126,7 +168,7 @@ export default function DepartmentInterviewsPage() {
                     <div>
                       <span className="text-gray-500">Position:</span>
                       <span className="ml-2 text-gray-900">
-                        {item.application.requisition?.template?.title || "N/A"}
+                        {getJobDetails(item.application).title}
                       </span>
                     </div>
                     <div>

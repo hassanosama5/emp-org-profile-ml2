@@ -66,6 +66,9 @@ export class EmployeeProfileController {
     SystemRole.HR_EMPLOYEE,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.FINANCE_STAFF,
   )
   async findAll(@Query() query: QueryEmployeeDto, @CurrentUser() user: any) {
     const result = await this.employeeProfileService.findAll(
@@ -127,9 +130,28 @@ export class EmployeeProfileController {
     console.log('[getMyProfile] Fetching employee profile for:', user.userId);
     try {
       const employee = await this.employeeProfileService.findOne(user.userId);
+      
+      // Fetch and attach system roles
+      let roles: any[] = [];
+      try {
+        const systemRoles = await this.employeeProfileService.getSystemRoles(user.userId);
+        roles = systemRoles && systemRoles.isActive ? (systemRoles.roles || []) : [];
+      } catch (roleError) {
+        console.warn('[getMyProfile] Could not fetch system roles:', roleError);
+        // If roles from JWT token are available, use those as fallback
+        roles = user.roles || [];
+      }
+      
+      // Convert employee to plain object and attach roles
+      const employeeObj = employee.toObject ? employee.toObject() : employee;
+      const employeeWithRoles = {
+        ...employeeObj,
+        roles: roles,
+      };
+      
       return {
         message: 'Profile retrieved successfully',
-        data: employee,
+        data: employeeWithRoles,
       };
     } catch (error) {
       console.error('[getMyProfile] Error fetching employee:', error);
@@ -235,12 +257,17 @@ export class EmployeeProfileController {
     };
   }
 
+  // CHANGED BY TIME MANAGEMENT MODULE
+  // Added DEPARTMENT_EMPLOYEE role to allow employees to access their department's employee list.
+  // This is needed for the overtime request form to automatically find and assign the employee's
+  // department head/manager when submitting overtime requests.
   @Get('department/:departmentId')
   @Roles(
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
+    SystemRole.DEPARTMENT_EMPLOYEE,
   )
   async findByDepartment(@Param('departmentId') departmentId: string) {
     const employees =

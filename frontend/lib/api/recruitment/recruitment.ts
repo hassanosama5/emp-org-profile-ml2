@@ -181,6 +181,12 @@ export const recruitmentApi = {
     });
   },
 
+  // ✅ Accessible: Any authenticated user (panel members only see their assignments)
+  // Returns interviews where the current user is a panel member
+  getMyPanelInterviews: async (): Promise<any[]> => {
+    return await api.get("/recruitment/my-panel-interviews");
+  },
+
   // ============================================
   // OFFERS
   // ============================================
@@ -193,17 +199,31 @@ export const recruitmentApi = {
     return await api.patch(`/recruitment/offer/${id}/respond`, data);
   },
 
-  // ✅ Accessible: HR_MANAGER, SYSTEM_ADMIN
+  // ✅ Accessible: HR_MANAGER, HR_EMPLOYEE, SYSTEM_ADMIN
+  // CHANGED: Added HR_EMPLOYEE role - HR employees can create/send offers but cannot approve them
   createOffer: async (data: CreateOfferDto): Promise<Offer> => {
     return await api.post("/recruitment/offer", data);
   },
 
-  // ✅ Accessible: HR_MANAGER, SYSTEM_ADMIN
+  // ✅ Accessible: HR_MANAGER, SYSTEM_ADMIN (NOT HR_EMPLOYEE)
+  // Only HR Manager can approve/finalize offers
   finalizeOffer: async (id: string, data: FinalizeOfferDto): Promise<Offer> => {
     return await api.patch(`/recruitment/offer/${id}/finalize`, data);
   },
 
-  // ✅ Accessible: HR_MANAGER, SYSTEM_ADMIN
+  // ✅ Accessible: HR_EMPLOYEE ONLY
+  // CHANGED: New endpoint for HR Employee to reject candidates
+  // Cannot reject if candidate is already finalized (hired, employee created, etc.)
+  rejectCandidate: async (offerId: string, reason: string): Promise<{
+    message: string;
+    offer: Offer;
+    reason: string;
+  }> => {
+    return await api.patch(`/recruitment/offer/${offerId}/reject-candidate`, { reason });
+  },
+
+  // ✅ Accessible: HR_MANAGER, HR_EMPLOYEE, SYSTEM_ADMIN
+  // CHANGED: Added HR_EMPLOYEE role for viewing offers
   getOfferByApplicationId: async (applicationId: string): Promise<Offer> => {
     return await api.get(`/recruitment/offer/application/${applicationId}`);
   },
@@ -296,6 +316,14 @@ export const recruitmentApi = {
     return await api.get(`/recruitment/onboarding/employee/${employeeId}`);
   },
 
+  // ONB-004: Candidates can view their onboarding after being hired
+  // This finds the employee profile linked to the candidate and returns their onboarding
+  getOnboardingByCandidateId: async (
+    candidateId: string
+  ): Promise<Onboarding> => {
+    return await api.get(`/recruitment/onboarding/candidate/${candidateId}`);
+  },
+
   // ✅ Accessible: No role restriction (for new hires to upload documents)
   uploadTaskDocument: async (
     onboardingId: string,
@@ -319,18 +347,26 @@ export const recruitmentApi = {
   },
 
   // ✅ Accessible: No role restriction
-  downloadDocument: async (documentId: string): Promise<Blob> => {
-    return await api.get(`/recruitment/document/${documentId}/download`, {
-      responseType: "blob",
+  // Download candidate resume/CV by candidate ID
+  // Used in Talent Pool to view candidate CVs
+  downloadCandidateResume: async (candidateId: string): Promise<Blob> => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+    
+    const response = await fetch(`${API_BASE_URL}/recruitment/candidate/${candidateId}/resume/download`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Failed to download resume: ${response.statusText}`);
+    }
+    
+    return response.blob();
   },
 
-  // CHANGED BY RECRUITMENT SUBSYSTEM - Talent Pool Feature
-  // Download candidate resume/CV by candidate ID
-  // This method allows HR staff to download resumes from the Talent Pool
-  // ✅ Accessible: HR_EMPLOYEE, HR_MANAGER, SYSTEM_ADMIN, RECRUITER
-  downloadCandidateResume: async (candidateId: string): Promise<Blob> => {
-    return await api.get(`/recruitment/candidate/${candidateId}/resume/download`, {
+  downloadDocument: async (documentId: string): Promise<Blob> => {
+    return await api.get(`/recruitment/document/${documentId}/download`, {
       responseType: "blob",
     });
   },
@@ -623,6 +659,13 @@ export const recruitmentApi = {
   // Only HR Employees and HR Managers can be panel members
   getHREmployeesForPanel: async (): Promise<any[]> => {
     return await api.get("/recruitment/hr-employees");
+  },
+
+  // CHANGED - New: Get eligible panel members based on interview stage
+  // HR_INTERVIEW: Only HR employees
+  // DEPARTMENT_INTERVIEW: HR employees + employees from the job's department
+  getEligiblePanelMembers: async (applicationId: string, stage: string): Promise<any[]> => {
+    return await api.get(`/recruitment/eligible-panel-members/${applicationId}/${stage}`);
   },
 
   // CHANGED - Added: Get employee by ID for access management

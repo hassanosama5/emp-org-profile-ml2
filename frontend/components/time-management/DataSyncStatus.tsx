@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shared/ui/Card";
 import { Button } from "@/components/shared/ui/Button";
 import { Toast, useToast } from "@/components/leaves/Toast";
+import { timeManagementApi } from "@/lib/api/time-management/time-management.api";
 
 interface SyncStatus {
   module: string;
@@ -15,10 +16,13 @@ interface SyncStatus {
 }
 
 interface SyncResult {
-  success: boolean;
-  message: string;
-  modulesSynced?: string[];
-  errors?: Array<{ module: string; error: string }>;
+  overallStatus: "SUCCESS" | "FAILED" | "PARTIAL";
+  syncDate?: Date | string;
+  executedAt?: Date | string;
+  results?: Record<
+    string,
+    { status: "SUCCESS" | "FAILED"; error?: string; data?: any }
+  >;
 }
 
 export function DataSyncStatus() {
@@ -33,32 +37,54 @@ export function DataSyncStatus() {
   }, [user?.id]);
 
   const loadSyncStatus = async () => {
-    if (!user?.id) return;
-
     try {
       setLoading(true);
-      // Note: This endpoint needs to be implemented in the backend
-      // const data = await timeManagementApi.getSyncStatus();
-      // Mock data structure
-      setSyncStatuses([
+      const data = await timeManagementApi.getSyncStatus();
+
+      const lastSync = data?.modules?.timeManagement?.lastSync || null;
+      const payrollPending = data?.modules?.payroll?.pendingRecords;
+      const payrollFinalized = data?.modules?.payroll?.finalizedRecords;
+
+      const attendanceTotal = data?.attendance?.total;
+      const attendanceFinalized = data?.attendance?.finalized;
+      const attendancePending = data?.attendance?.pending;
+
+      const derived: SyncStatus[] = [
+        {
+          module: "Payroll",
+          status:
+            payrollPending === 0 ? "SYNCED" : payrollPending > 0 ? "PENDING" : "NEVER_SYNCED",
+          lastSyncTime: lastSync,
+          recordsSynced: typeof payrollFinalized === "number" ? payrollFinalized : undefined,
+        },
+        {
+          module: "Leaves",
+          status: data?.modules?.leaves?.status ? "SYNCED" : "NEVER_SYNCED",
+          lastSyncTime: lastSync,
+        },
+        {
+          module: "Benefits",
+          status: data?.modules?.benefits?.status ? "SYNCED" : "NEVER_SYNCED",
+          lastSyncTime: lastSync,
+        },
         {
           module: "Attendance Records",
-          status: "SYNCED",
-          lastSyncTime: new Date(),
-          recordsSynced: 0,
+          status:
+            typeof attendancePending === "number"
+              ? attendancePending === 0
+                ? "SYNCED"
+                : "PENDING"
+              : "NEVER_SYNCED",
+          lastSyncTime: lastSync,
+          recordsSynced: typeof attendanceFinalized === "number" ? attendanceFinalized : undefined,
+          errorMessage:
+            typeof attendanceTotal === "number"
+              ? `Total=${attendanceTotal}, Pending=${attendancePending ?? "?"}`
+              : undefined,
         },
-        {
-          module: "Shift Assignments",
-          status: "SYNCED",
-          lastSyncTime: new Date(),
-          recordsSynced: 0,
-        },
-        {
-          module: "Time Exceptions",
-          status: "PENDING",
-          recordsSynced: 0,
-        },
-      ]);
+      ];
+
+      setSyncStatuses(derived);
     } catch (error: any) {
       console.error("Failed to load sync status:", error);
       showToast(error.message || "Failed to load sync status", "error");
@@ -70,16 +96,16 @@ export function DataSyncStatus() {
   const triggerSync = async () => {
     try {
       setSyncing(true);
-      // Note: This endpoint needs to be implemented in the backend
-      // const result = await timeManagementApi.syncData();
-      // Mock result
-      const result: SyncResult = {
-        success: true,
-        message: "Data synchronization completed successfully",
-        modulesSynced: ["Attendance Records", "Shift Assignments", "Time Exceptions"],
-      };
+      // Run full cross-module sync for today by default
+      const result: SyncResult = await timeManagementApi.syncData({
+        syncDate: new Date(),
+        modules: ["payroll", "leaves", "benefits"],
+      });
 
-      showToast(result.message, result.success ? "success" : "error");
+      showToast(
+        `Sync completed: ${result.overallStatus}`,
+        result.overallStatus === "SUCCESS" ? "success" : "error",
+      );
       loadSyncStatus();
     } catch (error: any) {
       console.error("Failed to sync data:", error);

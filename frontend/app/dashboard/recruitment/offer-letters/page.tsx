@@ -20,6 +20,31 @@ import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
 
+// Helper function to extract job details from application
+const getJobDetails = (application: Application | null) => {
+  if (!application) {
+    return { title: "Unknown Position", department: "Unknown Department", location: "Unknown Location" };
+  }
+  const app = application as any;
+  const title = 
+    app.requisitionId?.templateId?.title ||
+    app.requisitionId?.template?.title ||
+    app.requisition?.templateId?.title ||
+    app.requisition?.template?.title ||
+    "Unknown Position";
+  const department = 
+    app.requisitionId?.templateId?.department ||
+    app.requisitionId?.template?.department ||
+    app.requisition?.templateId?.department ||
+    app.requisition?.template?.department ||
+    "Unknown Department";
+  const location = 
+    app.requisitionId?.location ||
+    app.requisition?.location ||
+    "Unknown Location";
+  return { title, department, location };
+};
+
 export default function OfferLettersPage() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
@@ -122,9 +147,7 @@ export default function OfferLettersPage() {
       signingBonus: 0,
       benefits: [],
       deadline: "",
-      role: application.requisition?.template?.title || 
-            (typeof application.requisition === 'object' && application.requisition?.template?.title) ||
-            "",
+      role: getJobDetails(application).title !== "Unknown Position" ? getJobDetails(application).title : "",
       content: "",
     });
     setBenefitInput("");
@@ -245,9 +268,7 @@ export default function OfferLettersPage() {
   };
 
   const getJobTitle = (application: Application): string => {
-    return application.requisition?.template?.title || 
-           (typeof application.requisition === 'object' && application.requisition?.template?.title) ||
-           "Unknown Position";
+    return getJobDetails(application).title;
   };
 
   // Filter offers based on active tab

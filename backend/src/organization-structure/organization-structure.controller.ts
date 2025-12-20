@@ -160,6 +160,7 @@ export class OrganizationStructureController {
 
   /**
    * REQ-SANV-01: View positions (All authenticated users)
+   * Payroll Specialists and Managers need access to view positions for signing bonus configuration
    */
   @Get('positions')
   @Roles(
@@ -190,9 +191,16 @@ export class OrganizationStructureController {
 
   /**
    * REQ-SANV-01: View specific position details
+   * Payroll Specialists and Managers need access to view position details for signing bonus configuration
    */
   @Get('positions/:id')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER)
+  @Roles(
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.PAYROLL_SPECIALIST,
+  )
   async getPositionById(@Param('id') id: string, @CurrentUser() user: any) {
     return this.structureService.getPositionById(id);
   }
@@ -348,23 +356,32 @@ export class OrganizationStructureController {
    * System Admin reviews all submitted requests, Managers/HR see only their own
    */
   @Get('change-requests')
-  @Roles(SystemRole.SYSTEM_ADMIN, SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.DEPARTMENT_HEAD)
+  @Roles(
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.DEPARTMENT_HEAD,
+  )
   async getAllChangeRequests(
     @CurrentUser() user: any,
     @Query('status') status?: StructureRequestStatus,
   ) {
     // System Admin sees all requests (for approval)
     // Managers/HR/Department Head see only their own requests
-    const isSystemAdmin = user?.roles?.some((r: string) => 
-      String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase()
+    const isSystemAdmin = user?.roles?.some(
+      (r: string) =>
+        String(r).toLowerCase() === SystemRole.SYSTEM_ADMIN.toLowerCase(),
     );
-    
+
     if (isSystemAdmin) {
       // System Admin: See all requests (especially SUBMITTED ones for approval)
       return this.structureService.getAllChangeRequests(status);
     } else {
       // Managers/HR/Department Head: See only their own requests
-      return this.structureService.getChangeRequestsByRequester(user?.id || user?.userId, status);
+      return this.structureService.getChangeRequestsByRequester(
+        user?.id || user?.userId,
+        status,
+      );
     }
   }
 
@@ -408,19 +425,30 @@ export class OrganizationStructureController {
     @Body() dto: ApproveRejectChangeRequestDto,
     @CurrentUser() user: any,
   ) {
-    console.log(`[Controller] approveChangeRequest called for ID: ${id}, user: ${user?.userId}`);
-    
+    console.log(
+      `[Controller] approveChangeRequest called for ID: ${id}, user: ${user?.userId}`,
+    );
+
     if (!user?.userId) {
       console.error(`[Controller] User ID not found. User object:`, user);
-      throw new BadRequestException('User ID not found. Please ensure you are logged in.');
+      throw new BadRequestException(
+        'User ID not found. Please ensure you are logged in.',
+      );
     }
-    
+
     try {
-      const result = await this.structureService.approveChangeRequest(id, user.userId, dto.comments);
+      const result = await this.structureService.approveChangeRequest(
+        id,
+        user.userId,
+        dto.comments,
+      );
       console.log(`[Controller] Approval successful for request ${id}`);
       return result;
     } catch (error: any) {
-      console.error(`[Controller] Error approving request ${id}:`, error?.message || error);
+      console.error(
+        `[Controller] Error approving request ${id}:`,
+        error?.message || error,
+      );
       throw error;
     }
   }
@@ -436,18 +464,29 @@ export class OrganizationStructureController {
     @Body() dto: ApproveRejectChangeRequestDto,
     @CurrentUser() user: any,
   ) {
-    console.log(`[Controller] rejectChangeRequest called for ID: ${id}, user: ${user?.userId}`);
-    
+    console.log(
+      `[Controller] rejectChangeRequest called for ID: ${id}, user: ${user?.userId}`,
+    );
+
     if (!user?.userId) {
-      throw new BadRequestException('User ID not found. Please ensure you are logged in.');
+      throw new BadRequestException(
+        'User ID not found. Please ensure you are logged in.',
+      );
     }
-    
+
     try {
-      const result = await this.structureService.rejectChangeRequest(id, user.userId, dto.comments);
+      const result = await this.structureService.rejectChangeRequest(
+        id,
+        user.userId,
+        dto.comments,
+      );
       console.log(`[Controller] Rejection successful for request ${id}`);
       return result;
     } catch (error: any) {
-      console.error(`[Controller] Error rejecting request ${id}:`, error?.message || error);
+      console.error(
+        `[Controller] Error rejecting request ${id}:`,
+        error?.message || error,
+      );
       throw error;
     }
   }

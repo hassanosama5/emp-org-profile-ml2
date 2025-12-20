@@ -174,6 +174,7 @@ export interface OnboardingTask {
   department: string;
   status: OnboardingTaskStatus;
   deadline?: string;
+  completedAt?: string;
   documentId?: string;
   notes?: string;
 }
@@ -186,6 +187,8 @@ export interface Onboarding {
   tasks: OnboardingTask[];
   startDate?: string;
   completionDate?: string;
+  completed?: boolean;
+  completedAt?: string;
   status: string;
   createdAt?: string;
   updatedAt?: string;
@@ -389,5 +392,17 @@ export interface CreateEmployeeFromContractDto {
   startDate: string;
   workEmail?: string;
   employeeNumber?: string;
+  // CHANGED - Added missing fields to integrate with employee-profile subsystem
+  contractType?: 'FULL_TIME_CONTRACT' | 'PART_TIME_CONTRACT';
+  workType?: 'FULL_TIME' | 'PART_TIME';
+  primaryDepartmentId?: string;
+  supervisorPositionId?: string;
+  payGradeId?: string;
+  // CHANGED - Added systemRole to allow HR to specify what role the new employee should have
+  // This is crucial for hiring HR staff, payroll staff, etc. who need specific dashboard access
+  // If not provided, the backend will auto-determine based on job title/department
+  systemRole?: 'department employee' | 'department head' | 'HR Manager' | 'HR Employee' | 
+               'Payroll Specialist' | 'Payroll Manager' | 'System Admin' | 
+               'Legal & Policy Admin' | 'Recruiter' | 'Finance Staff' | 'HR Admin';
 }
 

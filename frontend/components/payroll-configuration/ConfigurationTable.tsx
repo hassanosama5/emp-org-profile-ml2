@@ -59,64 +59,64 @@ export function ConfigurationTable<T extends ConfigurationItem>({
 
   if (data.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-12 text-center">
-        <div className="text-gray-400 mb-2">
+      <div className="rounded-lg border border-white/20 backdrop-blur-xl bg-white/10 p-12 text-center">
+        <div className="text-white/40 mb-2">
           <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
         </div>
-        <p className="text-gray-500 text-lg">{emptyMessage}</p>
+        <p className="text-white/70 text-lg">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border-2 border-gray-200 bg-white shadow-lg">
-      <table className="w-full">
-        <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <tr>
+    <div className="overflow-x-auto rounded-2xl border-2 border-white/20 backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 shadow-2xl">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-gradient-to-r from-white/15 via-white/10 to-white/15 border-b-2 border-white/20">
             {columns.map((column) => (
               <th
                 key={column.key}
-                className={`px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 border-b-2 border-gray-200 ${column.className || ''}`}
+                className={`px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-white/90 ${column.className || ''}`}
               >
                 {column.label}
               </th>
             ))}
             {showStatus && (
-              <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 border-b-2 border-gray-200">
+              <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-white/90">
                 Status
               </th>
             )}
-            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-700 border-b-2 border-gray-200">
+            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-white/90">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 bg-white">
+        <tbody className="divide-y divide-white/10">
           {data.map((item, index) => {
             const itemId = item._id || item.id || '';
             return (
               <tr 
                 key={itemId} 
-                className={`hover:bg-gradient-to-r hover:from-cyan-50 hover:to-blue-50 transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                className={`hover:bg-gradient-to-r hover:from-white/15 hover:via-white/10 hover:to-white/15 transition-all duration-300 ${index % 2 === 0 ? 'bg-white/5' : 'bg-white/8'}`}
               >
                 {columns.map((column) => (
-                  <td key={column.key} className={`px-6 py-4 text-sm text-gray-900 ${column.className || ''}`}>
+                  <td key={column.key} className={`px-6 py-4 text-sm text-white align-top ${column.className || ''}`}>
                     {column.render ? column.render(item) : (item[column.key] as string) || '-'}
                   </td>
                 ))}
                 {showStatus && (
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 text-sm align-top">
                     <StatusBadge status={item.status} size="sm" />
                   </td>
                 )}
-                <td className="px-6 py-4 text-right text-sm font-medium">
+                <td className="px-6 py-4 text-right text-sm font-medium align-top">
                   <div className="flex justify-end gap-2 flex-wrap">
                     {onView && (
                       <button
                         onClick={() => onView(item)}
-                        className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 hover:shadow-md"
+                        className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-slate-600/80 to-slate-700/80 hover:from-slate-500 hover:to-slate-600 rounded-lg transition-all duration-200 hover:shadow-lg backdrop-blur-md border border-white/20 hover:border-white/40 transform hover:scale-105"
                       >
                         View
                       </button>
@@ -124,7 +124,7 @@ export function ConfigurationTable<T extends ConfigurationItem>({
                     {onEdit && canEdit(item) && (
                       <button
                         onClick={() => onEdit(item)}
-                        className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-all duration-200 hover:shadow-md"
+                        className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-lg transition-all duration-200 hover:shadow-lg backdrop-blur-md transform hover:scale-105 shadow-md shadow-blue-500/30"
                       >
                         Edit
                       </button>
@@ -132,7 +132,7 @@ export function ConfigurationTable<T extends ConfigurationItem>({
                     {onApprove && canApprove(item) && (
                       <button
                         onClick={() => onApprove(item)}
-                        className="px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg transition-all duration-200 hover:shadow-md transform hover:scale-105"
+                        className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg transition-all duration-200 hover:shadow-lg transform hover:scale-105 shadow-md shadow-green-500/30"
                       >
                         Approve
                       </button>
@@ -140,7 +140,7 @@ export function ConfigurationTable<T extends ConfigurationItem>({
                     {onReject && canReject(item) && (
                       <button
                         onClick={() => onReject(item)}
-                        className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-lg transition-all duration-200 hover:shadow-md"
+                        className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 rounded-lg transition-all duration-200 hover:shadow-lg backdrop-blur-md border border-red-400/30 hover:border-red-400/50 transform hover:scale-105 shadow-md shadow-red-500/30"
                       >
                         Reject
                       </button>
@@ -148,7 +148,7 @@ export function ConfigurationTable<T extends ConfigurationItem>({
                     {onDelete && canDelete(item) && (
                       <button
                         onClick={() => onDelete(item)}
-                        className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-lg transition-all duration-200 hover:shadow-md"
+                        className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 rounded-lg transition-all duration-200 hover:shadow-lg backdrop-blur-md border border-red-400/30 hover:border-red-400/50 transform hover:scale-105 shadow-md shadow-red-500/30"
                       >
                         Delete
                       </button>

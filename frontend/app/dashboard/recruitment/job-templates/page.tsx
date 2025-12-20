@@ -3,6 +3,7 @@
 // CHANGED - REC-003: Job Templates Management Page
 // HR Manager can define standardized job description templates
 // FIXED - Removed nested TemplateForm component to fix input focus issue
+// CHANGED - Integrated with Organization Structure for departments and positions
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -10,7 +11,10 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { recruitmentApi } from "@/lib/api/recruitment/recruitment";
+import { departmentsApi } from "@/lib/api/organization-structure/departments.api";
+import { positionsApi } from "@/lib/api/organization-structure/positions.api";
 import { JobTemplate } from "@/types/recruitment";
+import { DepartmentResponseDto, PositionResponseDto } from "@/types/organization-structure";
 import {
   Card,
   CardHeader,
@@ -43,6 +47,11 @@ export default function JobTemplatesPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<JobTemplate | null>(null);
   
+  // CHANGED - Organization Structure data for dropdowns
+  const [departments, setDepartments] = useState<DepartmentResponseDto[]>([]);
+  const [positions, setPositions] = useState<PositionResponseDto[]>([]);
+  const [loadingOrgData, setLoadingOrgData] = useState(true);
+  
   // CHANGED - Form state (only fields backend accepts)
   const [formData, setFormData] = useState<TemplateFormData>({
     title: "",
@@ -61,6 +70,7 @@ export default function JobTemplatesPage() {
 
   useEffect(() => {
     loadTemplates();
+    loadOrganizationData();
   }, []);
 
   const loadTemplates = async () => {
@@ -72,6 +82,24 @@ export default function JobTemplatesPage() {
       showToast(error.message || "Failed to load job templates", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // CHANGED - Load departments and positions from Organization Structure
+  const loadOrganizationData = async () => {
+    try {
+      setLoadingOrgData(true);
+      const [deptData, posData] = await Promise.all([
+        departmentsApi.getAllDepartments({ isActive: true }),
+        positionsApi.getAllPositions({ isActive: true }),
+      ]);
+      setDepartments(Array.isArray(deptData) ? deptData : []);
+      setPositions(Array.isArray(posData) ? posData : []);
+    } catch (error: any) {
+      console.error("Failed to load organization data:", error);
+      showToast("Failed to load departments/positions. Please refresh.", "error");
+    } finally {
+      setLoadingOrgData(false);
     }
   };
 
@@ -211,32 +239,66 @@ export default function JobTemplatesPage() {
   };
 
   // CHANGED - Render form fields (inline, not as separate component)
+  // CHANGED - Now uses dropdowns for title (position) and department from Organization Structure
   const renderFormFields = () => (
     <div className="space-y-4">
-      {/* Title */}
+      {/* Loading indicator for organization data */}
+      {loadingOrgData && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+          Loading departments and positions...
+        </div>
+      )}
+
+      {/* Title (Position) - Now a dropdown */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Job Title *
+          Job Title (Position) *
         </label>
-        <Input
+        <select
           value={formData.title}
           onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-          placeholder="e.g., Software Engineer, Marketing Manager"
-        />
+          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          disabled={loadingOrgData}
+        >
+          <option value="">Select a position...</option>
+          {positions.map((position) => (
+            <option key={position._id} value={position.title}>
+              {position.title} {position.code ? `(${position.code})` : ""}
+            </option>
+          ))}
+        </select>
         {errors.title && <p className="text-red-500 text-xs mt-1">{errors.title}</p>}
+        {positions.length === 0 && !loadingOrgData && (
+          <p className="text-amber-600 text-xs mt-1">
+            No positions found. Please create positions in Organization Structure first.
+          </p>
+        )}
       </div>
 
-      {/* Department */}
+      {/* Department - Now a dropdown */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Department *
         </label>
-        <Input
+        <select
           value={formData.department}
           onChange={(e) => setFormData((prev) => ({ ...prev, department: e.target.value }))}
-          placeholder="e.g., Engineering, Marketing, HR"
-        />
+          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          disabled={loadingOrgData}
+        >
+          <option value="">Select a department...</option>
+          {departments.map((dept) => (
+            <option key={dept._id} value={dept.name}>
+              {dept.name} {dept.code ? `(${dept.code})` : ""}
+            </option>
+          ))}
+        </select>
         {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
+        {departments.length === 0 && !loadingOrgData && (
+          <p className="text-amber-600 text-xs mt-1">
+            No departments found. Please create departments in Organization Structure first.
+          </p>
+        )}
       </div>
 
       {/* Description */}
@@ -376,6 +438,10 @@ export default function JobTemplatesPage() {
               Job templates are standardized job descriptions that ensure consistency across all job postings.
               Each template includes: <strong>title, department, description, qualifications, and skills</strong>.
               When creating a job requisition, HR staff selects a template and specifies the number of openings and location.
+            </p>
+            <p className="text-sm text-blue-700 mt-2">
+              <strong>Note:</strong> Titles and departments are now linked to the Organization Structure. 
+              Make sure positions and departments exist there before creating templates.
             </p>
           </CardContent>
         </Card>

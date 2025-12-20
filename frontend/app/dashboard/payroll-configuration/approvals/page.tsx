@@ -187,12 +187,12 @@ export default function ApprovalsPage() {
       label: 'Type',
       render: (item: ConfigurationItem) => (
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg">
-            <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="p-1.5 bg-gradient-to-br from-orange-500/30 to-amber-500/30 rounded-lg border border-orange-400/30">
+            <svg className="w-4 h-4 text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
           </div>
-          <span className="font-semibold text-gray-900 capitalize">
+          <span className="font-semibold text-white capitalize">
             {item.type?.replace(/-/g, ' ') || 'Unknown'}
           </span>
         </div>
@@ -210,7 +210,7 @@ export default function ApprovalsPage() {
         else if (item.type) nameField = item.type;
         return (
           <div>
-            <span className="font-semibold text-gray-900">{nameField}</span>
+            <span className="font-semibold text-white">{nameField}</span>
           </div>
         );
       },
@@ -231,11 +231,11 @@ export default function ApprovalsPage() {
         return (
           <div className="flex flex-wrap gap-1">
             {details.map((detail, idx) => (
-              <span key={idx} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
+              <span key={idx} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-500/30 text-orange-200 border border-orange-400/30">
                 {detail}
               </span>
             ))}
-            {details.length === 0 && <span className="text-sm text-gray-400">—</span>}
+            {details.length === 0 && <span className="text-sm text-white/40">—</span>}
           </div>
         );
       },
@@ -255,10 +255,10 @@ export default function ApprovalsPage() {
         }
         return (
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-amber-500 rounded-full flex items-center justify-center text-white text-xs font-semibold shadow-lg">
               {displayName ? displayName.charAt(0).toUpperCase() : '?'}
             </div>
-            <span className="text-sm font-medium text-gray-700">{displayName}</span>
+            <span className="text-sm font-medium text-white">{displayName}</span>
           </div>
         );
       },
@@ -270,97 +270,120 @@ export default function ApprovalsPage() {
         const date = item.createdAt || item.data?.createdAt;
         return date ? (
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
-            <span className="text-sm font-medium text-gray-700">{new Date(date).toLocaleDateString()}</span>
+            <span className="text-sm font-medium text-white">{new Date(date).toLocaleDateString()}</span>
           </div>
         ) : (
-          <span className="text-sm text-gray-400">N/A</span>
+          <span className="text-sm text-white/40">N/A</span>
         );
       },
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
-            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">Approval Dashboard</h1>
-            <p className="text-gray-600 mt-1 text-sm">
-              Review and approve pending payroll configurations (Payroll Manager only)
-            </p>
-          </div>
-        </div>
-
-        {/* Stats Banner */}
-        <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-amber-100 text-sm font-medium mb-1">Pending Approvals</p>
-              <p className="text-4xl font-bold">{Array.isArray(pendingApprovals) ? pendingApprovals.length : 0}</p>
-              <p className="text-amber-100 text-xs mt-1">Configuration(s) awaiting your review</p>
-            </div>
-            <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm">
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-              </svg>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 relative overflow-hidden">
+      {/* Animated Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-orange-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-yellow-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
       </div>
 
+      {/* Grid Pattern Overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none"></div>
+
+      <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-4 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl shadow-xl shadow-orange-500/50 transform hover:scale-110 transition-transform duration-300">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-2">
+                <span className="text-white">Approval </span>
+                <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 bg-clip-text text-transparent">
+                  Dashboard
+                </span>
+              </h1>
+              <p className="text-white/80 mt-1 text-base">
+                Review and approve pending payroll configurations (Payroll Manager only)
+              </p>
+            </div>
+          </div>
+
+          {/* Stats Banner */}
+          <div className="bg-gradient-to-br from-orange-600/40 via-amber-600/40 to-yellow-600/40 backdrop-blur-xl border-2 border-orange-400/50 rounded-3xl shadow-2xl p-8 mb-8 text-white relative overflow-hidden">
+            {/* Decorative gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30 pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400/20 to-amber-400/20 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+            
+            <div className="flex items-center justify-between relative z-10">
+              <div>
+                <p className="text-orange-100 text-sm font-semibold mb-2 uppercase tracking-wide">Pending Approvals</p>
+                <p className="text-6xl font-extrabold mb-2 drop-shadow-lg">{Array.isArray(pendingApprovals) ? pendingApprovals.length : 0}</p>
+                <p className="text-orange-100 text-sm">Configuration(s) awaiting your review</p>
+              </div>
+              <div className="p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20 shadow-xl">
+                <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
       {error && (
-        <div className="mb-6 rounded-xl border-2 border-red-300 bg-red-50 p-4 shadow-lg">
+        <div className="mb-6 rounded-2xl border-2 border-red-400/50 bg-gradient-to-br from-red-600/30 to-red-700/30 backdrop-blur-xl p-4 shadow-xl">
           <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-5 h-5 text-red-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
-            <p className="text-red-800 font-semibold">{error}</p>
+            <p className="text-red-100 font-semibold">{error}</p>
           </div>
         </div>
       )}
 
       {success && (
-        <div className="mb-6 rounded-xl border-2 border-green-300 bg-green-50 p-4 shadow-lg">
+        <div className="mb-6 rounded-2xl border-2 border-green-400/50 bg-gradient-to-br from-green-600/30 to-emerald-700/30 backdrop-blur-xl p-4 shadow-xl">
           <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-5 h-5 text-green-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
-            <p className="text-green-800 font-semibold">{success}</p>
+            <p className="text-green-100 font-semibold">{success}</p>
           </div>
         </div>
       )}
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-2xl rounded-2xl border border-white/20 overflow-hidden">
-        <div className="px-6 py-6 sm:px-8 sm:py-8">
+      <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-2xl shadow-2xl rounded-3xl border-2 border-white/20 overflow-hidden relative">
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/20 pointer-events-none"></div>
+        
+        <div className="px-6 py-6 sm:px-8 sm:py-8 relative z-10">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-1">Pending Approvals</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-2xl font-bold text-white mb-1 drop-shadow-lg">Pending Approvals</h2>
+              <p className="text-sm text-white/80">
                 {Array.isArray(pendingApprovals) ? pendingApprovals.length : 0} configuration(s) awaiting approval
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                 </svg>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
-                  className="px-4 py-2 text-sm font-medium border-2 border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white text-gray-700 transition-all duration-200 hover:border-amber-300"
+                  className="px-4 py-2.5 text-sm font-medium border-2 border-orange-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 transition-all duration-200 hover:border-orange-400 hover:bg-white/15"
                 >
-                  <option value="all">All Types</option>
+                  <option value="all" className="bg-slate-900 text-white">All Types</option>
                   {types.map((type) => (
-                    <option key={type} value={type}>
+                    <option key={type} value={type} className="bg-slate-900 text-white">
                       {type.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
                     </option>
                   ))}
@@ -369,7 +392,7 @@ export default function ApprovalsPage() {
               <button
                 onClick={loadPendingApprovals}
                 disabled={isLoading}
-                className="px-4 py-2 border-2 border-amber-200 rounded-lg text-sm font-semibold text-amber-700 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all duration-200 flex items-center hover:border-amber-300 disabled:opacity-50"
+                className="px-5 py-2.5 border-2 border-orange-400/50 rounded-xl text-sm font-semibold text-white hover:bg-orange-500/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 flex items-center hover:border-orange-400 disabled:opacity-50 bg-white/10 backdrop-blur-sm"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -433,6 +456,20 @@ export default function ApprovalsPage() {
         data={viewModal.details}
         type={viewModal.item?.type || ''}
       />
+    </div>
+
+      {/* Add custom animations */}
+      <style jsx>{`
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+      `}</style>
     </div>
   );
 }

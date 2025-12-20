@@ -216,8 +216,9 @@ export default function AllJobsPage() {
                       {job.statistics && (
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500">Available:</span>
-                          <span className="font-medium text-blue-600">
-                            {job.statistics.availablePositions || job.openings} positions
+                          <span className={`font-medium ${job.statistics.availablePositions === 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                            {/* FIXED: Use nullish coalescing (??) instead of || to handle 0 correctly */}
+                            {job.statistics.availablePositions ?? job.openings} position{(job.statistics.availablePositions ?? job.openings) !== 1 ? 's' : ''}
                           </span>
                         </div>
                       )}
@@ -244,11 +245,18 @@ export default function AllJobsPage() {
                     )}
 
                     <div className="flex gap-2 pt-4 border-t">
-                      <Link href={`/dashboard/recruitment/jobs/${job._id}`} className="flex-1">
-                        <Button className="w-full" size="sm">
-                          {isCandidate ? "View & Apply" : "View Details"}
+                      {/* CHANGED: Show different button when no positions available */}
+                      {isCandidate && job.statistics?.availablePositions === 0 ? (
+                        <Button className="w-full bg-gray-400 cursor-not-allowed" size="sm" disabled>
+                          No Positions Available
                         </Button>
-                      </Link>
+                      ) : (
+                        <Link href={`/dashboard/recruitment/jobs/${job._id}`} className="flex-1">
+                          <Button className="w-full" size="sm">
+                            {isCandidate ? "View & Apply" : "View Details"}
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

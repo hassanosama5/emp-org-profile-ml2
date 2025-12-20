@@ -17,15 +17,14 @@ export const api: AxiosInstance = axios.create({
     "Content-Type": "application/json",
   },
   timeout: 15000,
-  withCredentials: true, // Enable cookies (credentials) for all requests
+  withCredentials: true, // Required for HTTP-only cookie authentication
 });
 
 // 🔐 Request interceptor – cookies are sent automatically with withCredentials: true
-// No need to manually attach tokens from localStorage
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Cookies are automatically included with withCredentials: true
-    // No localStorage token handling needed
+    // Cookies are automatically sent with requests when withCredentials: true
+    // No need to manually attach tokens from localStorage
     return config;
   },
   (error) => {
@@ -50,18 +49,7 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle null or empty responses gracefully
-    // Return the data property if it exists, otherwise return null
-    // This prevents "null" string parsing errors
-    if (response.data === null || response.data === undefined) {
-      return null;
-    }
-    
-    // If response.data is the string "null", return null instead
-    if (typeof response.data === 'string' && response.data.trim() === 'null') {
-      return null;
-    }
-    
+    // Return the data property if it exists, otherwise return the full response
     return response.data;
   },
   (error) => {
@@ -140,17 +128,6 @@ api.interceptors.response.use(
         headers: error.response.headers,
       });
     }
-
-    // Log validation errors if present
-    if (error.response?.data) {
-      const errorData = error.response.data;
-      if (Array.isArray(errorData.message)) {
-        // NestJS validation errors format
-        console.error('🔴 Validation Errors:', errorData.message);
-      } else if (errorData.message) {
-        console.error('🔴 Error Message:', errorData.message);
-      }
-    }
     
     // ============================================================
     // CHANGED: Removed orphaned code causing syntax errors
@@ -180,12 +157,12 @@ api.interceptors.response.use(
         const isAuthPage = currentPath.startsWith("/auth/");
         const isNetworkError = !error.response; // Network errors don't have response
         
-        // Don't redirect if already on auth pages or if it's a network error
-        // Also don't redirect if we're in the middle of initializing auth
+        // Don't redirect if already on login/auth page or if it's a network error
+        // Also don't redirect during initial page load - let the auth hooks handle it
         if (!isLoginPage && !isAuthPage && !isNetworkError) {
-          // Cookie-based auth - no need to clear localStorage
-          // Cookie will be cleared by backend on logout
-          // Add a small delay to prevent redirect loops
+          // With cookie-based auth, 401 means the cookie is invalid/expired
+          // Redirect to login to get a new cookie
+          // Small delay to prevent redirect loops
           setTimeout(() => {
             window.location.href = "/auth/login";
           }, 100);
@@ -208,11 +185,7 @@ api.interceptors.response.use(
     // CHANGED - Extract error message with better handling for validation errors
     let errorMessage = "An error occurred";
     
-    // Handle case where response.data might be the string "null" or actual null
-    let responseData = error.response?.data;
-    if (typeof responseData === 'string' && responseData.trim() === 'null') {
-      responseData = null;
-    }
+    const responseData = error.response?.data;
     
     // First, try to get message from error.response.data (NestJS format)
     if (responseData) {
@@ -289,28 +262,10 @@ api.interceptors.response.use(
 
     //change
     // Create a more detailed error object
-    let finalErrorMessage = errorMessage;
-    
-    // Extract validation errors if present
-    if (error.response?.data) {
-      const errorData = error.response.data;
-      if (Array.isArray(errorData.message)) {
-        // NestJS validation errors format: { message: ["field must be...", ...] }
-        finalErrorMessage = `Validation failed: ${errorData.message.join(', ')}`;
-      } else if (errorData.message && typeof errorData.message === 'string') {
-        finalErrorMessage = errorData.message;
-      } else if (errorData.error) {
-        finalErrorMessage = errorData.error;
-      } else if (typeof errorData === 'string') {
-        finalErrorMessage = errorData;
-      }
-    }
-    
-    const detailedError = new Error(finalErrorMessage);
+    const detailedError = new Error(errorMessage);
     (detailedError as any).status = error.response?.status;
     (detailedError as any).responseData = responseData;
     (detailedError as any).originalError = error;
-    (detailedError as any).validationErrors = error.response?.data?.message || null;
     
     return Promise.reject(detailedError);
   }

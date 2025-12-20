@@ -8,6 +8,30 @@ interface AttendanceRecordCardProps {
 }
 
 export function AttendanceRecordCard({ record, onRequestCorrection }: AttendanceRecordCardProps) {
+    const deriveFromPunches = () => {
+        const raw: any[] = Array.isArray((record as any)?.punches) ? (record as any).punches : [];
+        const flat = raw.flatMap((p: any) => (Array.isArray(p) ? p : [p]));
+        const parsed = flat
+            .map((p: any) => ({
+                type: String(p?.type ?? "").trim().toUpperCase(),
+                time: p?.time ? new Date(p.time) : null,
+            }))
+            .filter((p) => p.time && !isNaN((p.time as Date).getTime()))
+            .sort((a, b) => (a.time as Date).getTime() - (b.time as Date).getTime());
+
+        const firstIn = parsed.find((p) => p.type === "IN");
+        const lastOut = [...parsed].reverse().find((p) => p.type === "OUT");
+        const punchCount = parsed.length;
+
+        return {
+            punchCount,
+            clockIn: (firstIn?.time || parsed[0]?.time || undefined) as Date | undefined,
+            clockOut: (lastOut?.time || (punchCount > 1 ? parsed[punchCount - 1]?.time : undefined)) as Date | undefined,
+        };
+    };
+
+    const derived = deriveFromPunches();
+
     const formatTime = (time?: Date | string) => {
         if (!time) return "N/A";
         return new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -55,7 +79,14 @@ export function AttendanceRecordCard({ record, onRequestCorrection }: Attendance
         }
     };
 
-    const hasMissedPunch = record.hasMissedPunch || record.status === "INCOMPLETE";
+    const effectiveClockIn = record.clockIn || (derived.clockIn as any);
+    const effectiveClockOut = record.clockOut || (derived.clockOut as any);
+    const displayStatus =
+        (record.status === "COMPLETE" && !effectiveClockOut) || (derived.punchCount % 2 !== 0 && derived.punchCount > 0)
+            ? "INCOMPLETE"
+            : record.status;
+
+    const hasMissedPunch = record.hasMissedPunch || displayStatus === "INCOMPLETE";
 
     return (
         <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -72,8 +103,8 @@ export function AttendanceRecordCard({ record, onRequestCorrection }: Attendance
                             Missed Punch
                         </span>
                     )}
-                    <span className={`px-2 py-1 text-xs font-medium rounded border ${getStatusColor(record.status)}`}>
-                        {getStatusLabel(record.status)}
+                    <span className={`px-2 py-1 text-xs font-medium rounded border ${getStatusColor(displayStatus)}`}>
+                        {getStatusLabel(displayStatus)}
                     </span>
                 </div>
             </div>
@@ -81,11 +112,11 @@ export function AttendanceRecordCard({ record, onRequestCorrection }: Attendance
             <div className="grid grid-cols-2 gap-4 mb-3">
                 <div>
                     <p className="text-xs text-gray-500">Clock In</p>
-                    <p className="text-sm font-medium text-gray-900">{formatTime(record.clockIn)}</p>
+                    <p className="text-sm font-medium text-gray-900">{formatTime(effectiveClockIn)}</p>
                 </div>
                 <div>
                     <p className="text-xs text-gray-500">Clock Out</p>
-                    <p className="text-sm font-medium text-gray-900">{formatTime(record.clockOut)}</p>
+                    <p className="text-sm font-medium text-gray-900">{formatTime(effectiveClockOut)}</p>
                 </div>
             </div>
 

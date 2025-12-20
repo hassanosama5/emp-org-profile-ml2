@@ -14,6 +14,34 @@ import { Application } from "@/types/recruitment";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
 import { Toast, useToast } from "@/components/leaves/Toast";
 
+// Helper function to extract job details from application
+const getJobDetails = (application: Application | null) => {
+  if (!application) {
+    return { 
+      title: "Unknown Position", 
+      department: "Unknown Department", 
+      location: "Unknown Location",
+      openings: 0,
+      publishStatus: "Unknown",
+      description: "",
+      skills: [] as string[],
+    };
+  }
+  const app = application as any;
+  const template = app.requisitionId?.templateId || app.requisitionId?.template || 
+                   app.requisition?.templateId || app.requisition?.template;
+  
+  const title = template?.title || "Unknown Position";
+  const department = template?.department || "Unknown Department";
+  const location = app.requisitionId?.location || app.requisition?.location || "Unknown Location";
+  const openings = app.requisitionId?.openings || app.requisition?.openings || 0;
+  const publishStatus = app.requisitionId?.publishStatus || app.requisition?.publishStatus || "Active";
+  const description = template?.description || "";
+  const skills = template?.skills || [];
+  
+  return { title, department, location, openings, publishStatus, description, skills };
+};
+
 export default function MyApplicationsPage() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
@@ -82,6 +110,34 @@ export default function MyApplicationsPage() {
       rejected: "Unfortunately, your application was not selected this time.",
     };
     return messages[status.toLowerCase()] || "Application status pending.";
+  };
+
+  // CHANGED - Get current stage display based on status and stage
+  const getCurrentStageDisplay = (application: Application): string => {
+    const status = application.status?.toLowerCase();
+    const stage = application.currentStage || application.stage;
+    
+    // Map status to meaningful stage display
+    if (status === 'hired') return 'Hired';
+    if (status === 'rejected') return 'Rejected';
+    if (status === 'offer') return 'Offer Stage';
+    
+    // For in_process, show the actual interview stage
+    if (status === 'in_process') {
+      if (stage) {
+        const stageDisplay = stage.toString().replace(/_/g, ' ');
+        // Capitalize each word
+        return stageDisplay.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+      }
+      return 'Under Review';
+    }
+    
+    // For submitted
+    if (status === 'submitted') return 'Screening';
+    
+    return 'Pending';
   };
 
   // CHANGED - Get progress percentage
@@ -184,12 +240,12 @@ export default function MyApplicationsPage() {
                         <span className="text-3xl">{getStatusEmoji(application.status)}</span>
                         <div>
                           <CardTitle className="text-xl text-gray-900">
-                            {application.requisition?.template?.title || "Job Application"}
+                            {getJobDetails(application).title}
                           </CardTitle>
                           <p className="text-sm text-gray-600 mt-1">
-                            <span className="font-medium">{application.requisition?.template?.department || "Department"}</span>
-                            {application.requisition?.location && (
-                              <span> • 📍 {application.requisition.location}</span>
+                            <span className="font-medium">{getJobDetails(application).department}</span>
+                            {getJobDetails(application).location !== "Unknown Location" && (
+                              <span> • 📍 {getJobDetails(application).location}</span>
                             )}
                           </p>
                         </div>
@@ -257,42 +313,42 @@ export default function MyApplicationsPage() {
 
                       <div className="bg-gray-50 rounded-lg p-3">
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Current Stage</p>
-                        <p className="text-sm font-semibold text-gray-900 mt-1 capitalize">
-                          {application.stage?.replace(/_/g, " ") || "Initial Review"}
+                        <p className="text-sm font-semibold text-gray-900 mt-1">
+                          {getCurrentStageDisplay(application)}
                         </p>
                       </div>
 
                       <div className="bg-gray-50 rounded-lg p-3">
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Position Openings</p>
                         <p className="text-sm font-semibold text-gray-900 mt-1">
-                          {application.requisition?.openings || "N/A"} position{(application.requisition?.openings || 0) !== 1 ? 's' : ''}
+                          {getJobDetails(application).openings || "N/A"} position{(getJobDetails(application).openings || 0) !== 1 ? 's' : ''}
                         </p>
                       </div>
 
                       <div className="bg-gray-50 rounded-lg p-3">
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Job Status</p>
                         <p className="text-sm font-semibold text-gray-900 mt-1 capitalize">
-                          {application.requisition?.publishStatus || "Active"}
+                          {getJobDetails(application).publishStatus}
                         </p>
                       </div>
                     </div>
 
                     {/* CHANGED - Job description preview */}
-                    {application.requisition?.template?.description && (
+                    {getJobDetails(application).description && (
                       <div className="border-t pt-4">
                         <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Job Description</p>
                         <p className="text-sm text-gray-600 line-clamp-2">
-                          {application.requisition.template.description}
+                          {getJobDetails(application).description}
                         </p>
                       </div>
                     )}
 
                     {/* CHANGED - Skills if available */}
-                    {application.requisition?.template?.skills && application.requisition.template.skills.length > 0 && (
+                    {getJobDetails(application).skills.length > 0 && (
                       <div className="border-t pt-4">
                         <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Required Skills</p>
                         <div className="flex flex-wrap gap-2">
-                          {application.requisition.template.skills.slice(0, 5).map((skill: string, idx: number) => (
+                          {getJobDetails(application).skills.slice(0, 5).map((skill: string, idx: number) => (
                             <span 
                               key={idx} 
                               className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
@@ -300,9 +356,9 @@ export default function MyApplicationsPage() {
                               {skill}
                             </span>
                           ))}
-                          {application.requisition.template.skills.length > 5 && (
+                          {getJobDetails(application).skills.length > 5 && (
                             <span className="text-xs text-gray-400">
-                              +{application.requisition.template.skills.length - 5} more
+                              +{getJobDetails(application).skills.length - 5} more
                             </span>
                           )}
                         </div>
@@ -311,7 +367,14 @@ export default function MyApplicationsPage() {
 
                     {/* CHANGED - Action buttons */}
                     <div className="flex gap-3 pt-2 border-t">
-                      <Link href={`/dashboard/recruitment/jobs/${application.requisitionId}`} className="flex-1">
+                      <Link 
+                        href={`/dashboard/recruitment/jobs/${
+                          typeof application.requisitionId === 'object' 
+                            ? (application.requisitionId as any)?._id || (application.requisitionId as any)?.id
+                            : application.requisitionId
+                        }`} 
+                        className="flex-1"
+                      >
                         <Button variant="outline" className="w-full">
                           View Job Details
                         </Button>

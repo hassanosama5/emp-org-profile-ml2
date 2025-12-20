@@ -1,4 +1,14 @@
 "use client";
+// Shift name suggestions for quick selection
+const SHIFT_NAME_SUGGESTIONS = [
+  "Fixed Core Hours",
+  "Flex-Time",
+  "Rotational",
+  "Split",
+  "Custom Weekly Patterns",
+  "Overtime",
+];
+
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
@@ -273,6 +283,23 @@ export default function ShiftSchedulesPage() {
             error={errors.name}
             placeholder="e.g., Morning Shift 9-5"
           />
+          {/* Shift Name Suggestions */}
+          <div className="mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quick Shift Name Suggestions</label>
+            <div className="flex flex-wrap gap-2">
+              {SHIFT_NAME_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className={`px-3 py-1.5 text-sm rounded-full border bg-gray-50 border-gray-300 text-gray-700 hover:bg-blue-100 hover:border-blue-500 hover:text-blue-700 transition-colors ${formData.name === suggestion ? 'ring-2 ring-blue-400' : ''}`}
+                  onClick={() => setFormData({ ...formData, name: suggestion })}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Click a suggestion to quickly fill the shift name.</p>
+          </div>
 
           <Select
             label="Shift Type *"

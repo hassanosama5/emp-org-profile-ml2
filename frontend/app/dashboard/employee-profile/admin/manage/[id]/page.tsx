@@ -19,6 +19,22 @@ import { isHRAdminOrManager } from "@/lib/utils/role-utils";
 import RoleAssignmentSection from "@/components/employee-profile/RoleAssignmentSection";
 import EducationSection from "@/components/employee-profile/EducationSection";
 
+// Helper function to format dates consistently (prevents hydration errors)
+const formatDate = (date: Date | string | undefined | null): string => {
+  if (!date) return "Not provided";
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "Invalid date";
+    // Use a consistent format that works on both server and client
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  } catch {
+    return "Invalid date";
+  }
+};
+
 export default function ManageProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -159,10 +175,10 @@ export default function ManageProfilePage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             Manage Employee Profile
           </h1>
-          <p className="text-white-600 mt-1">Employee ID: {id}</p>
+          <p className="text-gray-600 mt-1">Employee ID: {id}</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
           <Button
@@ -222,9 +238,7 @@ export default function ManageProfilePage() {
                   ["Employee Number", profile.employeeNumber],
                   [
                     "Date of Birth",
-                    profile.dateOfBirth
-                      ? new Date(profile.dateOfBirth).toLocaleDateString()
-                      : "Not provided",
+                    formatDate(profile.dateOfBirth),
                   ],
                   ["Gender", profile.gender || "Not provided"],
                   ["Marital Status", profile.maritalStatus || "Not provided"],
@@ -259,9 +273,9 @@ export default function ManageProfilePage() {
                 <div key={label}>
                   <p className="text-sm font-medium text-gray-800">{label}</p>
                   <p className="mt-1 text-gray-900">
-                    {value
-                      ? new Date(value as any).toLocaleDateString?.() || value
-                      : "N/A"}
+                    {label === "Date of Hire"
+                      ? formatDate(value as any)
+                      : value || "N/A"}
                   </p>
                 </div>
               ))}

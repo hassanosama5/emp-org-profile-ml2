@@ -20,9 +20,8 @@ export default function SchedulingRulesPage() {
   const router = useRouter();
   const { toast, showToast, hideToast } = useToast();
 
-  // Role check: Allow HR_MANAGER or SYSTEM_ADMIN (per BR-TM-03)
-  const canManageRules = user?.roles?.includes(SystemRole.HR_MANAGER) ||
-                         user?.roles?.includes(SystemRole.SYSTEM_ADMIN);
+  // Role check: Only HR_MANAGER can manage scheduling rules (per BR-TM-03)
+  const canManageRules = user?.roles?.includes(SystemRole.HR_MANAGER);
 
   // Redirect if not authorized
   useEffect(() => {
@@ -122,7 +121,7 @@ export default function SchedulingRulesPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-red-500">
-              Access Denied: Only HR Manager or System Admin can manage scheduling rules.
+              Access Denied: Only HR Manager can manage scheduling rules.
             </p>
           </CardContent>
         </Card>

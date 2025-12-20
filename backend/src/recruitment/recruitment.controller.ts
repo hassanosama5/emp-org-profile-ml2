@@ -211,6 +211,18 @@ export class RecruitmentController {
     return this.service.getHREmployeesForPanel();
   }
 
+  // CHANGED - New endpoint to get eligible panel members based on interview stage
+  // Returns HR employees for HR_INTERVIEW, HR + department employees for DEPARTMENT_INTERVIEW
+  @UseGuards(RolesGuard)
+  @Roles(SystemRole.HR_EMPLOYEE, SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN, SystemRole.RECRUITER)
+  @Get('eligible-panel-members/:applicationId/:stage')
+  getEligiblePanelMembers(
+    @Param('applicationId') applicationId: string,
+    @Param('stage') stage: string,
+  ) {
+    return this.service.getEligiblePanelMembers(applicationId, stage);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     SystemRole.HR_EMPLOYEE,
@@ -256,16 +268,10 @@ export class RecruitmentController {
   ) {
     return this.service.updateInterviewStatus(id, dto);
   }
-  // CHANGED: Added RECRUITER role to allow recruiters to submit feedback
-  // Recruiters who schedule interviews are automatically added to the panel,
-  // so they should be able to submit feedback just like HR employees
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    SystemRole.HR_EMPLOYEE,
-    SystemRole.HR_MANAGER,
-    SystemRole.RECRUITER,
-    SystemRole.SYSTEM_ADMIN,
-  )
+  // CHANGED: Allow ANY authenticated employee to submit feedback
+  // The service validates that the user is actually part of the interview panel
+  // This allows department employees, new hires, etc. to submit feedback when selected as panel members
+  @UseGuards(JwtAuthGuard)
   @Post('interview/:id/feedback')
   submitInterviewFeedback(
     @Param('id') interviewId: string,
@@ -290,22 +296,37 @@ export class RecruitmentController {
     return this.service.getInterviewFeedback(interviewId);
   }
 
+  // NEW: Get interviews where current user is a panel member
+  // Accessible to ANY authenticated employee - all employees can be panel members
+  @UseGuards(JwtAuthGuard)
+  @Get('my-panel-interviews')
+  getMyPanelInterviews(@Req() req: any) {
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    if (!userId) {
+      throw new BadRequestException('User ID not found in request');
+    }
+    return this.service.getMyPanelInterviews(userId);
+  }
+
   @UseGuards(RolesGuard)
   @Get('interview/:id/score')
   getInterviewAverageScore(@Param('id') interviewId: string) {
     return this.service.getInterviewAverageScore(interviewId);
   }
 
+  // CHANGED: Added HR_EMPLOYEE role to allow HR employees to create offers
+  // HR employees can create/send offers but cannot approve/finalize them
   @UseGuards(RolesGuard)
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_EMPLOYEE, SystemRole.SYSTEM_ADMIN)
   @Post('offer')
   createOffer(@Body() dto: CreateOfferDto) {
     return this.service.createOffer(dto);
   }
 
   // More specific route must come before parameterized routes
+  // CHANGED: Added HR_EMPLOYEE role to allow viewing offers
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_EMPLOYEE, SystemRole.SYSTEM_ADMIN)
   @Get('offer/application/:applicationId')
   getOfferByApplication(@Param('applicationId') applicationId: string) {
     return this.service.getOfferByApplicationId(applicationId);
@@ -331,6 +352,19 @@ export class RecruitmentController {
   @Patch('offer/:id/finalize')
   finalize(@Param('id') id: string, @Body() dto: FinalizeOfferDto) {
     return this.service.finalizeOffer(id, dto);
+  }
+
+  // CHANGED: HR Employee can reject candidates - ONLY HR_EMPLOYEE can reject
+  // HR Manager cannot reject candidates, only HR Employee can
+  // Cannot reject if candidate is already finalized (hired, employee created, etc.)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(SystemRole.HR_EMPLOYEE)
+  @Patch('offer/:id/reject-candidate')
+  rejectCandidate(
+    @Param('id') offerId: string,
+    @Body() dto: { reason: string },
+  ) {
+    return this.service.rejectCandidateByHrEmployee(offerId, dto.reason);
   }
 
   // ONB-002: Get contract status for an offer (so HR can see if candidate uploaded contract)
@@ -427,23 +461,48 @@ export class RecruitmentController {
     return this.service.getAllOnboardings();
   }
 
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(SystemRole.HR_EMPLOYEE, SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
   @Get('onboarding/stats')
   async getOnboardingStats() {
     return this.service.getOnboardingStats();
   }
 
-  @UseGuards(RolesGuard)
-  @Get('onboarding/:id')
-  async getOnboardingById(@Param('id') id: string) {
-    return this.service.getOnboardingById(id);
+  // ONB-004: Candidate can view their onboarding after being hired
+  // When a candidate is hired (employee profile created), they can access
+  // their onboarding tasks by their candidate ID - the system finds the
+  // linked employee profile and returns that employee's onboarding
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(SystemRole.JOB_CANDIDATE)
+  @Get('onboarding/candidate/:candidateId')
+  async getOnboardingByCandidateId(@Param('candidateId') candidateId: string) {
+    return this.service.getOnboardingByCandidateId(candidateId);
   }
 
-  @UseGuards(RolesGuard)
+  // ONB-004: New hire can view their own onboarding tracker
+  // IMPORTANT: This specific route MUST come BEFORE the generic /:id route
+  // DEPARTMENT_EMPLOYEE allows new hires to view their onboarding tasks
+  // HR roles also have access for management purposes
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
   @Get('onboarding/employee/:employeeId')
   async getOnboardingByEmployeeId(@Param('employeeId') employeeId: string) {
     return this.service.getOnboardingByEmployeeId(employeeId);
+  }
+
+  // ONB-004: HR can view any onboarding by ID
+  // IMPORTANT: Generic /:id route must come AFTER more specific routes like /employee/:id
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(SystemRole.HR_EMPLOYEE, SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  @Get('onboarding/:id')
+  async getOnboardingById(@Param('id') id: string) {
+    return this.service.getOnboardingById(id);
   }
 
   // Check if employee already exists for an application
@@ -510,9 +569,16 @@ export class RecruitmentController {
   }
 
   // changed - modified to accept either file upload OR manual entry for testing
-  // ONB-007: New hires can upload their own documents for onboarding tasks
-  @UseGuards(RolesGuard)
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.HR_EMPLOYEE, SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
+  // ONB-007: New hires (candidates) can upload their own documents for onboarding tasks
+  // JOB_CANDIDATE is allowed so candidates can upload ID, certifications, etc.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    SystemRole.JOB_CANDIDATE,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
   @Post('onboarding/:id/task/:taskIndex/upload')
   @UseInterceptors(FileInterceptor('file', multerConfig))
   async uploadTaskDocument(
@@ -542,7 +608,15 @@ export class RecruitmentController {
     );
   }
 
-  @UseGuards(RolesGuard)
+  // ONB-007: Allow candidates and employees to download their uploaded documents
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    SystemRole.JOB_CANDIDATE,
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.SYSTEM_ADMIN,
+  )
   @Get('document/:documentId/download')
   async downloadDocument(
     @Param('documentId') documentId: string,

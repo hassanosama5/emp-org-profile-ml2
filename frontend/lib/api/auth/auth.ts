@@ -73,24 +73,34 @@ export const authApi = {
 
     try {
       const response = await api.get("/employee-profile/me/profile");
-      const userData = response.data?.data || response.data;
+      // Response is already the data object (due to axios interceptor)
+      // Backend returns: { message: '...', data: employee }
+      // After interceptor: response = { message: '...', data: employee }
+      // So response.data is the employee object
+      const userData = response?.data || response;
       
-      if (userData) {
-        // Transform to User format
-        return {
-          id: userData._id || userData.id,
-          employeeNumber: userData.employeeNumber,
-          candidateNumber: userData.candidateNumber,
-          fullName: userData.fullName,
-          workEmail: userData.workEmail,
-          personalEmail: userData.personalEmail,
-          roles: userData.roles || [],
-          userType: userData.userType || (userData.employeeNumber ? "employee" : "candidate"),
-          profilePictureUrl: userData.profilePictureUrl,
-        } as User;
+      if (!userData || (typeof userData === 'object' && !userData._id && !userData.id && !userData.employeeNumber)) {
+        return null;
       }
-      return null;
-    } catch {
+      
+      // Transform to User format
+      return {
+        id: userData._id || userData.id,
+        employeeNumber: userData.employeeNumber,
+        candidateNumber: userData.candidateNumber,
+        fullName: userData.fullName,
+        workEmail: userData.workEmail,
+        personalEmail: userData.personalEmail,
+        roles: userData.roles || [],
+        userType: userData.userType || (userData.employeeNumber ? "employee" : "candidate"),
+        profilePictureUrl: userData.profilePictureUrl,
+      } as User;
+    } catch (error: any) {
+      // Don't log 401 errors - they're expected when user is not authenticated
+      // Only log unexpected errors in development
+      if (process.env.NODE_ENV === 'development' && error?.status !== 401) {
+        console.error('Failed to fetch user:', error?.message || error);
+      }
       return null;
     }
   },

@@ -3,7 +3,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRequireAuth } from "@/lib/hooks/use-auth";
 import { SystemRole } from "@/types";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import {
@@ -19,7 +18,8 @@ import type { ProfileChangeRequest } from "@/types";
 import { Button } from "@/components/shared/ui/Button";
 
 export default function ChangeRequestsPage() {
-  useRequireAuth([SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.RECRUITER]);
+  // Note: useRequireAuth is handled by ProtectedRoute below
+  // No need to call it here to avoid double checks
   const { toast, showToast, hideToast } = useToast();
   const [requests, setRequests] = useState<ProfileChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +43,17 @@ export default function ChangeRequestsPage() {
   }, [showToast]);
 
   return (
-    <ProtectedRoute requiredUserType="employee">
+    <ProtectedRoute
+      requiredUserType="employee"
+      allowedRoles={[
+        SystemRole.DEPARTMENT_EMPLOYEE,
+        SystemRole.RECRUITER,
+        SystemRole.HR_MANAGER,
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_EMPLOYEE,
+        SystemRole.DEPARTMENT_HEAD,
+      ]}
+    >
       <div className="container mx-auto px-6 py-8">
         <Toast
           message={toast.message}

@@ -3,17 +3,38 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/hooks/use-auth";
-import { SystemRole } from "@/types";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { isHRStaff } from "@/lib/utils/role-utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/shared/ui/Card";
-import { Button } from "@/components/shared/ui/Button";
-import { Input } from "@/components/shared/ui/Input";
-import { Modal } from "@/components/leaves/Modal";
 import { recruitmentApi } from "@/lib/api/recruitment/recruitment";
 import { Application } from "@/types/recruitment";
 import { StatusBadge } from "@/components/recruitment/StatusBadge";
 import { Toast, useToast } from "@/components/leaves/Toast";
+
+// Helper function to extract job details from application
+const getJobDetails = (application: Application | null) => {
+  if (!application) {
+    return { title: "Unknown Position", department: "Unknown Department", location: "Unknown Location" };
+  }
+  const app = application as any;
+  const title = 
+    app.requisitionId?.templateId?.title ||
+    app.requisitionId?.template?.title ||
+    app.requisition?.templateId?.title ||
+    app.requisition?.template?.title ||
+    "Unknown Position";
+  const department = 
+    app.requisitionId?.templateId?.department ||
+    app.requisitionId?.template?.department ||
+    app.requisition?.templateId?.department ||
+    app.requisition?.template?.department ||
+    "Unknown Department";
+  const location = 
+    app.requisitionId?.location ||
+    app.requisition?.location ||
+    "Unknown Location";
+  return { title, department, location };
+};
 
 export default function EmployeeReferralsPage() {
   const { user } = useAuth();
@@ -21,9 +42,6 @@ export default function EmployeeReferralsPage() {
   const [referrals, setReferrals] = useState<any[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState<string>("");
-  const [tagForm, setTagForm] = useState({ role: "", level: "" });
   
   const isHR = isHRStaff(user);
   const isEmployee = user?.userType === "employee" && !isHR;
@@ -78,28 +96,6 @@ export default function EmployeeReferralsPage() {
     }
   };
 
-  const handleOpenTag = (candidateId: string) => {
-    setSelectedCandidate(candidateId);
-    setTagForm({ role: "", level: "" });
-    setIsTagModalOpen(true);
-  };
-
-  const handleTagCandidate = async () => {
-    try {
-      await recruitmentApi.tagCandidateAsReferral(
-        selectedCandidate,
-        user?.id || user?.userId,
-        tagForm.role || undefined,
-        tagForm.level || undefined
-      );
-      showToast("Candidate tagged as referral successfully", "success");
-      setIsTagModalOpen(false);
-      loadReferrals();
-    } catch (error: any) {
-      showToast(error.message || "Failed to tag candidate", "error");
-    }
-  };
-
   return (
     <ProtectedRoute>
       <div className="container mx-auto px-6 py-8">
@@ -120,57 +116,16 @@ export default function EmployeeReferralsPage() {
                 {isHR ? "Candidate Referrals" : "My Referrals"}
               </h1>
               <p className="text-gray-600 mt-1">
-                {isHR ? "Tag and track candidate referrals" : "Track candidates you've referred"}
+                {isHR ? "View and track candidate referrals" : "Track candidates you've referred"}
               </p>
+              {isHR && (
+                <p className="text-sm text-blue-600 mt-2">
+                  💡 To tag candidates as referrals, go to Candidate Tracking page
+                </p>
+              )}
             </div>
           </div>
         </div>
-
-        {isHR && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Tag Candidates as Referrals</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <p className="text-gray-500">Loading applications...</p>
-              ) : applications.length === 0 ? (
-                <p className="text-gray-500">No applications found.</p>
-              ) : (
-                <div className="space-y-2">
-                  {applications.slice(0, 10).map((app) => {
-                    // CHANGED - Handle candidateId as populated object or string
-                    const candidateId = typeof app.candidateId === 'object' 
-                      ? (app.candidateId as any)?._id 
-                      : app.candidateId;
-                    const candidateName = app.candidate?.fullName || 
-                      (typeof app.candidateId === 'object' ? (app.candidateId as any)?.fullName : null) || 
-                      'Unknown';
-                    
-                    return (
-                      <div key={app._id} className="flex items-center justify-between p-2 border rounded">
-                        <div>
-                          {/* CHANGED - Added text-gray-900 for visibility */}
-                          <span className="font-medium text-gray-900">{candidateName}</span>
-                          <span className="text-sm text-gray-500 ml-2">
-                            - {app.requisition?.template?.title || "Application"}
-                          </span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenTag(candidateId)}
-                        >
-                          Tag as Referral
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
       {loading ? (
         <div className="text-center py-12">
@@ -193,7 +148,7 @@ export default function EmployeeReferralsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-xl">
-                      {item.application.requisition?.template?.title || "Referred Candidate"}
+                      {getJobDetails(item.application).title}
                     </CardTitle>
                     <p className="text-sm text-gray-600 mt-1">
                       Candidate: {item.application.candidate?.fullName || "N/A"}
@@ -208,7 +163,7 @@ export default function EmployeeReferralsPage() {
                     <div>
                       <span className="text-gray-500">Position:</span>
                       <span className="ml-2 text-gray-900">
-                        {item.application.requisition?.template?.title || "N/A"}
+                        {getJobDetails(item.application).title}
                       </span>
                     </div>
                     <div>
@@ -231,48 +186,6 @@ export default function EmployeeReferralsPage() {
           ))}
         </div>
       )}
-
-        {/* Tag Candidate Modal */}
-        <Modal
-          isOpen={isTagModalOpen}
-          onClose={() => setIsTagModalOpen(false)}
-          title="Tag Candidate as Referral"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Role (Optional)
-              </label>
-              <Input
-                value={tagForm.role}
-                onChange={(e) => setTagForm({ ...tagForm, role: e.target.value })}
-                placeholder="e.g., Software Engineer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Level (Optional)
-              </label>
-              <Input
-                value={tagForm.level}
-                onChange={(e) => setTagForm({ ...tagForm, level: e.target.value })}
-                placeholder="e.g., Senior"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsTagModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleTagCandidate}>Tag Candidate</Button>
-            </div>
-          </div>
-        </Modal>
       </div>
     </ProtectedRoute>
   );
