@@ -38,11 +38,12 @@ export const CardDescription: React.FC<{
   <p className={`text-sm text-gray-600 ${className}`}>{children}</p>
 );
 
+// CHANGED - Added text-gray-900 for default text visibility
 export const CardContent: React.FC<{
   children: React.ReactNode;
   className?: string;
 }> = ({ children, className = '' }) => (
-  <div className={className}>{children}</div>
+  <div className={`text-gray-900 ${className}`}>{children}</div>
 );
 
 export const CardFooter: React.FC<{

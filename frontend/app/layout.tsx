@@ -4,7 +4,15 @@ import './globals.css';
 import Header from '../components/shared/layout/Header';
 import Footer from '../components/shared/layout/Footer';
 
-const inter = Inter({ subsets: ['latin'] });
+// Configure Inter font with proper fallbacks
+// If Google Fonts is unavailable, it will use system fonts
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  fallback: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+  adjustFontFallback: true,
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'HR Management System',

@@ -35,12 +35,14 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SystemRole, CandidateStatus } from './enums/employee-profile.enums';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { GetChangeRequestsDto } from './dto/get-change-requests.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Controller('employee-profile')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class EmployeeProfileController {
   constructor(
     private readonly employeeProfileService: EmployeeProfileService,
+    private readonly notificationsService: NotificationsService, // Add this
   ) {}
 
   // ==================== EMPLOYEE ROUTES ====================
@@ -64,6 +66,9 @@ export class EmployeeProfileController {
     SystemRole.HR_EMPLOYEE,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.FINANCE_STAFF,
   )
   async findAll(@Query() query: QueryEmployeeDto, @CurrentUser() user: any) {
     const result = await this.employeeProfileService.findAll(
@@ -81,11 +86,77 @@ export class EmployeeProfileController {
     if (!user || !user.userId) {
       throw new UnauthorizedException('User information not found in token');
     }
-    const employee = await this.employeeProfileService.findOne(user.userId);
-    return {
-      message: 'Profile retrieved successfully',
-      data: employee,
-    };
+    
+    // Debug logging
+    console.log('[getMyProfile] User from token:', {
+      userId: user.userId,
+      userType: user.userType,
+      username: user.username,
+    });
+    
+    // Determine user type - check token first, then try to infer
+    let isCandidate = user.userType === 'candidate';
+    
+    // If userType is not set, try to determine by checking if user exists as candidate
+    if (!user.userType) {
+      try {
+        const candidate = await this.employeeProfileService.findCandidateById(user.userId);
+        if (candidate) {
+          isCandidate = true;
+          console.log('[getMyProfile] UserType not in token, but found as candidate');
+        }
+      } catch (error) {
+        // Not a candidate, will try employee
+        console.log('[getMyProfile] UserType not in token, not found as candidate, trying employee');
+      }
+    }
+    
+    // Check if user is a candidate
+    if (isCandidate) {
+      console.log('[getMyProfile] Fetching candidate profile for:', user.userId);
+      try {
+        const candidate = await this.employeeProfileService.findCandidateById(user.userId);
+        return {
+          message: 'Profile retrieved successfully',
+          data: candidate,
+        };
+      } catch (error) {
+        console.error('[getMyProfile] Error fetching candidate:', error);
+        throw error;
+      }
+    }
+    
+    // Otherwise, get employee profile
+    console.log('[getMyProfile] Fetching employee profile for:', user.userId);
+    try {
+      const employee = await this.employeeProfileService.findOne(user.userId);
+      
+      // Fetch and attach system roles
+      let roles: any[] = [];
+      try {
+        const systemRoles = await this.employeeProfileService.getSystemRoles(user.userId);
+        roles = systemRoles && systemRoles.isActive ? (systemRoles.roles || []) : [];
+      } catch (roleError) {
+        console.warn('[getMyProfile] Could not fetch system roles:', roleError);
+        // If roles from JWT token are available, use those as fallback
+        roles = user.roles || [];
+      }
+      
+      // Convert employee to plain object and attach roles
+      const employeeObj = (employee as any).toObject ? (employee as any).toObject() : employee;
+      const employeeWithRoles = {
+        ...employeeObj,
+        roles: roles,
+      };
+      
+      return {
+        message: 'Profile retrieved successfully',
+        data: employeeWithRoles,
+      };
+    } catch (error) {
+      console.error('[getMyProfile] Error fetching employee:', error);
+      throw error;
+    }
   }
 
   @Patch('me')
@@ -186,12 +257,17 @@ export class EmployeeProfileController {
     };
   }
 
+  // CHANGED BY TIME MANAGEMENT MODULE
+  // Added DEPARTMENT_EMPLOYEE role to allow employees to access their department's employee list.
+  // This is needed for the overtime request form to automatically find and assign the employee's
+  // department head/manager when submitting overtime requests.
   @Get('department/:departmentId')
   @Roles(
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_MANAGER,
     SystemRole.DEPARTMENT_HEAD,
     SystemRole.HR_ADMIN,
+    SystemRole.DEPARTMENT_EMPLOYEE,
   )
   async findByDepartment(@Param('departmentId') departmentId: string) {
     const employees =
@@ -201,6 +277,31 @@ export class EmployeeProfileController {
       data: employees,
     };
   }
+
+ 
+  // CHANGED BY RECRUITMENT SUBSYSTEM - Talent Pool Feature (BR: Storage/upload of applications with resumes)
+  // This route was moved here from after @Get(':id') to fix route matching conflicts.
+  // The Talent Pool feature requires this endpoint to be accessible at /employee-profile/candidate
+  // without being intercepted by the @Get(':id') route handler.
+  // Purpose: Allows HR staff to browse and search all candidates with resumes in the organization's talent pool
+  // Related BR: "The system must support the storage/upload of applications with resumes, which creates the organization's talent pool"
+  @Get('candidate')
+  @Roles(
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.RECRUITER,
+  )
+  async findAllCandidates(@Query() query: any) {
+    const candidates =
+      await this.employeeProfileService.findAllCandidatesWithFilters(query);
+    return {
+      message: 'Candidates retrieved successfully',
+      data: candidates,
+    };
+  }
+//lghayet hena
+
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
@@ -365,7 +466,7 @@ export class EmployeeProfileController {
     };
   }
 
-  @Get('candidate')
+  /*@Get('candidate')
   @Roles(
     SystemRole.SYSTEM_ADMIN,
     SystemRole.HR_MANAGER,
@@ -379,7 +480,7 @@ export class EmployeeProfileController {
       message: 'Candidates retrieved successfully',
       data: candidates,
     };
-  }
+  }*/
 
   @Get('candidate/:id')
   @Roles(
@@ -494,7 +595,19 @@ export class EmployeeProfileController {
   // ==================== PROFILE CHANGE REQUEST ROUTES ====================
 
   @Post('change-request')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.DEPARTMENT_HEAD,
+    SystemRole.RECRUITER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+    SystemRole.PAYROLL_SPECIALIST,
+    SystemRole.PAYROLL_MANAGER,
+    SystemRole.LEGAL_POLICY_ADMIN,
+    SystemRole.FINANCE_STAFF,
+  )
   @HttpCode(HttpStatus.CREATED)
   async createProfileChangeRequest(
     @CurrentUser() user: any,
@@ -505,6 +618,12 @@ export class EmployeeProfileController {
         user.userId,
         createRequestDto,
       );
+    // N-040: Notify HR Manager/Admin
+    await this.notificationsService.notifyProfileChangeRequestSubmitted(
+      user.userId,
+      changeRequest.requestId, // Using _id since requestId is the unique field
+      createRequestDto.requestDescription,
+    );
     return {
       message: 'Profile change request submitted successfully',
       data: changeRequest,
@@ -512,7 +631,7 @@ export class EmployeeProfileController {
   }
 
   @Get('change-request/my-requests')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.RECRUITER)
   async getMyChangeRequests(@CurrentUser() user: any) {
     const requests =
       await this.employeeProfileService.getProfileChangeRequestsByEmployee(
@@ -751,12 +870,23 @@ export class EmployeeProfileController {
   async approveChangeRequest(
     @Param('id') id: string,
     @Body() approveDto: { reason?: string },
+    @CurrentUser() currentUser: any,
   ) {
     const updatedRequest =
       await this.employeeProfileService.processProfileChangeRequest(id, {
         status: 'APPROVED',
         reason: approveDto.reason,
       });
+
+    // N-037: Notify employee
+    // Use requestId and employeeProfileId
+    await this.notificationsService.notifyProfileChangeRequestProcessed(
+      updatedRequest.employeeProfileId.toString(),
+      updatedRequest.requestId, // Changed from _id to requestId
+      'APPROVED',
+      approveDto.reason,
+    );
+
     return {
       message: 'Change request approved successfully',
       data: updatedRequest,
@@ -768,12 +898,23 @@ export class EmployeeProfileController {
   async rejectChangeRequest(
     @Param('id') id: string,
     @Body() rejectDto: { reason?: string },
+    @CurrentUser() currentUser: any,
   ) {
     const updatedRequest =
       await this.employeeProfileService.processProfileChangeRequest(id, {
         status: 'REJECTED',
         reason: rejectDto.reason,
       });
+
+    // N-037: Notify employee
+    // Use requestId and employeeProfileId
+    await this.notificationsService.notifyProfileChangeRequestProcessed(
+      updatedRequest.employeeProfileId.toString(),
+      updatedRequest.requestId, // Changed from _id to requestId
+      'REJECTED',
+      rejectDto.reason,
+    );
+
     return {
       message: 'Change request rejected successfully',
       data: updatedRequest,
@@ -781,7 +922,7 @@ export class EmployeeProfileController {
   }
 
   @Patch('change-request/:id/cancel')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(SystemRole.DEPARTMENT_EMPLOYEE, SystemRole.RECRUITER)
   async cancelChangeRequest(@Param('id') id: string, @CurrentUser() user: any) {
     const updatedRequest =
       await this.employeeProfileService.cancelProfileChangeRequest(
@@ -793,11 +934,17 @@ export class EmployeeProfileController {
       data: updatedRequest,
     };
   }
-
   // ==================== QUALIFICATION ROUTES ====================
 
   @Post('qualification')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
   async addQualification(
     @CurrentUser() user: any,
     @Body()
@@ -817,7 +964,12 @@ export class EmployeeProfileController {
   }
 
   @Post(':employeeId/qualifications')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_EMPLOYEE, SystemRole.SYSTEM_ADMIN)
+  @Roles(
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
   async addQualificationForEmployee(
     @Param('employeeId') employeeId: string,
     @Body()
@@ -837,7 +989,14 @@ export class EmployeeProfileController {
   }
 
   @Get('qualification/my-qualifications')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
   async getMyQualifications(@CurrentUser() user: any) {
     const qualifications =
       await this.employeeProfileService.getQualificationsByEmployee(
@@ -850,7 +1009,12 @@ export class EmployeeProfileController {
   }
 
   @Get(':employeeId/qualifications')
-  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_EMPLOYEE, SystemRole.SYSTEM_ADMIN)
+  @Roles(
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
   async getEmployeeQualifications(@Param('employeeId') employeeId: string) {
     const qualifications =
       await this.employeeProfileService.getQualificationsByEmployee(employeeId);
@@ -861,7 +1025,14 @@ export class EmployeeProfileController {
   }
 
   @Patch('qualifications/:qualId')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
   async updateQualification(
     @Param('qualId') qualificationId: string,
     @CurrentUser() user: any,
@@ -883,7 +1054,14 @@ export class EmployeeProfileController {
   }
 
   @Delete('qualifications/:qualId')
-  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  @Roles(
+    SystemRole.DEPARTMENT_EMPLOYEE,
+    SystemRole.RECRUITER,
+    SystemRole.HR_MANAGER,
+    SystemRole.HR_EMPLOYEE,
+    SystemRole.HR_ADMIN,
+    SystemRole.SYSTEM_ADMIN,
+  )
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeQualification(
     @Param('qualId') qualificationId: string,
@@ -897,7 +1075,6 @@ export class EmployeeProfileController {
       message: 'Qualification removed successfully',
     };
   }
-
   // ==================== SEARCH ROUTES ====================
 
   @Post('search')

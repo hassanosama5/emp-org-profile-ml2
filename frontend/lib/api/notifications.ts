@@ -1,69 +1,93 @@
-import { api } from './client';
-import {
-  Notification,
-  GetNotificationsResponse,
-} from '@/types/notifications';
+import { api } from "./client";
+import { Notification, GetNotificationsResponse } from "@/types/notifications";
 
 /**
  * Get all notifications for the current user
  */
 export async function getNotifications(): Promise<Notification[]> {
   try {
-    console.log('Fetching notifications from /notifications endpoint...');
-    const response = await api.get<any>('/notifications');
-    console.log('Notifications API response:', response);
-    
+    console.log("Fetching notifications from /notifications endpoint...");
+    const response = await api.get<any>("/notifications");
+    console.log("Notifications API response:", response);
+
     // Handle both array and wrapped response
     // The axios interceptor returns response.data, so response should be the data directly
     let notifications: any[] = [];
     if (Array.isArray(response)) {
       notifications = response;
       console.log(`Found ${notifications.length} notifications (array format)`);
-    } else if (response && typeof response === 'object' && 'data' in response && Array.isArray((response as any).data)) {
+    } else if (
+      response &&
+      typeof response === "object" &&
+      "data" in response &&
+      Array.isArray((response as any).data)
+    ) {
       notifications = (response as any).data;
-      console.log(`Found ${notifications.length} notifications (wrapped format)`);
-    } else if (response && typeof response === 'object' && response !== null) {
+      console.log(
+        `Found ${notifications.length} notifications (wrapped format)`
+      );
+    } else if (response && typeof response === "object" && response !== null) {
       // Check if response itself is a notification object (single notification)
       // Type assertion to handle the response as any object
       const responseObj: any = response;
       if (responseObj._id || responseObj.type) {
         notifications = [responseObj];
-        console.log('Found 1 notification (single object format)');
+        console.log("Found 1 notification (single object format)");
       } else {
-        console.warn('Unexpected response format:', response);
+        console.warn("Unexpected response format:", response);
         notifications = [];
       }
     } else {
-      console.warn('Response is not an array or object:', response);
+      console.warn("Response is not an array or object:", response);
       notifications = [];
     }
-    
+
     // Transform notifications to ensure proper format
     const transformed = notifications.map((notif: any) => ({
       _id: notif._id?.toString() || notif._id,
       to: notif.to?.toString() || notif.to,
-      type: notif.type || '',
-      message: notif.message || '',
+      type: notif.type || "",
+      message: notif.message || "",
       isRead: notif.isRead ?? false,
       createdAt: notif.createdAt ? new Date(notif.createdAt) : new Date(),
       updatedAt: notif.updatedAt ? new Date(notif.updatedAt) : undefined,
       source: notif.source,
+      title: notif.title,
+      data: notif.data, // Include assignment data for shift expiry notifications
     }));
-    
+
     console.log(`Transformed ${transformed.length} notifications`);
     return transformed;
   } catch (error: any) {
-    // Return empty array instead of throwing on 404
-    if (error.response?.status === 404) {
-      console.log('No notifications found (404 is expected)');
+    // Handle timeout errors gracefully (backend may be slow or unavailable)
+    if (error.message?.includes('timeout') || error.code === 'ECONNABORTED') {
+      // Silently return empty array for timeout errors - notifications are optional
       return [];
     }
-    console.error('Failed to fetch notifications:', error);
-    console.error('Error details:', {
+    
+    // Return empty array instead of throwing on 404
+    if (error.response?.status === 404) {
+      console.log("No notifications found (404 is expected)");
+      // Silently return empty array for 404 - notifications endpoint may not be implemented
+      return [];
+    }
+    console.error("Failed to fetch notifications:", error);
+    console.error("Error details:", {
       message: error.message,
       status: error.response?.status,
       data: error.response?.data,
     });
+    
+    // Only log non-timeout, non-404 errors
+    if (error.response?.status !== 404 && !error.message?.includes('timeout') && error.code !== 'ECONNABORTED') {
+      console.error('Failed to fetch notifications:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    }
+    
     // Return empty array on error instead of throwing
     return [];
   }
@@ -81,7 +105,7 @@ export async function markNotificationAsRead(
     );
     return response as unknown as Notification;
   } catch (error) {
-    console.error('Failed to mark notification as read:', error);
+    console.error("Failed to mark notification as read:", error);
     throw error;
   }
 }
@@ -95,7 +119,7 @@ export async function deleteNotification(
   try {
     await api.delete(`/notifications/${notificationId}`);
   } catch (error) {
-    console.error('Failed to delete notification:', error);
+    console.error("Failed to delete notification:", error);
     throw error;
   }
 }
@@ -112,7 +136,7 @@ export async function notifyLeaveRequestFinalized(
   leaveDetails: any
 ): Promise<any> {
   try {
-    const response = await api.post('/notifications/leave/finalized', {
+    const response = await api.post("/notifications/leave/finalized", {
       leaveRequestId,
       employeeId,
       managerId,
@@ -121,7 +145,7 @@ export async function notifyLeaveRequestFinalized(
     });
     return response;
   } catch (error) {
-    console.error('Failed to notify leave request finalized:', error);
+    console.error("Failed to notify leave request finalized:", error);
     throw error;
   }
 }
@@ -137,7 +161,7 @@ export async function notifyLeaveRequestCreated(
   leaveDetails: any
 ): Promise<any> {
   try {
-    const response = await api.post('/notifications/leave/created', {
+    const response = await api.post("/notifications/leave/created", {
       leaveRequestId,
       employeeId,
       managerId,
@@ -145,7 +169,7 @@ export async function notifyLeaveRequestCreated(
     });
     return response;
   } catch (error) {
-    console.error('Failed to notify leave request created:', error);
+    console.error("Failed to notify leave request created:", error);
     throw error;
   }
 }
@@ -157,17 +181,17 @@ export async function notifyLeaveRequestCreated(
 export async function notifyLeaveRequestStatusChanged(
   leaveRequestId: string,
   employeeId: string,
-  status: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_CORRECTION' | 'MODIFIED'
+  status: "APPROVED" | "REJECTED" | "RETURNED_FOR_CORRECTION" | "MODIFIED"
 ): Promise<any> {
   try {
-    const response = await api.post('/notifications/leave/status-changed', {
+    const response = await api.post("/notifications/leave/status-changed", {
       leaveRequestId,
       employeeId,
       status,
     });
     return response;
   } catch (error) {
-    console.error('Failed to notify leave request status changed:', error);
+    console.error("Failed to notify leave request status changed:", error);
     throw error;
   }
 }
@@ -183,7 +207,7 @@ export async function notifyShiftAssignmentExpiry(
   expiryDate: Date
 ): Promise<any> {
   try {
-    const response = await api.post('/notifications/shift/expiry', {
+    const response = await api.post("/notifications/shift/expiry", {
       shiftAssignmentId,
       hrAdminId,
       employeeDetails,
@@ -191,7 +215,7 @@ export async function notifyShiftAssignmentExpiry(
     });
     return response;
   } catch (error) {
-    console.error('Failed to notify shift assignment expiry:', error);
+    console.error("Failed to notify shift assignment expiry:", error);
     throw error;
   }
 }
@@ -207,7 +231,7 @@ export async function notifyMissedPunch(
   attendanceDetails: any
 ): Promise<any> {
   try {
-    const response = await api.post('/notifications/attendance/missed-punch', {
+    const response = await api.post("/notifications/attendance/missed-punch", {
       employeeId,
       managerId,
       coordinatorId,
@@ -215,7 +239,7 @@ export async function notifyMissedPunch(
     });
     return response;
   } catch (error) {
-    console.error('Failed to notify missed punch:', error);
+    console.error("Failed to notify missed punch:", error);
     throw error;
   }
 }
@@ -231,7 +255,7 @@ export async function getShiftExpiryNotifications(hrAdminId: string): Promise<{
     const response = await api.get(`/notifications/shift-expiry/${hrAdminId}`);
     return response as any;
   } catch (error) {
-    console.error('Failed to get shift expiry notifications:', error);
+    console.error("Failed to get shift expiry notifications:", error);
     throw error;
   }
 }
@@ -240,14 +264,19 @@ export async function getShiftExpiryNotifications(hrAdminId: string): Promise<{
  * Check for expiring shifts
  * Called by Time Management module or HR Admin
  */
-export async function checkExpiringShifts(daysBeforeExpiry?: number): Promise<any> {
+export async function checkExpiringShifts(
+  daysBeforeExpiry?: number
+): Promise<any> {
   try {
-    const response = await api.post('/time-management/automation/check-expiring-shifts', {
-      daysBeforeExpiry: daysBeforeExpiry || 7,
-    });
+    const response = await api.post(
+      "/time-management/automation/check-expiring-shifts",
+      {
+        daysBeforeExpiry: daysBeforeExpiry || 7,
+      }
+    );
     return response;
   } catch (error) {
-    console.error('Failed to check expiring shifts:', error);
+    console.error("Failed to check expiring shifts:", error);
     throw error;
   }
 }
@@ -268,16 +297,17 @@ export async function createShiftExpiryNotifications(
   }>
 ): Promise<any> {
   try {
-    const response = await api.post('/notifications/shift-expiry/notify-bulk', {
+    const response = await api.post("/notifications/shift-expiry/notify-bulk", {
       hrAdminIds,
-      expiringAssignments: expiringAssignments.map(a => ({
+      expiringAssignments: expiringAssignments.map((a) => ({
         ...a,
-        endDate: a.endDate instanceof Date ? a.endDate.toISOString() : a.endDate,
+        endDate:
+          a.endDate instanceof Date ? a.endDate.toISOString() : a.endDate,
       })),
     });
     return response;
   } catch (error) {
-    console.error('Failed to create shift expiry notifications:', error);
+    console.error("Failed to create shift expiry notifications:", error);
     // Don't throw - this is secondary to the check
     return null;
   }
@@ -289,14 +319,84 @@ export async function createShiftExpiryNotifications(
  */
 export async function createTestNotification(): Promise<any> {
   try {
-    const response = await api.post('/notifications/test/create');
+    const response = await api.post("/notifications/test/create");
     return response;
   } catch (error) {
-    console.error('Failed to create test notification:', error);
+    console.error("Failed to create test notification:", error);
     throw error;
   }
 }
 
+/**
+ * Notify HR when profile change request is submitted (N-040)
+ * Called by Employee Profile module
+ */
+export async function notifyProfileChangeRequestSubmitted(
+  employeeId: string,
+  changeRequestId: string,
+  changeDescription: string
+): Promise<any> {
+  try {
+    const response = await api.post(
+      "/notifications/profile/change-request/submitted",
+      {
+        employeeId,
+        changeRequestId,
+        changeDescription,
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error("Failed to notify profile change request submitted:", error);
+    // Don't throw - notification failure shouldn't block the main action
+    return null;
+  }
+}
 
+/**
+ * Notify employee when change request is processed (N-037)
+ * Called by Employee Profile module
+ */
+export async function notifyProfileChangeRequestProcessed(
+  employeeId: string,
+  changeRequestId: string,
+  status: "APPROVED" | "REJECTED",
+  reason?: string
+): Promise<any> {
+  try {
+    const response = await api.post(
+      "/notifications/profile/change-request/processed",
+      {
+        employeeId,
+        changeRequestId,
+        status,
+        reason,
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error("Failed to notify profile change request processed:", error);
+    return null;
+  }
+}
 
-
+/**
+ * Notify employee when profile is updated by HR
+ */
+export async function notifyProfileUpdated(
+  employeeId: string,
+  updatedBy: string,
+  changes: string[]
+): Promise<any> {
+  try {
+    const response = await api.post("/notifications/profile/updated", {
+      employeeId,
+      updatedBy,
+      changes,
+    });
+    return response;
+  } catch (error) {
+    console.error("Failed to notify profile updated:", error);
+    return null;
+  }
+}

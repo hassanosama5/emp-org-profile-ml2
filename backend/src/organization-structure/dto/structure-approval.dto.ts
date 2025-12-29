@@ -6,7 +6,8 @@ export class CreateStructureApprovalDto {
   changeRequestId: string;
 
   @IsMongoId()
-  approverEmployeeId: string;
+  @IsOptional()
+  approverEmployeeId?: string; // Optional - will be auto-set from current user if not provided
 
   @IsString()
   @IsOptional()
@@ -17,6 +18,12 @@ export class UpdateApprovalDecisionDto {
   @IsEnum(ApprovalDecision)
   decision: ApprovalDecision;
 
+  @IsString()
+  @IsOptional()
+  comments?: string;
+}
+
+export class ApproveRejectChangeRequestDto {
   @IsString()
   @IsOptional()
   comments?: string;

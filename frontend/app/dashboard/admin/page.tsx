@@ -14,13 +14,15 @@ import {
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
+  useRequireAuth([SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN]);
 
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">HR Admin Dashboard</h1>
-        <p className="text-gray-600 mt-1">
+        <h1 className="text-3xl font-bold text-white-900">
+          HR Admin Dashboard
+        </h1>
+        <p className="text-white-600 mt-1">
           Welcome, {user?.fullName || "Admin"}. Manage HR operations and system
           configuration.
         </p>
@@ -28,7 +30,7 @@ export default function AdminDashboardPage() {
 
       {/* HR Operations Section */}
       <div className="mb-10">
-        <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+        <h2 className="text-2xl font-semibold text-white-900 mb-4">
           HR Operations
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -66,6 +68,24 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
+          {/* ADDED: Organization Structure Card in HR Operations section */}
+          <Card className="hover:shadow-lg transition-shadow border-2 border-green-200">
+            <CardHeader>
+              <CardTitle>Structure</CardTitle>
+              <CardDescription>
+                Manage departments and positions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/dashboard/organization-structure"
+                className="block w-full text-center bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 transition font-medium"
+              >
+                Organization Structure
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <CardTitle>Team</CardTitle>
@@ -82,32 +102,47 @@ export default function AdminDashboardPage() {
               </Link>
             </CardContent>
           </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle>My Profile</CardTitle>
-              <CardDescription>
-                View and manage your personal information
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link
-                href="/dashboard/employee-profile/my-profile"
-                className="block w-full text-center bg-gray-600 text-white py-3 px-4 rounded-md hover:bg-gray-700 transition font-medium"
-              >
-                My Profile
-              </Link>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
       {/* System Administration Section */}
       <div className="mb-10">
-        <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+        <h2 className="text-2xl font-semibold text-white-900 mb-4">
           System Administration
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* PROMOTED: Organization Structure in System Admin section with more prominent styling */}
+          <Card className="hover:shadow-lg transition-shadow border-2 border-green-200">
+            <CardHeader>
+              <CardTitle className="text-lg">Organization Structure</CardTitle>
+              <CardDescription>
+                Define departments, positions, and manage hierarchy
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Link
+                href="/dashboard/organization-structure"
+                className="block w-full text-center bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 transition font-medium"
+              >
+                Manage Structure
+              </Link>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/dashboard/organization-structure/departments"
+                  className="text-center border border-green-600 text-green-600 py-2 px-3 rounded-md hover:bg-green-50 transition text-sm"
+                >
+                  Departments
+                </Link>
+                <Link
+                  href="/dashboard/organization-structure/positions"
+                  className="text-center border border-green-600 text-green-600 py-2 px-3 rounded-md hover:bg-green-50 transition text-sm"
+                >
+                  Positions
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <CardTitle>Leaves Configuration</CardTitle>
@@ -176,36 +211,25 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle>Organization Structure</CardTitle>
-              <CardDescription>
-                Manage departments, positions, and organizational hierarchy
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link
-                href="/dashboard/organization-structure"
-                className="block w-full text-center bg-gray-600 text-white py-3 px-4 rounded-md hover:bg-gray-700 transition font-medium"
-              >
-                Manage Structure →
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow border-2 border-blue-200">
             <CardHeader>
               <CardTitle>Time Management</CardTitle>
               <CardDescription>
-                Manage attendance, schedules, and time tracking
+                Manage attendance, schedules, shifts, and time tracking
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Link
                 href="/dashboard/time-management"
-                className="block w-full text-center bg-gray-600 text-white py-3 px-4 rounded-md hover:bg-gray-700 transition font-medium"
+                className="block w-full text-center bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition font-medium mb-2"
               >
                 Manage Time →
+              </Link>
+              <Link
+                href="/dashboard/time-management/approvals"
+                className="block w-full text-center bg-gray-600 text-white py-3 px-4 rounded-md hover:bg-gray-700 transition font-medium"
+              >
+                Approvals & Reports →
               </Link>
             </CardContent>
           </Card>
@@ -214,4 +238,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-

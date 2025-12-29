@@ -11,6 +11,7 @@ import { Input } from '@/components/shared/ui/Input';
 import { Toast, useToast } from '@/components/leaves/Toast';
 import { checkExpiringShifts } from '@/lib/api/notifications';
 import { ExpiringShiftAssignment, CheckExpiringShiftsResponse } from '@/types/time-management';
+import ShiftManagementDialog from './ShiftManagementDialog';
 
 export default function NotificationCenter() {
   const { user } = useAuth();
@@ -25,6 +26,15 @@ export default function NotificationCenter() {
   const [checkResult, setCheckResult] = useState<CheckExpiringShiftsResponse | null>(null);
   const [checking, setChecking] = useState(false);
   const [daysBeforeExpiry, setDaysBeforeExpiry] = useState<number>(7);
+  
+  // Shift management dialog state
+  const [selectedShiftAssignment, setSelectedShiftAssignment] = useState<{
+    assignmentId: string;
+    employeeId: string;
+    employeeName: string;
+    endDate: Date;
+    notificationId?: string; // To delete notification after managing
+  } | null>(null);
 
   useEffect(() => {
     if (error) {
@@ -125,14 +135,56 @@ export default function NotificationCenter() {
   const handleCheckExpiringShifts = async () => {
     try {
       setChecking(true);
+      console.log('[SHIFT EXPIRY CHECK] Starting check for shifts expiring within', daysBeforeExpiry, 'days');
+      
       const result = await checkExpiringShifts(daysBeforeExpiry);
+      console.log('[SHIFT EXPIRY CHECK] Result:', result);
+      
       setCheckResult(result);
       setExpiringAssignments(result.assignments || []);
-      showToast(
-        `Found ${result.count} expiring shift assignment(s) within ${daysBeforeExpiry} days. Notifications will be automatically sent to HR admins.`,
-        result.count > 0 ? 'warning' : 'success'
-      );
+      
+      // Create notifications for ALL HR Admins and System Admins
+      if (result.count > 0 && result.assignments && result.assignments.length > 0) {
+        try {
+          console.log('[SHIFT EXPIRY CHECK] Creating notifications for', result.count, 'expiring assignments');
+          
+          // The backend endpoint will automatically notify all HR Admins and System Admins
+          const { createShiftExpiryNotifications } = await import('@/lib/api/notifications');
+          
+          // Pass empty array - backend will automatically fetch all HR Admins and System Admins
+          const notifResult = await createShiftExpiryNotifications([], result.assignments);
+          console.log('[SHIFT EXPIRY CHECK] Notifications created:', notifResult);
+          
+          showToast(
+            `Found ${result.count} expiring shift assignment(s). Notifications sent to all HR Admins and System Admins!`,
+            'success'
+          );
+          
+          // Refresh notifications to show the new ones
+          console.log('[SHIFT EXPIRY CHECK] Refreshing notifications...');
+          await refetch();
+          console.log('[SHIFT EXPIRY CHECK] Notifications refreshed');
+        } catch (notifError: any) {
+          console.error('[SHIFT EXPIRY CHECK] Failed to create notifications:', notifError);
+          console.error('[SHIFT EXPIRY CHECK] Error details:', {
+            message: notifError.message,
+            response: notifError.response,
+            data: notifError.response?.data,
+          });
+          showToast(
+            `Found ${result.count} expiring shift assignment(s), but failed to send notifications: ${notifError.message}`,
+            'error'
+          );
+        }
+      } else {
+        console.log('[SHIFT EXPIRY CHECK] No expiring assignments found');
+        showToast(
+          `Found ${result.count} expiring shift assignment(s) within ${daysBeforeExpiry} days.`,
+          result.count > 0 ? 'warning' : 'success'
+        );
+      }
     } catch (error: any) {
+      console.error('[SHIFT EXPIRY CHECK] Failed:', error);
       showToast(error.message || 'Failed to check expiring shifts', 'error');
     } finally {
       setChecking(false);
@@ -268,6 +320,7 @@ export default function NotificationCenter() {
                         <th className="text-left py-3 px-4 font-semibold text-gray-700">End Date</th>
                         <th className="text-left py-3 px-4 font-semibold text-gray-700">Days Remaining</th>
                         <th className="text-left py-3 px-4 font-semibold text-gray-700">Urgency</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -303,6 +356,20 @@ export default function NotificationCenter() {
                               {assignment.urgency}
                             </span>
                           </td>
+                          <td className="py-3 px-4">
+                            <Button
+                              onClick={() => setSelectedShiftAssignment({
+                                assignmentId: assignment.assignmentId,
+                                employeeId: assignment.employeeId || '',
+                                employeeName: assignment.employeeName,
+                                endDate: new Date(assignment.endDate),
+                              })}
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              Manage
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -334,28 +401,67 @@ export default function NotificationCenter() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {shiftExpiryNotifications.map((notification) => (
-                    <div
-                      key={notification._id}
-                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              {notification.type === 'SHIFT_EXPIRY_ALERT'
-                                ? 'Alert'
-                                : 'Bulk Alert'}
-                            </span>
-                            <span className="text-sm text-gray-500">
-                              {formatDate(notification.createdAt)}
-                            </span>
+                  {shiftExpiryNotifications.map((notification) => {
+                    // Log notification data to debug
+                    console.log('[Shift Expiry Notification]', notification._id, {
+                      type: notification.type,
+                      hasData: !!notification.data,
+                      data: notification.data,
+                    });
+                    
+                    const hasAssignmentData = notification.data?.assignmentId && notification.data?.endDate;
+                    
+                    return (
+                      <div
+                        key={notification._id}
+                        className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                {notification.type === 'SHIFT_EXPIRY_ALERT'
+                                  ? 'Alert'
+                                  : 'Bulk Alert'}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                {formatDate(notification.createdAt)}
+                              </span>
+                              {!hasAssignmentData && (
+                                <span className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                  Legacy
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-900">{notification.message}</p>
                           </div>
-                          <p className="text-gray-900">{notification.message}</p>
+                          {/* Manage button - uses assignmentId and endDate from notification data */}
+                          <Button
+                            onClick={() => {
+                              if (notification.data?.assignmentId && notification.data?.endDate) {
+                                setSelectedShiftAssignment({
+                                  assignmentId: notification.data.assignmentId,
+                                  employeeId: notification.data.employeeId || '',
+                                  employeeName: notification.data.employeeName || 'Unknown Employee',
+                                  endDate: new Date(notification.data.endDate),
+                                  notificationId: notification._id, // For deletion after managing
+                                });
+                              } else {
+                                showToast('This is an older notification without assignment details. Please delete it and use "Check Expiring Shifts" to create a new notification with full details.', 'warning');
+                              }
+                            }}
+                            size="sm"
+                            className={hasAssignmentData 
+                              ? "bg-blue-600 hover:bg-blue-700 text-white ml-4"
+                              : "bg-gray-400 hover:bg-gray-500 text-white ml-4"
+                            }
+                          >
+                            Manage
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -419,51 +525,102 @@ export default function NotificationCenter() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredNotifications.map((notif: Notification) => (
-                <div
-                  key={notif._id}
-                  className={`border-l-4 border-l-transparent rounded-lg p-4 ${getTypeColor(notif.type)} flex items-start justify-between gap-4`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">
-                        {getTypeLabel(notif.type)}
-                      </h3>
-                      {!notif.isRead && (
-                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
-                          New
-                        </span>
-                      )}
+              {filteredNotifications.map((notif: Notification) => {
+                const isShiftExpiry = notif.type === 'SHIFT_EXPIRY_ALERT' || notif.type === 'SHIFT_EXPIRY_BULK_ALERT';
+                const hasAssignmentData = isShiftExpiry && notif.data?.assignmentId && notif.data?.endDate;
+                
+                return (
+                  <div
+                    key={notif._id}
+                    className={`border-l-4 border-l-transparent rounded-lg p-4 ${getTypeColor(notif.type)} flex items-start justify-between gap-4`}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">
+                          {getTypeLabel(notif.type)}
+                        </h3>
+                        {!notif.isRead && (
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                            New
+                          </span>
+                        )}
+                        {isShiftExpiry && !hasAssignmentData && (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                            Legacy
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm">{notif.message}</p>
+                      <p className="mt-1 text-xs font-medium opacity-75">
+                        {new Date(notif.createdAt).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="mt-2 text-sm">{notif.message}</p>
-                    <p className="mt-1 text-xs font-medium opacity-75">
-                      {new Date(notif.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex flex-shrink-0 gap-2">
-                    {!notif.isRead && (
+                    <div className="flex flex-shrink-0 gap-2">
+                      {/* Manage button for shift expiry notifications - uses data from notification */}
+                      {isShiftExpiry && (
+                        <Button
+                          onClick={() => {
+                            if (notif.data?.assignmentId && notif.data?.endDate) {
+                              setSelectedShiftAssignment({
+                                assignmentId: notif.data.assignmentId,
+                                employeeId: notif.data.employeeId || '',
+                                employeeName: notif.data.employeeName || 'Unknown Employee',
+                                endDate: new Date(notif.data.endDate),
+                                notificationId: notif._id, // For deletion after managing
+                              });
+                            } else {
+                              showToast('This is an older notification without assignment details. Please delete it and use "Check Expiring Shifts" to create a new notification.', 'warning');
+                            }
+                          }}
+                          size="sm"
+                          className={hasAssignmentData 
+                            ? "bg-blue-600 hover:bg-blue-700 text-white"
+                            : "bg-gray-400 hover:bg-gray-500 text-white"
+                          }
+                        >
+                          Manage
+                        </Button>
+                      )}
+                      {!notif.isRead && (
+                        <Button
+                          onClick={() => handleMarkAsRead(notif._id)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          Mark Read
+                        </Button>
+                      )}
                       <Button
-                        onClick={() => handleMarkAsRead(notif._id)}
+                        onClick={() => handleDelete(notif._id)}
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                       >
-                        Mark Read
+                        Delete
                       </Button>
-                    )}
-                    <Button
-                      onClick={() => handleDelete(notif._id)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Delete
-                    </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Shift Management Dialog */}
+      {selectedShiftAssignment && (
+        <ShiftManagementDialog
+          assignmentId={selectedShiftAssignment.assignmentId}
+          employeeId={selectedShiftAssignment.employeeId}
+          employeeName={selectedShiftAssignment.employeeName}
+          endDate={selectedShiftAssignment.endDate}
+          notificationId={selectedShiftAssignment.notificationId}
+          onClose={() => setSelectedShiftAssignment(null)}
+          onSuccess={() => {
+            showToast('Shift assignment updated successfully', 'success');
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }

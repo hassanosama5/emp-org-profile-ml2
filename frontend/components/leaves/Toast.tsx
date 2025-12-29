@@ -117,13 +117,13 @@ export const useToast = () => {
     isVisible: false,
   });
 
-  const showToast = (message: string, type: ToastType = "info") => {
+  const showToast = React.useCallback((message: string, type: ToastType = "info") => {
     setToast({ message, type, isVisible: true });
-  };
+  }, []);
 
-  const hideToast = () => {
+  const hideToast = React.useCallback(() => {
     setToast((prev) => ({ ...prev, isVisible: false }));
-  };
+  }, []);
 
   return {
     toast,

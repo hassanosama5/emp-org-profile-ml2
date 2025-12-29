@@ -20,12 +20,10 @@ import {
   CandidateDocument,
 } from '../employee-profile/models/candidate.schema';
 import { RegisterCandidateDto } from '../employee-profile/dto/register-candidate.dto';
-// removed CreateEmployeeDto import
 import {
   SystemRole,
   CandidateStatus,
 } from '../employee-profile/enums/employee-profile.enums';
-// removed duplicate import and unused EmployeeStatus
 
 @Injectable()
 export class AuthService {
@@ -70,6 +68,35 @@ export class AuthService {
     employee: EmployeeProfileDocument,
     password: string,
   ): Promise<any> {
+    // ========================================================================
+    // RECRUITMENT SYSTEM - Employee Status Access Control
+    // ========================================================================
+    // Employees with RETIRED or TERMINATED status cannot log in to the system.
+    // - RETIRED: Employee resigned and left the organization
+    // - TERMINATED: Employee was terminated by HR/Management
+    // - INACTIVE: System access manually revoked (backward compatibility)
+    // - PROBATION: New hires can log in normally (onboarding in progress)
+    // - ACTIVE: Full access (normal operation)
+    // ========================================================================
+    if (employee.status === 'RETIRED') {
+      throw new UnauthorizedException(
+        'Your account has been retired due to resignation. System access has been revoked. Please contact HR for assistance.',
+      );
+    }
+    
+    if (employee.status === 'TERMINATED') {
+      throw new UnauthorizedException(
+        'Your account has been terminated. System access has been revoked. Please contact HR for assistance.',
+      );
+    }
+    
+    // Backward compatibility: INACTIVE status (manual access revocation)
+    if (employee.status === 'INACTIVE') {
+      throw new UnauthorizedException(
+        'Your account has been deactivated. System access has been revoked. Please contact HR for assistance.',
+      );
+    }
+
     const isPasswordValid = await bcrypt.compare(password, employee.password);
 
     if (!isPasswordValid) {
@@ -88,6 +115,7 @@ export class AuthService {
       identifier: employee.employeeNumber,
       roles: systemRole?.roles || [],
       permissions: systemRole?.permissions || [],
+      profilePictureUrl: employee.profilePictureUrl, // ADDED
     };
   }
 
@@ -113,6 +141,7 @@ export class AuthService {
       identifier: candidate.candidateNumber,
       roles: systemRole?.roles || [],
       permissions: systemRole?.permissions || [],
+      profilePictureUrl: candidate.profilePictureUrl, // ADDED
     };
   }
 
@@ -125,6 +154,12 @@ export class AuthService {
       permissions: user.permissions,
       userType:
         user.userType || (user.employeeNumber ? 'employee' : 'candidate'),
+      // ========================================================================
+      // NEW CHANGES FOR OFFBOARDING: Added employeeNumber to JWT payload
+      // Required for OFF-018 (Employee Resignation) and OFF-001 (HR Termination)
+      // The resignation endpoint needs employeeNumber from token to identify user
+      // ========================================================================
+      employeeNumber: user.employeeNumber || null,
     };
 
     return {
@@ -139,6 +174,7 @@ export class AuthService {
         roles: user.roles,
         userType:
           user.userType || (user.employeeNumber ? 'employee' : 'candidate'),
+        profilePictureUrl: user.profilePictureUrl, // ADDED
       },
     };
   }
@@ -252,15 +288,10 @@ export class AuthService {
         personalEmail: candidateWithoutPassword.personalEmail,
         roles: [SystemRole.JOB_CANDIDATE],
         userType: 'candidate',
+        profilePictureUrl: candidateWithoutPassword.profilePictureUrl, // ADDED
       },
     };
   }
-
-  // removed registerEmployee
-
-  // removed duplicate registerEmployee implementation
-
-  // removed generateEmployeeNumber
 
   private async generateCandidateNumber(): Promise<string> {
     const year = new Date().getFullYear();

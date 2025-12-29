@@ -65,6 +65,14 @@ export const employeeProfileApi = {
     return extractData<EmployeeProfile>(response) || response;
   },
 
+  // Get employee by employee number
+  getEmployeeByNumber: async (employeeNumber: string) => {
+    const response = await api.get(
+      `/employee-profile/search/by-number/${employeeNumber}`
+    );
+    return extractData<EmployeeProfile>(response) || response;
+  },
+
   // Submit a change request
   submitChangeRequest: async (data: {
     requestDescription: string;
@@ -156,6 +164,74 @@ export const employeeProfileApi = {
   getMyTeam: async () => {
     const response = await api.get("/employee-profile/team/members");
     const data = extractData<TeamMember[]>(response);
-    return Array.isArray(data) ? data : [];
+    // Backend returns EmployeeProfile docs (with `_id`), while some UI expects `id`.
+    const raw = Array.isArray(data) ? data : [];
+
+    const normalized = raw
+      .map((m: any) => {
+        const id = (m?.id || m?._id || m?.employeeProfileId || "").toString();
+        const firstName = m?.firstName ?? "";
+        const lastName = m?.lastName ?? "";
+        const fullName =
+          m?.fullName ||
+          `${firstName} ${lastName}`.trim() ||
+          m?.name ||
+          "Unknown";
+
+        // Extract position title
+        let positionTitle = "";
+        if (m?.primaryPosition) {
+          // If populated as object
+          positionTitle = typeof m.primaryPosition === "object" 
+            ? (m.primaryPosition.title || m.primaryPosition.name || "")
+            : String(m.primaryPosition);
+        } else if (m?.primaryPositionId) {
+          // If populated as object with _id
+          if (typeof m.primaryPositionId === "object") {
+            positionTitle = m.primaryPositionId.title || m.primaryPositionId.name || "";
+          }
+        }
+        // Fallback to positionTitle if already set
+        if (!positionTitle && m?.positionTitle) {
+          positionTitle = m.positionTitle;
+        }
+
+        // Extract department name
+        let departmentName = "";
+        if (m?.primaryDepartment) {
+          // If populated as object
+          departmentName = typeof m.primaryDepartment === "object"
+            ? (m.primaryDepartment.name || m.primaryDepartment.title || "")
+            : String(m.primaryDepartment);
+        } else if (m?.primaryDepartmentId) {
+          // If populated as object with _id
+          if (typeof m.primaryDepartmentId === "object") {
+            departmentName = m.primaryDepartmentId.name || m.primaryDepartmentId.title || "";
+          }
+        }
+        // Fallback to departmentName if already set
+        if (!departmentName && m?.departmentName) {
+          departmentName = m.departmentName;
+        }
+
+        return {
+          ...m,
+          id,
+          firstName,
+          lastName,
+          fullName,
+          positionTitle: positionTitle || m?.positionTitle || "—",
+          departmentName: departmentName || m?.departmentName || "—",
+        } as TeamMember;
+      })
+      .filter((m: any) => !!m.id);
+
+    // Deduplicate by id
+    const seen = new Set<string>();
+    return normalized.filter((m: any) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
   },
 };

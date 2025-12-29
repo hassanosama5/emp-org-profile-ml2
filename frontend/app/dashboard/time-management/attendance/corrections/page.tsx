@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/hooks/use-auth";
-import { useRequireAuth } from "@/lib/hooks/use-auth";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SystemRole } from "@/types";
 import { timeManagementApi } from "@/lib/api/time-management/time-management.api";
 import {
@@ -16,10 +16,11 @@ import { Input } from "@/components/shared/ui/Input";
 import { Select } from "@/components/leaves/Select";
 import { Modal } from "@/components/leaves/Modal";
 import { Toast, useToast } from "@/components/leaves/Toast";
+import { CorrectionRequestList } from "@/components/time-management/CorrectionRequestList";
+import Link from "next/link";
 
 export default function AttendanceCorrectionsPage() {
   const { user } = useAuth();
-  useRequireAuth(SystemRole.HR_ADMIN);
   const { toast, showToast, hideToast } = useToast();
 
   const [requests, setRequests] = useState<AttendanceCorrectionRequest[]>([]);
@@ -35,14 +36,33 @@ export default function AttendanceCorrectionsPage() {
   const [processing, setProcessing] = useState(false);
   const [filters, setFilters] = useState<GetAllCorrectionRequestsFilters>({});
   const [viewMode, setViewMode] = useState<"all" | "pending">("all");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  // Check if user is admin-level for corrections
+  useEffect(() => {
+    if (
+      user?.roles?.includes(SystemRole.HR_ADMIN) ||
+      user?.roles?.includes(SystemRole.SYSTEM_ADMIN) ||
+      user?.roles?.includes(SystemRole.DEPARTMENT_HEAD) ||
+      user?.roles?.includes(SystemRole.HR_MANAGER)
+    ) {
+      setIsAdmin(true);
+    } else {
+      setIsAdmin(false);
+      setAccessError(null); // Employees are allowed to view/submit; only admin actions are gated
+    }
+  }, [user?.roles]);
 
   useEffect(() => {
+    if (!isAdmin) return;
+    
     if (viewMode === "all") {
       loadAllRequests();
     } else {
       loadPendingRequests();
     }
-  }, [filters, viewMode]);
+  }, [filters, viewMode, isAdmin]);
 
   const loadAllRequests = async () => {
     try {
@@ -219,7 +239,16 @@ export default function AttendanceCorrectionsPage() {
   const isLoading = viewMode === "all" ? loading : loadingPending;
 
   return (
-    <div className="container mx-auto px-6 py-8">
+    <ProtectedRoute
+      allowedRoles={[
+        SystemRole.HR_ADMIN,
+        SystemRole.HR_MANAGER,
+        SystemRole.DEPARTMENT_HEAD,
+        SystemRole.SYSTEM_ADMIN,
+        SystemRole.DEPARTMENT_EMPLOYEE, // Employees can view their own requests
+      ]}
+    >
+      <div className="container mx-auto px-6 py-8">
       <Toast
         message={toast.message}
         type={toast.type}
@@ -227,23 +256,43 @@ export default function AttendanceCorrectionsPage() {
         onClose={hideToast}
       />
 
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Attendance Correction Requests</h1>
-          <p className="text-gray-600 mt-1">
-            Review, approve, or reject attendance correction requests
+      {!isAdmin ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">My Correction Requests</h1>
+              <p className="text-gray-600 mt-1">
+                Submit and track your own attendance correction requests
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === "all" ? "primary" : "outline"}
-            onClick={() => setViewMode("all")}
-          >
-            All Requests
-          </Button>
-          <Button
-            variant={viewMode === "pending" ? "primary" : "outline"}
-            onClick={() => setViewMode("pending")}
+            <Link
+              href="/dashboard/employee-profile/time-management"
+              className="text-blue-600 hover:underline font-medium"
+            >
+              Request a Correction →
+            </Link>
+          </div>
+          <CorrectionRequestList />
+        </div>
+      ) : (
+        <>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Attendance Correction Requests</h1>
+              <p className="text-gray-600 mt-1">
+                Review, approve, or reject attendance correction requests
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === "all" ? "primary" : "outline"}
+                onClick={() => setViewMode("all")}
+              >
+                All Requests
+              </Button>
+              <Button
+                variant={viewMode === "pending" ? "primary" : "outline"}
+                onClick={() => setViewMode("pending")}
           >
             Pending Requests
           </Button>
@@ -347,9 +396,9 @@ export default function AttendanceCorrectionsPage() {
                         key={requestId}
                         className="border-b border-gray-100 hover:bg-gray-50"
                       >
-                        <td className="py-3 px-4">{employeeDisplay}</td>
-                        <td className="py-3 px-4">{attendanceDate}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 text-gray-900">{employeeDisplay}</td>
+                        <td className="py-3 px-4 text-gray-900">{attendanceDate}</td>
+                        <td className="py-3 px-4 text-gray-900">
                           <div className="max-w-xs truncate" title={request.reason || "No reason provided"}>
                             {request.reason || "N/A"}
                           </div>
@@ -363,9 +412,9 @@ export default function AttendanceCorrectionsPage() {
                             {request.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4">{formatDate(request.createdAt)}</td>
+                        <td className="py-3 px-4 text-gray-900">{formatDate(request.createdAt)}</td>
                         {viewMode === "pending" && (request as any).waitingDays !== undefined && (
-                          <td className="py-3 px-4">{(request as any).waitingDays} days</td>
+                          <td className="py-3 px-4 text-gray-900">{(request as any).waitingDays} days</td>
                         )}
                         <td className="py-3 px-4">
                           <div className="flex gap-2">
@@ -376,7 +425,7 @@ export default function AttendanceCorrectionsPage() {
                             >
                               View
                             </Button>
-                            {canApproveOrReject(request.status) && (
+                            {canApproveOrReject(request.status) && isAdmin && (
                               <>
                                 <Button
                                   variant="primary"
@@ -581,7 +630,10 @@ export default function AttendanceCorrectionsPage() {
           </div>
         )}
       </Modal>
-    </div>
+        </>
+      )}
+      </div>
+    </ProtectedRoute>
   );
 }
 

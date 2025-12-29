@@ -40,12 +40,16 @@ export class PolicyConfigService {
     createOvertimeRuleDto: CreateOvertimeRuleDto,
     currentUserId: string,
   ) {
+    // OvertimeRule schema doesn't have createdBy/updatedBy fields, so we only set the schema fields
     const newOvertimeRule = new this.overtimeRuleModel({
-      ...createOvertimeRuleDto,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
+      name: createOvertimeRuleDto.name,
+      description: createOvertimeRuleDto.description,
+      active: createOvertimeRuleDto.active !== undefined ? createOvertimeRuleDto.active : true,
+      approved: createOvertimeRuleDto.approved !== undefined ? createOvertimeRuleDto.approved : false,
     });
-    return newOvertimeRule.save();
+    const saved = await newOvertimeRule.save();
+    console.log('[OvertimeRule] Saved rule:', saved._id, 'Name:', saved.name);
+    return saved;
   }
 
   // Get all overtime rules with optional filters
@@ -1477,5 +1481,136 @@ export class PolicyConfigService {
       })
       .sort({ startDate: 1 })
       .exec();
+  }
+
+  // ===== PERMISSION POLICY METHODS (Using OvertimeRule schema) =====
+  // Since we cannot create new schemas, we use OvertimeRule schema to store permission policies
+  // We use a naming convention: name starts with "PERMISSION_POLICY:" to identify them
+  // Additional data is stored in the description field as JSON
+  private readonly PERMISSION_POLICY_PREFIX = 'PERMISSION_POLICY:';
+
+  async createPermissionPolicy(data: any, currentUserId: string) {
+    const policyData = {
+      name: `${this.PERMISSION_POLICY_PREFIX}${data.name}`,
+      description: JSON.stringify({
+        permissionType: data.permissionType,
+        maxDurationMinutes: data.maxDurationMinutes,
+        requiresApproval: data.requiresApproval,
+        affectsPayroll: data.affectsPayroll,
+        originalDescription: data.description,
+      }),
+      active: data.active !== undefined ? data.active : true,
+      approved: data.requiresApproval || data.affectsPayroll, // Use approved field to indicate if policy requires approval/affects payroll
+    };
+    
+    console.log('[PermissionPolicy] Creating policy with data:', JSON.stringify(policyData, null, 2));
+    
+    const overtimeRule = await this.createOvertimeRule(policyData, currentUserId);
+    
+    console.log('[PermissionPolicy] Created overtime rule:', overtimeRule._id, 'Name:', overtimeRule.name);
+    
+    // Return in the format expected by frontend
+    return this.mapOvertimeRuleToPermissionPolicy(overtimeRule);
+  }
+
+  async getPermissionPolicies(currentUserId: string) {
+    try {
+      // Query directly for rules with the prefix
+      const query = { name: { $regex: `^${this.PERMISSION_POLICY_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` } };
+      console.log('[PermissionPolicy] Query:', JSON.stringify(query));
+      
+      const allRules = await this.overtimeRuleModel.find({}).exec();
+      console.log('[PermissionPolicy] Total overtime rules found:', allRules.length);
+      console.log('[PermissionPolicy] Sample rule names:', allRules.slice(0, 3).map((r: any) => r.name));
+      console.log('[PermissionPolicy] Looking for prefix:', this.PERMISSION_POLICY_PREFIX);
+      
+      const permissionPolicies = allRules
+        .filter((rule: any) => {
+          const matches = rule.name?.startsWith(this.PERMISSION_POLICY_PREFIX);
+          if (matches) {
+            console.log('[PermissionPolicy] Found matching rule:', rule._id, rule.name);
+          }
+          return matches;
+        })
+        .map((rule: any) => this.mapOvertimeRuleToPermissionPolicy(rule));
+      
+      console.log('[PermissionPolicy] Returning', permissionPolicies.length, 'permission policies');
+      return permissionPolicies;
+    } catch (error: any) {
+      console.error('[PermissionPolicy] Error in getPermissionPolicies:', error);
+      throw error;
+    }
+  }
+
+  async getPermissionPolicyById(id: string, currentUserId: string) {
+    const rule = await this.overtimeRuleModel.findById(id).exec();
+    if (!rule) {
+      throw new Error('Permission policy not found');
+    }
+    if (!rule.name?.startsWith(this.PERMISSION_POLICY_PREFIX)) {
+      throw new Error('Not a permission policy');
+    }
+    return this.mapOvertimeRuleToPermissionPolicy(rule);
+  }
+
+  async updatePermissionPolicy(id: string, data: any, currentUserId: string) {
+    const rule = await this.overtimeRuleModel.findById(id).exec();
+    if (!rule) {
+      throw new Error('Permission policy not found');
+    }
+    if (!rule.name?.startsWith(this.PERMISSION_POLICY_PREFIX)) {
+      throw new Error('Not a permission policy');
+    }
+    
+    const policyData = {
+      name: `${this.PERMISSION_POLICY_PREFIX}${data.name}`,
+      description: JSON.stringify({
+        permissionType: data.permissionType,
+        maxDurationMinutes: data.maxDurationMinutes,
+        requiresApproval: data.requiresApproval,
+        affectsPayroll: data.affectsPayroll,
+        originalDescription: data.description,
+      }),
+      active: data.active,
+      approved: data.requiresApproval || data.affectsPayroll,
+    };
+    
+    const updatedRule = await this.updateOvertimeRule(id, policyData, currentUserId);
+    return this.mapOvertimeRuleToPermissionPolicy(updatedRule);
+  }
+
+  async deletePermissionPolicy(id: string, currentUserId: string) {
+    const rule = await this.overtimeRuleModel.findById(id).exec();
+    if (!rule) {
+      throw new Error('Permission policy not found');
+    }
+    if (!rule.name?.startsWith(this.PERMISSION_POLICY_PREFIX)) {
+      throw new Error('Not a permission policy');
+    }
+    await this.deleteOvertimeRule(id, currentUserId);
+    return { message: 'Permission policy deleted successfully' };
+  }
+
+  // Helper: Map OvertimeRule to PermissionPolicy format
+  private mapOvertimeRuleToPermissionPolicy(rule: any) {
+    let policyData: any = {};
+    try {
+      policyData = JSON.parse(rule.description || '{}');
+    } catch (e) {
+      // If description is not JSON, treat as empty
+    }
+    
+    return {
+      _id: rule._id.toString(),
+      name: rule.name?.replace(this.PERMISSION_POLICY_PREFIX, '') || '',
+      description: policyData.originalDescription || rule.description || '',
+      permissionType: policyData.permissionType || 'EARLY_IN',
+      maxDurationMinutes: policyData.maxDurationMinutes || 60,
+      requiresApproval: policyData.requiresApproval !== undefined ? policyData.requiresApproval : true,
+      affectsPayroll: policyData.affectsPayroll !== undefined ? policyData.affectsPayroll : true,
+      active: rule.active !== undefined ? rule.active : true,
+      createdAt: rule.createdAt?.toISOString(),
+      updatedAt: rule.updatedAt?.toISOString(),
+    };
   }
 }

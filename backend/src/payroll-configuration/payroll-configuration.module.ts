@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PayrollConfigurationController } from './payroll-configuration.controller';
 import { PayrollConfigurationService } from './payroll-configuration.service';
 import { ObjectIdPipe } from './common/pipes/object-id.pipe';
+import { OrganizationStructureModule } from '../organization-structure/organization-structure.module';
 
 // Import all schemas - make sure these paths are correct
 import { payGrade, payGradeSchema } from './models/payGrades.schema';
@@ -30,6 +31,7 @@ import {
 
 @Module({
   imports: [
+    OrganizationStructureModule,
     MongooseModule.forFeature([
       // Pay Grade
       { name: payGrade.name, schema: payGradeSchema },

@@ -6,16 +6,37 @@ import { latenessRuleSchema } from './models/lateness-rule.schema';
 import { OvertimeRuleSchema } from './models/overtime-rule.schema';
 import { ScheduleRuleSchema } from './models/schedule-rule.schema';
 import { ShiftAssignmentSchema } from './models/shift-assignment.schema';
-import { PunchPolicy, HolidayType, ShiftAssignmentStatus } from './models/enums/index';
+import {
+  PunchPolicy,
+  HolidayType,
+  ShiftAssignmentStatus,
+} from './models/enums/index';
 
-export async function seedTimeManagement(connection: mongoose.Connection, employees: any, departments: any, positions: any) {
+export async function seedTimeManagement(
+  connection: mongoose.Connection,
+  employees: any,
+  departments: any,
+  positions: any,
+) {
   const ShiftTypeModel = connection.model('ShiftType', ShiftTypeSchema);
   const ShiftModel = connection.model('Shift', ShiftSchema);
   const HolidayModel = connection.model('Holiday', HolidaySchema);
-  const LatenessRuleModel = connection.model('LatenessRule', latenessRuleSchema);
-  const OvertimeRuleModel = connection.model('OvertimeRule', OvertimeRuleSchema);
-  const ScheduleRuleModel = connection.model('ScheduleRule', ScheduleRuleSchema);
-  const ShiftAssignmentModel = connection.model('ShiftAssignment', ShiftAssignmentSchema);
+  const LatenessRuleModel = connection.model(
+    'LatenessRule',
+    latenessRuleSchema,
+  );
+  const OvertimeRuleModel = connection.model(
+    'OvertimeRule',
+    OvertimeRuleSchema,
+  );
+  const ScheduleRuleModel = connection.model(
+    'ScheduleRule',
+    ScheduleRuleSchema,
+  );
+  const ShiftAssignmentModel = connection.model(
+    'ShiftAssignment',
+    ShiftAssignmentSchema,
+  );
 
   console.log('Clearing Time Management...');
   await ShiftTypeModel.deleteMany({});

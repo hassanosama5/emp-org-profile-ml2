@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface TabsContextValue {
   value: string;
@@ -13,10 +13,17 @@ interface TabsProps {
   defaultValue: string;
   className?: string;
   children: React.ReactNode;
+  onValueChange?: (value: string) => void;
 }
 
-export function Tabs({ defaultValue, className = "", children }: TabsProps) {
+export function Tabs({ defaultValue, className = "", children, onValueChange }: TabsProps) {
   const [value, setValue] = useState(defaultValue);
+
+  // Call onValueChange when the internal value changes
+  useEffect(() => {
+    onValueChange?.(value);
+  }, [value, onValueChange]);
+
   return (
     <TabsContext.Provider value={{ value, setValue }}>
       <div className={className}>{children}</div>

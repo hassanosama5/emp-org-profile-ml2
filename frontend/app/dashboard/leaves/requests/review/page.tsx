@@ -28,8 +28,19 @@ export default function ManagerLeaveReviewPage() {
   // NEW: State for employee dropdown
   const [employees, setEmployees] = useState<Array<{ _id: string; employeeId: string; firstName: string; lastName: string }>>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  
+  // State for delegate selection per request
+  const [showDelegateDropdown, setShowDelegateDropdown] = useState<{ [requestId: string]: boolean }>({});
+  const [selectedDelegate, setSelectedDelegate] = useState<{ [requestId: string]: string }>({});
+  const [delegating, setDelegating] = useState<{ [requestId: string]: boolean }>({});
 
-  useRequireAuth(SystemRole.DEPARTMENT_HEAD);
+  // State for document rejection
+  const [showRejectDocumentDialog, setShowRejectDocumentDialog] = useState<{ [requestId: string]: boolean }>({});
+  const [documentRejectionReason, setDocumentRejectionReason] = useState<{ [requestId: string]: string }>({});
+  const [rejectingDocument, setRejectingDocument] = useState<{ [requestId: string]: boolean }>({});
+
+  // Allow both department heads and delegates to access this page
+  // useRequireAuth(SystemRole.DEPARTMENT_HEAD); // Commented out to allow delegates
 
   useEffect(() => {
     if (successMessage) {
@@ -42,6 +53,14 @@ export default function ManagerLeaveReviewPage() {
   useEffect(() => {
     loadEmployees();
   }, []);
+
+  // Check if user is a delegate and auto-load delegated requests
+  useEffect(() => {
+    if (isAuthenticated && user && !hasSearched) {
+      // Auto-fetch if user might be a delegate
+      fetchPendingRequests();
+    }
+  }, [isAuthenticated, user]);
 
   const loadEmployees = async () => {
     try {
@@ -62,7 +81,127 @@ export default function ManagerLeaveReviewPage() {
   };
 
   const fetchPendingRequests = async (employeeId?: string) => {
+    // If no employeeId provided, check if user is a delegate, Payroll Manager, or Department Head
     if (!employeeId) {
+      // Check if there's an employeeId in URL query params (for delegates clicking from dashboard)
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryEmployeeId = urlParams.get('employeeId');
+      
+      if (queryEmployeeId) {
+        // Use the employeeId from query params
+        await fetchPendingRequests(queryEmployeeId);
+        return;
+      }
+      
+      const roles = user?.roles || [];
+      const isPayrollManager = roles.includes(SystemRole.PAYROLL_MANAGER);
+      const isDepartmentHead = roles.includes(SystemRole.DEPARTMENT_HEAD);
+      const userId = (user as any)?._id || user?.userId || (user as any)?.id;
+      
+      if (userId) {
+        setLoadingRequests(true);
+        setError(null);
+        setHasSearched(true);
+        try {
+          // First check if user is a delegate (for Payroll Managers or others)
+          // Delegates should fetch delegated requests, not team requests
+          let isDelegate = false;
+          try {
+            const delegateRequests = await leavesApi.getEmployeeLeaveRequests(userId, {
+              status: "pending",
+            });
+            // If we get requests and user is not a Department Head, they might be a delegate
+            // Check if requests exist and don't belong to the user
+            const normalizedUserId = userId.toString();
+            const hasDelegatedRequests = Array.isArray(delegateRequests) && delegateRequests.some((req: any) => {
+              const rawEmployeeId: any = req.employeeId;
+              let employeeIdStr: string | null = null;
+              if (typeof rawEmployeeId === "string") {
+                employeeIdStr = rawEmployeeId;
+              } else if (rawEmployeeId && typeof rawEmployeeId === "object") {
+                employeeIdStr = rawEmployeeId._id || rawEmployeeId.id || (typeof rawEmployeeId.toString === "function" ? rawEmployeeId.toString() : null);
+              }
+              return employeeIdStr && employeeIdStr !== normalizedUserId && req.status?.toLowerCase() === "pending";
+            });
+            
+            if (hasDelegatedRequests) {
+              isDelegate = true;
+              console.log("User is a delegate, fetching delegated requests");
+              const pendingOnly = delegateRequests.filter(
+                (req: any) => {
+                  if (req.status?.toLowerCase() !== "pending") return false;
+                  const rawEmployeeId: any = req.employeeId;
+                  let employeeIdStr: string | null = null;
+                  if (typeof rawEmployeeId === "string") {
+                    employeeIdStr = rawEmployeeId;
+                  } else if (rawEmployeeId && typeof rawEmployeeId === "object") {
+                    employeeIdStr = rawEmployeeId._id || rawEmployeeId.id || (typeof rawEmployeeId.toString === "function" ? rawEmployeeId.toString() : null);
+                  }
+                  return employeeIdStr && employeeIdStr !== normalizedUserId;
+                }
+              );
+              setPendingRequests(pendingOnly);
+            }
+          } catch (delegateErr) {
+            // Not a delegate or error fetching, continue to team requests
+            console.log("User is not a delegate or error checking:", delegateErr);
+          }
+          
+          // If not a delegate, fetch team requests for Payroll Managers or Department Heads
+          if (!isDelegate) {
+            if (isPayrollManager) {
+              console.log("Fetching team pending requests for Payroll Manager:", userId);
+              const result = await leavesApi.filterTeamLeaveData(userId, {
+                status: "pending",
+                limit: 1000, // Get all pending requests
+              });
+              console.log("Received team requests:", result);
+              const teamRequests = Array.isArray(result.items) ? result.items : [];
+              const pendingOnly = teamRequests.filter(
+                (req: any) => req.status?.toLowerCase() === "pending"
+              );
+              console.log("Filtered team pending requests:", pendingOnly);
+              setPendingRequests(pendingOnly);
+            } else if (isDepartmentHead) {
+            // Department Head: fetch team requests using filterTeamLeaveData
+            console.log("Fetching team pending requests for Department Head:", userId);
+            const result = await leavesApi.filterTeamLeaveData(userId, {
+              status: "pending",
+              limit: 1000,
+            });
+            console.log("Received team requests:", result);
+            const teamRequests = Array.isArray(result.items) ? result.items : [];
+            const pendingOnly = teamRequests.filter(
+              (req: any) => req.status?.toLowerCase() === "pending"
+            );
+              console.log("Filtered team pending requests:", pendingOnly);
+              setPendingRequests(pendingOnly);
+            } else {
+              // For other users (not Payroll Manager or Department Head), try fetching delegated requests
+              // The backend will handle this when userId is passed
+              console.log("Fetching delegated pending requests for user:", userId);
+              const requests = await leavesApi.getEmployeeLeaveRequests(userId, {
+                status: "pending",
+              });
+              console.log("Received delegated requests:", requests);
+              const pendingOnly = requests.filter(
+                (req) => req.status?.toLowerCase() === "pending"
+              );
+              console.log("Filtered delegated pending requests:", pendingOnly);
+              setPendingRequests(pendingOnly);
+            }
+          }
+        } catch (err: any) {
+          console.error("Error fetching requests:", err);
+          // If error, user might not have access - that's okay
+          setPendingRequests([]);
+          setHasSearched(false);
+        } finally {
+          setLoadingRequests(false);
+        }
+        return;
+      }
+      
       setPendingRequests([]);
       setLoadingRequests(false);
       setHasSearched(false);
@@ -115,6 +254,9 @@ export default function ManagerLeaveReviewPage() {
     // Refresh the list
     if (employeeIdFilter.trim()) {
       fetchPendingRequests(employeeIdFilter.trim());
+    } else {
+      // Refresh team requests if no specific employee filter
+      fetchPendingRequests();
     }
   };
 
@@ -123,11 +265,131 @@ export default function ManagerLeaveReviewPage() {
     // Refresh the list
     if (employeeIdFilter.trim()) {
       fetchPendingRequests(employeeIdFilter.trim());
+    } else {
+      // Refresh team requests if no specific employee filter
+      fetchPendingRequests();
     }
   };
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
+  };
+
+  const handleDelegateClick = (requestId: string) => {
+    setShowDelegateDropdown(prev => ({
+      ...prev,
+      [requestId]: !prev[requestId]
+    }));
+  };
+
+  const handleDelegateSelect = (requestId: string, delegateId: string) => {
+    setSelectedDelegate(prev => ({
+      ...prev,
+      [requestId]: delegateId
+    }));
+  };
+
+  const handleDelegateSubmit = async (requestId: string) => {
+    const delegateId = selectedDelegate[requestId];
+    if (!delegateId) {
+      setError("Please select a delegate");
+      return;
+    }
+
+    setDelegating(prev => ({ ...prev, [requestId]: true }));
+    setError(null);
+
+    try {
+      // Create delegation for 7 days from now
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 7);
+
+      await leavesApi.delegateApprovalAuthority(delegateId, startDate, endDate);
+      
+      setSuccessMessage(`Delegation created successfully. The selected employee can now approve leave requests on your behalf for the next 7 days.`);
+      setShowDelegateDropdown(prev => ({ ...prev, [requestId]: false }));
+      setSelectedDelegate(prev => {
+        const newState = { ...prev };
+        delete newState[requestId];
+        return newState;
+      });
+    } catch (err: any) {
+      console.error("Error delegating approval authority:", err);
+      const errorMessage = err?.response?.data?.message || err?.message || "Failed to delegate approval authority";
+      setError(errorMessage);
+    } finally {
+      setDelegating(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // NEW CODE: Handle document view
+  const handleViewDocument = async (request: LeaveRequest) => {
+    if (!request.attachmentId) {
+      setError("No attachment found for this leave request");
+      return;
+    }
+
+    try {
+      const attachmentId = typeof request.attachmentId === 'object' 
+        ? (request.attachmentId as any)._id || (request.attachmentId as any).toString()
+        : String(request.attachmentId);
+      
+      const blob = await leavesApi.downloadAttachment(attachmentId);
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open in new tab
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        // If popup blocked, try downloading instead
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.click();
+      }
+      
+      // Clean up after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err: any) {
+      console.error("Error viewing document:", err);
+      setError(err?.message || "Failed to view document. Please try again.");
+    }
+  };
+
+  // NEW CODE: Handle document rejection
+  const handleRejectDocument = async (requestId: string) => {
+    const rejectionReason = documentRejectionReason[requestId]?.trim();
+    if (!rejectionReason) {
+      setError("Please provide a reason for rejecting the document");
+      return;
+    }
+
+    setRejectingDocument(prev => ({ ...prev, [requestId]: true }));
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      await leavesApi.rejectDocumentByDepartmentHead(requestId, rejectionReason);
+      setSuccessMessage("Document rejected. The leave request has been automatically rejected.");
+      setShowRejectDocumentDialog(prev => ({ ...prev, [requestId]: false }));
+      setDocumentRejectionReason(prev => {
+        const newState = { ...prev };
+        delete newState[requestId];
+        return newState;
+      });
+      
+      // Refresh the list
+      if (employeeIdFilter.trim()) {
+        await fetchPendingRequests(employeeIdFilter.trim());
+      } else {
+        await fetchPendingRequests();
+      }
+    } catch (err: any) {
+      console.error("Error rejecting document:", err);
+      setError(err?.response?.data?.message || err?.message || "Failed to reject document");
+    } finally {
+      setRejectingDocument(prev => ({ ...prev, [requestId]: false }));
+    }
   };
 
   const formatDate = (date: Date | string | undefined): string => {
@@ -152,16 +414,69 @@ export default function ManagerLeaveReviewPage() {
     );
   };
 
-  // ENHANCED: Check if leave request is overridden by HR Manager
+  // ENHANCED: Check if leave request is overridden by HR Manager (not finalized)
   const isOverridden = (request: LeaveRequest): boolean => {
     if (!request.approvalFlow || request.approvalFlow.length === 0) {
       return false;
     }
-    // Check if approvalFlow contains an HR Manager override (can be approved or rejected)
-    const hrApproval = request.approvalFlow.find(
+    
+    // Find all HR Manager entries
+    const hrManagerEntries = request.approvalFlow.filter(
       (approval) => approval.role === "HR Manager"
     );
-    return hrApproval !== undefined;
+    
+    if (hrManagerEntries.length === 0) {
+      return false;
+    }
+    
+    // Find the first HR Manager entry index
+    const firstHrIndex = request.approvalFlow.findIndex(
+      (approval) => approval.role === "HR Manager"
+    );
+    
+    if (firstHrIndex === -1) {
+      return false;
+    }
+    
+    // Check if the initial approval role is "HR Manager" (department head request)
+    // If so, HR Manager approval is the initial approval, not an override
+    const initialApproval = request.approvalFlow[0];
+    if (initialApproval?.role === "HR Manager") {
+      return false; // This is initial approval for department head, not an override
+    }
+    
+    // Check if there's a Department Head decision before the first HR Manager entry
+    const deptHeadEntry = request.approvalFlow
+      .slice(0, firstHrIndex)
+      .reverse()
+      .find((approval) => 
+        approval.role === "Departement_Head" || 
+        approval.role === "Department Head" ||
+        approval.role?.toLowerCase().includes("department")
+      );
+    
+    if (!deptHeadEntry) {
+      // No Department Head decision before HR Manager = it's an override
+      return true;
+    }
+    
+    // Get the HR Manager entry and Department Head status
+    const hrEntry = request.approvalFlow[firstHrIndex];
+    const deptHeadStatus = deptHeadEntry.status?.toLowerCase();
+    const hrStatus = hrEntry.status?.toLowerCase();
+    
+    // Finalization: Department Head approved → HR Manager approves (same status, normal flow)
+    // Override: Department Head rejected → HR Manager approves (status changed)
+    // Override: Department Head approved → HR Manager rejects (status changed)
+    // Override: Any status change by HR Manager
+    
+    // If both are approved and Department Head approved first = finalization (not override)
+    if (deptHeadStatus === "approved" && hrStatus === "approved") {
+      return false; // This is finalization, not override
+    }
+    
+    // If statuses don't match = override (HR changed the decision)
+    return true;
   };
 
   const getStatusColor = (status: string): string => {
@@ -192,19 +507,24 @@ export default function ManagerLeaveReviewPage() {
 
   const roles = user?.roles || [];
   const isDepartmentHead = roles.includes(SystemRole.DEPARTMENT_HEAD);
-
-  if (!isDepartmentHead) {
+  const isPayrollManager = roles.includes(SystemRole.PAYROLL_MANAGER);
+  
+  // Allow access if user is department head, Payroll Manager, OR if they have delegated requests
+  const hasDelegatedRequests = pendingRequests.length > 0 && !isDepartmentHead && !isPayrollManager;
+  
+  // Department heads always have access to this page
+  if (!isDepartmentHead && !isPayrollManager && !hasDelegatedRequests && hasSearched) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
-        <div className="rounded-md bg-red-50 p-4 border border-red-200">
-          <p className="text-sm text-red-800">
-            You do not have permission to access this page. Only department heads can review leave requests.
+        <div className="rounded-md bg-yellow-50 p-4 border border-yellow-200">
+          <p className="text-sm text-yellow-800">
+            No delegated leave requests found. You need to be assigned as a delegate by a department head to review requests.
           </p>
           <button
-            onClick={() => router.push("/dashboard/leaves/requests")}
-            className="mt-4 text-sm text-red-600 hover:text-red-800 underline"
+            onClick={() => router.push("/dashboard/leaves")}
+            className="mt-4 text-sm text-yellow-600 hover:text-yellow-800 underline"
           >
-            Go back to leave requests
+            Go back to leaves dashboard
           </button>
         </div>
       </div>
@@ -216,7 +536,12 @@ export default function ManagerLeaveReviewPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Review Leave Requests</h1>
         <p className="text-gray-600 mt-1">
-          As a department head, review and approve or reject leave requests from your team members
+          {isDepartmentHead 
+            ? "As a department head, review and approve or reject leave requests from your team members. You can view documents, reject documents (which automatically rejects the request), and manage all team leave data."
+            : isPayrollManager
+            ? "As a payroll manager, review and approve or reject leave requests from your team members"
+            : "Review and approve or reject leave requests delegated to you"
+          }
         </p>
       </div>
 
@@ -301,10 +626,11 @@ export default function ManagerLeaveReviewPage() {
       ) : (
         <div className="space-y-4">
           {pendingRequests.map((request) => {
-            const leaveTypeName =
-              typeof request.leaveTypeId === "object" && request.leaveTypeId !== null
+            // Use leaveTypeName from backend if available, otherwise fallback to checking leaveTypeId
+            const leaveTypeName = (request as any).leaveTypeName ||
+              (typeof request.leaveTypeId === "object" && request.leaveTypeId !== null
                 ? request.leaveTypeId.name
-                : "Unknown Leave Type";
+                : "Unknown Leave Type");
 
             return (
               <Card key={request._id}>
@@ -410,23 +736,218 @@ export default function ManagerLeaveReviewPage() {
                     )}
                   </div>
 
+                  {/* Document Section - Always visible for department heads */}
+                  <div className="mb-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="w-5 h-5 text-gray-600"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-700">Document</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {request.attachmentId ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewDocument(request)}
+                              className="flex items-center gap-2"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                />
+                              </svg>
+                              View Document
+                            </Button>
+                            {request.status.toLowerCase() === "pending" && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => setShowRejectDocumentDialog(prev => ({ ...prev, [request._id]: true }))}
+                                className="flex items-center gap-2"
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                                Reject Document
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-500 italic">No document attached</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Approval Actions */}
                   {request.status.toLowerCase() === "pending" && (
-                    <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                      <ApproveLeaveRequestButton
-                        leaveRequestId={request._id}
-                        onSuccess={handleApproveSuccess}
-                        onError={handleError}
-                        variant="primary"
-                        size="md"
-                      />
-                      <RejectLeaveRequestButton
-                        leaveRequestId={request._id}
-                        onSuccess={handleRejectSuccess}
-                        onError={handleError}
-                        variant="danger"
-                        size="md"
-                      />
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-4 mb-4">
+                        <ApproveLeaveRequestButton
+                          leaveRequestId={request._id}
+                          onSuccess={handleApproveSuccess}
+                          onError={handleError}
+                          variant="primary"
+                          size="md"
+                        />
+                        <RejectLeaveRequestButton
+                          leaveRequestId={request._id}
+                          onSuccess={handleRejectSuccess}
+                          onError={handleError}
+                          variant="danger"
+                          size="md"
+                        />
+                        <Button
+                          variant="outline"
+                          size="md"
+                          onClick={() => handleDelegateClick(request._id)}
+                          className="ml-auto"
+                        >
+                          Choose Delegate
+                        </Button>
+                      </div>
+                      
+                      {/* Delegate Selection Dropdown */}
+                      {showDelegateDropdown[request._id] && (
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Select an employee to delegate approval authority:
+                            </label>
+                            <Select
+                              label=""
+                              value={selectedDelegate[request._id] || ""}
+                              onChange={(e) => handleDelegateSelect(request._id, e.target.value)}
+                              options={
+                                employees.length > 0
+                                  ? employees
+                                      .filter(emp => {
+                                        const currentUserId = user?.userId || (user as any)?._id || (user as any)?.id;
+                                        return emp._id !== currentUserId;
+                                      }) // Don't show self
+                                      .map((emp) => ({
+                                        value: emp._id,
+                                        label: `${emp.firstName} ${emp.lastName} (${emp.employeeId || emp._id})`,
+                                      }))
+                                  : [{ value: "", label: loadingEmployees ? "Loading employees..." : "No employees available" }]
+                              }
+                              placeholder="Select an employee to delegate to"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleDelegateSubmit(request._id)}
+                              disabled={!selectedDelegate[request._id] || delegating[request._id]}
+                            >
+                              {delegating[request._id] ? "Delegating..." : "Confirm Delegate"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowDelegateDropdown(prev => ({ ...prev, [request._id]: false }));
+                                setSelectedDelegate(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[request._id];
+                                  return newState;
+                                });
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            The selected employee will be able to approve leave requests on your behalf for the next 7 days.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Document Rejection Dialog */}
+                      {showRejectDocumentDialog[request._id] && (
+                        <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-red-700 mb-2">
+                              Reason for rejecting the document:
+                            </label>
+                            <textarea
+                              value={documentRejectionReason[request._id] || ""}
+                              onChange={(e) => setDocumentRejectionReason(prev => ({
+                                ...prev,
+                                [request._id]: e.target.value
+                              }))}
+                              placeholder="Please provide a reason for rejecting this document. The leave request will be automatically rejected."
+                              className="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                              rows={3}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleRejectDocument(request._id)}
+                              disabled={!documentRejectionReason[request._id]?.trim() || rejectingDocument[request._id]}
+                            >
+                              {rejectingDocument[request._id] ? "Rejecting..." : "Confirm Rejection"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowRejectDocumentDialog(prev => ({ ...prev, [request._id]: false }));
+                                setDocumentRejectionReason(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[request._id];
+                                  return newState;
+                                });
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-xs text-red-600">
+                            ⚠️ Warning: Rejecting the document will automatically reject the leave request.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>

@@ -46,9 +46,12 @@ export function RoleGuard({
 
   if (allowedRoles && allowedRoles.length > 0) {
     const roles = user.roles || [];
-    const hasAllowedRole = allowedRoles.some((role) =>
-      roles.includes(String(role))
-    );
+    // Normalize roles to strings and make comparison case-insensitive
+    const normalizedUserRoles = roles.map((r: string) => String(r).toLowerCase().trim());
+    const hasAllowedRole = allowedRoles.some((role) => {
+      const normalizedRole = String(role).toLowerCase().trim();
+      return normalizedUserRoles.includes(normalizedRole);
+    });
     if (!hasAllowedRole) {
       return <>{fallback}</>;
     }

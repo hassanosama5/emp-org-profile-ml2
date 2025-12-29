@@ -44,11 +44,44 @@ export interface EmployeeProfile {
     | "TERMINATED";
   maritalStatus?: "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED";
 
-  // MongoDB ObjectId fields (as strings)
-  primaryPositionId?: string;
-  primaryDepartmentId?: string;
-  supervisorPositionId?: string;
-  payGradeId?: string;
+  // MongoDB ObjectId fields - can be raw IDs (string)
+  // or populated reference objects depending on the API endpoint
+  primaryPositionId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        title?: string;
+        code?: string;
+      };
+  primaryDepartmentId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        name?: string;
+        code?: string;
+      };
+  supervisorPositionId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        title?: string;
+        code?: string;
+      };
+  payGradeId?:
+    | string
+    | {
+        _id?: string;
+        id?: string;
+        name?: string;
+        grade?: string;
+        level?: number;
+        code?: string;
+        minSalary?: number;
+        maxSalary?: number;
+      };
 
   // Populated fields (from refs)
   primaryPosition?: {
@@ -108,6 +141,14 @@ export interface TeamMember {
   dateOfHire: string;
   workEmail?: string;
   mobilePhone?: string;
+  profilePictureUrl?: string;
+  supervisorPositionId?: string | any; // For filtering direct reports
+  // Sensitive fields (BR 18b)
+  personalEmail?: string;
+  homePhone?: string;
+  address?: any;
+  payGrade?: any;
+  salary?: any;
 }
 
 // Update Profile DTO - based on your backend DTOs
@@ -160,6 +201,7 @@ export interface User {
   userType: "employee" | "candidate";
   username?: string;
   permissions?: string[];
+  profilePictureUrl?: string; // ADD THIS
 }
 
 // Add the rest of your existing types...
@@ -167,6 +209,38 @@ export interface User {
 export interface LoginRequest {
   employeeNumber: string;
   password: string;
+}
+
+// Candidate interface for Talent Pool
+export interface Candidate {
+  _id: string;
+  candidateNumber: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  fullName?: string;
+  personalEmail?: string;
+  mobilePhone?: string;
+  homePhone?: string;
+  nationalId?: string;
+  gender?: "MALE" | "FEMALE";
+  dateOfBirth?: string;
+  maritalStatus?: "SINGLE" | "MARRIED" | "DIVORCED" | "WITHDRAWN";
+  address?: {
+    city?: string;
+    streetAddress?: string;
+    country?: string;
+  };
+  resumeUrl?: string;
+  status: "APPLIED" | "SCREENING" | "INTERVIEW" | "OFFER_SENT" | "OFFER_ACCEPTED" | "HIRED" | "REJECTED" | "WITHDRAWN";
+  applicationDate?: string;
+  notes?: string;
+  departmentId?: string | { _id: string; name: string; code: string };
+  positionId?: string | { _id: string; title: string; code: string };
+  department?: { _id: string; name: string; code: string };
+  position?: { _id: string; title: string; code: string };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface RegisterRequest {
@@ -246,4 +320,33 @@ export enum MaritalStatus {
   MARRIED = "MARRIED",
   DIVORCED = "DIVORCED",
   WIDOWED = "WIDOWED",
+}
+
+export interface EmployeeQualification {
+  id: string;
+  _id?: string;
+  employeeProfileId: string;
+  establishmentName: string;
+  graduationType: GraduationType | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export enum GraduationType {
+  UNDERGRADE = "UNDERGRADE",
+  BACHELOR = "BACHELOR",
+  MASTER = "MASTER",
+  PHD = "PHD",
+  OTHER = "OTHER",
+}
+
+// Add to existing types
+export interface CreateQualificationDto {
+  establishmentName: string;
+  graduationType: string;
+}
+
+export interface UpdateQualificationDto {
+  establishmentName?: string;
+  graduationType?: string;
 }

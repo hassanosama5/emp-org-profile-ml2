@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { SystemRole } from '../../employee-profile/enums/employee-profile.enums';
@@ -19,10 +19,23 @@ export class RolesGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest();
 
-    if (!user || !user.roles) {
-      return false;
+    if (!user) {
+      console.error('[RolesGuard] No user found in request');
+      throw new ForbiddenException('Access denied: User not authenticated');
     }
 
-    return requiredRoles.some((role) => user.roles?.includes(role));
+    if (!user.roles || user.roles.length === 0) {
+      console.error(`[RolesGuard] User ${user.sub || user._id} has no roles assigned`);
+      throw new ForbiddenException(`Access denied: No roles assigned to user. Required roles: ${requiredRoles.join(', ')}`);
+    }
+
+    const hasRole = requiredRoles.some((role) => user.roles?.includes(role));
+    
+    if (!hasRole) {
+      console.error(`[RolesGuard] User ${user.sub || user._id} with roles [${user.roles.join(', ')}] denied access. Required: [${requiredRoles.join(', ')}]`);
+      throw new ForbiddenException(`Access denied: You need one of these roles: ${requiredRoles.join(', ')}. Your roles: ${user.roles.join(', ')}`);
+    }
+
+    return true;
   }
 }

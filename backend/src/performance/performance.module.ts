@@ -2,6 +2,10 @@
 
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
+import { TimeManagementModule } from '../time-management/time-management.module';
+import { NotificationLogSchema } from '../time-management/models/notification-log.schema';
 
 // Controllers & Services
 import { PerformanceController } from './performance.controller';
@@ -42,7 +46,14 @@ import {
       { name: AppraisalAssignment.name, schema: AppraisalAssignmentSchema },
       { name: AppraisalRecord.name, schema: AppraisalRecordSchema },
       { name: AppraisalDispute.name, schema: AppraisalDisputeSchema },
+      { name: 'NotificationLog', schema: NotificationLogSchema },
     ]),
+    // Import NotificationsModule to use NotificationsService
+    NotificationsModule,
+    // Import EmployeeProfileModule to update employee profiles after publishing
+    EmployeeProfileModule,
+    // Import TimeManagementModule to fetch attendance data for appraisals (REQ-AE-03)
+    TimeManagementModule,
   ],
   controllers: [PerformanceController],
   providers: [PerformanceService],

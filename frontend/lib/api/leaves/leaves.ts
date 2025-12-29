@@ -200,8 +200,41 @@ export const leavesApi = {
   },
 
   // Reset Leave Balances
-  resetLeaveBalances: async (criterion?: string): Promise<{ message: string }> => {
-    return await api.post("/leaves/reset-leave-balances", { criterion });
+  resetLeaveBalances: async (criterion?: string, force?: boolean): Promise<{ message: string }> => {
+    return await api.post("/leaves/reset-leave-balances", { criterion, force }, {
+      timeout: 120000, // 120 seconds timeout for bulk reset operations
+    });
+  },
+
+  resetLeaveBalancesForTest: async (): Promise<{ 
+    message: string; 
+    success: boolean; 
+    total?: number; 
+    reset?: number; 
+    errors?: number; 
+    duration?: string;
+  }> => {
+    return await api.post("/leaves/reset-leave-balances-test", {}, {
+      timeout: 60000, // 60 seconds timeout for bulk operations
+    });
+  },
+
+  addAllEmployeesToEntitlements: async (): Promise<{ 
+    message: string; 
+    success: boolean; 
+    totalEmployees?: number;
+    employeesProcessed?: number;
+    employeesFailed?: number;
+    employeesUpdated?: number;
+    totalLeaveTypes?: number;
+    entitlementsCreated?: number;
+    entitlementsSkipped?: number;
+    failedEmployees?: Array<{ employeeId: string; error: string }>;
+    duration?: string;
+  }> => {
+    return await api.post("/leaves/add-all-employees-to-entitlements", {}, {
+      timeout: 120000, // 120 seconds timeout for bulk operations
+    });
   },
 
   // ============================================================================
@@ -271,20 +304,15 @@ export const leavesApi = {
    */
   downloadAttachment: async (attachmentId: string): Promise<Blob> => {
     try {
-      const token = typeof window !== 'undefined' 
-        ? localStorage.getItem('auth_token') || '' 
-        : '';
-      
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:6000/api/v1";
       
       // FIXED: Use correct endpoint /leaves/attachments/:id/download
+      // Cookies are sent automatically with credentials: 'include'
       const response = await fetch(
         `${API_BASE_URL}/leaves/attachments/${attachmentId}/download`,
         {
           method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          credentials: 'include', // Include cookies
         }
       );
 
@@ -340,6 +368,27 @@ export const leavesApi = {
       return result as unknown as LeaveRequest;
     } catch (error: any) {
       console.error("Error rejecting document:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Department Head reject document (also rejects the leave request)
+   * POST /leaves/request/:id/reject-document-dept-head
+   * Required roles: DEPARTMENT_HEAD
+   */
+  rejectDocumentByDepartmentHead: async (
+    leaveRequestId: string,
+    rejectionReason: string
+  ): Promise<LeaveRequest> => {
+    try {
+      const payload = { 
+        rejectionReason 
+      };
+      const result = await api.post(`/leaves/request/${leaveRequestId}/reject-document-dept-head`, payload);
+      return result as unknown as LeaveRequest;
+    } catch (error: any) {
+      console.error("Error rejecting document by department head:", error);
       throw error;
     }
   },
@@ -464,21 +513,16 @@ export const leavesApi = {
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = typeof window !== 'undefined' 
-        ? localStorage.getItem('auth_token') || '' 
-        : '';
-
       const API_BASE_URL =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:6000/api/v1";
 
       // Use the correct endpoint
       const endpoint = '/leaves/attachment/upload';
 
+      // Cookies are sent automatically with credentials: 'include'
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include', // Include cookies
         body: formData,
       });
 
@@ -519,13 +563,25 @@ export const leavesApi = {
       }
 
       const params = new URLSearchParams();
-      if (filters?.fromDate) params.append('fromDate', filters.fromDate);
-      if (filters?.toDate) params.append('toDate', filters.toDate);
-      if (filters?.status) params.append('status', filters.status);
-      if (filters?.leaveTypeId) params.append('leaveTypeId', filters.leaveTypeId);
+      if (filters?.fromDate && filters.fromDate.trim()) {
+        params.append('fromDate', filters.fromDate.trim());
+      }
+      if (filters?.toDate && filters.toDate.trim()) {
+        params.append('toDate', filters.toDate.trim());
+      }
+      if (filters?.status && filters.status.trim()) {
+        // Normalize status to lowercase for backend
+        const normalizedStatus = filters.status.trim().toLowerCase();
+        params.append('status', normalizedStatus);
+        console.log(`[API] Adding status filter: "${filters.status}" -> "${normalizedStatus}"`);
+      }
+      if (filters?.leaveTypeId && filters.leaveTypeId.trim()) {
+        params.append('leaveTypeId', filters.leaveTypeId.trim());
+      }
 
       const queryString = params.toString();
       const url = `/leaves/past-requests/${employeeId.trim()}${queryString ? `?${queryString}` : ''}`;
+      console.log(`[API] Request URL: ${url}`);
       
       const result = await api.get(url);
       
@@ -637,7 +693,16 @@ export const leavesApi = {
     overrideReason: string
   ): Promise<LeaveRequest> => {
     try {
-      const payload = { leaveRequestId, hrUserId, overrideToApproved, overrideReason };
+      // Ensure overrideReason is provided and is a string
+      if (!overrideReason || typeof overrideReason !== 'string') {
+        throw new Error('Override justification is required');
+      }
+      const payload = { 
+        leaveRequestId, 
+        hrUserId, 
+        overrideToApproved, 
+        overrideReason: overrideReason.trim() 
+      };
       const result = await api.post(`/leaves/request/override`, payload);
       return result as unknown as LeaveRequest;
     } catch (error: any) {
@@ -663,6 +728,332 @@ export const leavesApi = {
       return result as unknown as LeaveRequest[];
     } catch (error: any) {
       console.error("Error processing multiple leave requests:", error);
+      throw error;
+    }
+  },
+
+  // ===== EMPLOYEE FUNCTIONS =====
+
+  /**
+   * Get employee leave balance
+   * GET /leaves/balance/:employeeId
+   */
+  getEmployeeLeaveBalance: async (
+    employeeId: string,
+    leaveTypeId?: string
+  ): Promise<any> => {
+    try {
+      const url = leaveTypeId
+        ? `/leaves/balance/${employeeId}?leaveTypeId=${leaveTypeId}`
+        : `/leaves/balance/${employeeId}`;
+      return await api.get(url);
+    } catch (error: any) {
+      console.error("Error fetching leave balance:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Filter leave history
+   * POST /leaves/filter-history
+   */
+  filterLeaveHistory: async (
+    employeeId: string,
+    filters: {
+      leaveTypeId?: string;
+      fromDate?: string;
+      toDate?: string;
+      status?: string;
+      sortByDate?: 'asc' | 'desc';
+      sortByStatus?: 'asc' | 'desc';
+      offset?: number;
+      limit?: number;
+    }
+  ): Promise<any> => {
+    try {
+      // Normalize status to lowercase before sending
+      const normalizedFilters = { ...filters };
+      if (normalizedFilters.status && typeof normalizedFilters.status === 'string' && normalizedFilters.status.trim()) {
+        const originalStatus = normalizedFilters.status;
+        normalizedFilters.status = normalizedFilters.status.trim().toLowerCase();
+        console.log(`[API] filterLeaveHistory - Normalizing status: "${originalStatus}" -> "${normalizedFilters.status}"`);
+      } else if (normalizedFilters.status === '') {
+        // Remove empty string status
+        delete normalizedFilters.status;
+      }
+      
+      const payload = { employeeId, ...normalizedFilters };
+      console.log(`[API] filterLeaveHistory payload:`, payload);
+      return await api.post('/leaves/filter-history', payload);
+    } catch (error: any) {
+      console.error("Error filtering leave history:", error);
+      throw error;
+    }
+  },
+
+  // ===== MANAGER FUNCTIONS =====
+
+  /**
+   * Get team leave balances and upcoming leaves
+   * GET /leaves/team-balances/:managerId
+   */
+  getTeamLeaveBalances: async (
+    managerId: string,
+    upcomingFromDate?: string,
+    upcomingToDate?: string,
+    departmentId?: string
+  ): Promise<any> => {
+    try {
+      const params = new URLSearchParams();
+      if (upcomingFromDate && upcomingFromDate.trim()) {
+        params.append('upcomingFromDate', upcomingFromDate.trim());
+      }
+      if (upcomingToDate && upcomingToDate.trim()) {
+        params.append('upcomingToDate', upcomingToDate.trim());
+      }
+      if (departmentId && departmentId.trim()) {
+        params.append('departmentId', departmentId.trim());
+        console.log("[API] Adding departmentId to query:", departmentId.trim());
+      }
+
+      const queryString = params.toString();
+      const url = `/leaves/team-balances/${managerId}${queryString ? `?${queryString}` : ''}`;
+      console.log("[API] Request URL:", url);
+      return await api.get(url);
+    } catch (error: any) {
+      console.error("Error fetching team leave balances:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Filter team leave data
+   * POST /leaves/filter-team-data
+   */
+  filterTeamLeaveData: async (
+    managerId: string,
+    filters: {
+      departmentId?: string;
+      leaveTypeId?: string;
+      fromDate?: string;
+      toDate?: string;
+      status?: string;
+      sortByDate?: 'asc' | 'desc';
+      sortByStatus?: 'asc' | 'desc';
+      offset?: number;
+      limit?: number;
+    }
+  ): Promise<any> => {
+    try {
+      const payload = { managerId, ...filters };
+      return await api.post('/leaves/filter-team-data', payload);
+    } catch (error: any) {
+      console.error("Error filtering team leave data:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Flag irregular pattern
+   * POST /leaves/flag-irregular-pattern
+   */
+  flagIrregularPattern: async (
+    leaveRequestId: string,
+    managerId: string,
+    flagReason: string,
+    notes?: string
+  ): Promise<any> => {
+    try {
+      const payload = { leaveRequestId, managerId, flagReason, notes };
+      return await api.post('/leaves/flag-irregular-pattern', payload);
+    } catch (error: any) {
+      console.error("Error flagging irregular pattern:", error);
+      throw error;
+    }
+  },
+
+  // ===== HR MANAGER FUNCTIONS =====
+
+  /**
+   * Auto accrue leave for single employee
+   * POST /leaves/auto-accrue
+   */
+  autoAccrueLeave: async (
+    employeeId: string,
+    leaveTypeId: string,
+    accrualAmount: number,
+    accrualType: string,
+    policyId?: string,
+    notes?: string
+  ): Promise<any> => {
+    try {
+      const payload = {
+        employeeId,
+        leaveTypeId,
+        accrualAmount,
+        accrualType,
+        policyId,
+        notes,
+      };
+      return await api.post('/leaves/auto-accrue', payload);
+    } catch (error: any) {
+      console.error("Error auto accruing leave:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Auto accrue leave for all employees
+   * POST /leaves/auto-accrue-all
+   */
+  autoAccrueAllEmployees: async (
+    leaveTypeId: string,
+    accrualAmount: number,
+    accrualType: string,
+    departmentId?: string
+  ): Promise<any> => {
+    try {
+      const payload = {
+        leaveTypeId,
+        accrualAmount,
+        accrualType,
+        departmentId,
+      };
+      return await api.post('/leaves/auto-accrue-all', payload);
+    } catch (error: any) {
+      console.error("Error auto accruing leave for all employees:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delegate approval authority
+   * POST /leaves/delegate
+   * Required roles: DEPARTMENT_HEAD, HR_MANAGER, HR_ADMIN
+   */
+  delegateApprovalAuthority: async (
+    delegateId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<any> => {
+    try {
+      const payload = {
+        delegateId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+      return await api.post('/leaves/delegate', payload);
+    } catch (error: any) {
+      console.error("Error delegating approval authority:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get delegations for current manager
+   * GET /leaves/delegations
+   */
+  getDelegations: async (): Promise<any[]> => {
+    try {
+      return await api.get('/leaves/delegations');
+    } catch (error: any) {
+      console.error("Error fetching delegations:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Revoke a delegation
+   * DELETE /leaves/delegate
+   */
+  revokeDelegation: async (
+    delegateId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<any> => {
+    try {
+      const payload = {
+        delegateId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+      return await api.delete('/leaves/delegate', { data: payload });
+    } catch (error: any) {
+      console.error("Error revoking delegation:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Run carry-forward
+   * POST /leaves/carry-forward
+   */
+  runCarryForward: async (
+    leaveTypeId: string,
+    employeeId?: string,
+    asOfDate?: string,
+    departmentId?: string
+  ): Promise<any> => {
+    try {
+      const payload: any = {
+        leaveTypeId,
+      };
+      
+      // Only include optional fields if they have values
+      if (employeeId && employeeId.trim()) {
+        payload.employeeId = employeeId.trim();
+      }
+      
+      if (asOfDate && asOfDate.trim()) {
+        // Convert date string to ISO format for backend
+        payload.asOfDate = new Date(asOfDate).toISOString();
+      }
+      
+      if (departmentId && departmentId.trim()) {
+        payload.departmentId = departmentId.trim();
+      }
+      
+      console.log("[API] runCarryForward payload:", payload);
+      
+      const response = await api.post('/leaves/carry-forward', payload);
+      console.log("[API] runCarryForward response:", response);
+      return response;
+    } catch (error: any) {
+      console.error("[API] Error running carry-forward:", error);
+      console.error("[API] Error response:", error.response?.data);
+      console.error("[API] Error status:", error.response?.status);
+      throw error;
+    }
+  },
+
+  /**
+   * Adjust accrual
+   * POST /leaves/adjust-accrual
+   */
+  adjustAccrual: async (
+    employeeId: string,
+    leaveTypeId: string,
+    adjustmentType: string,
+    adjustmentAmount: number,
+    fromDate: string,
+    toDate?: string,
+    reason?: string,
+    notes?: string
+  ): Promise<any> => {
+    try {
+      const payload = {
+        employeeId,
+        leaveTypeId,
+        adjustmentType,
+        adjustmentAmount,
+        fromDate,
+        toDate,
+        reason,
+        notes,
+      };
+      return await api.post('/leaves/adjust-accrual', payload);
+    } catch (error: any) {
+      console.error("Error adjusting accrual:", error);
       throw error;
     }
   },

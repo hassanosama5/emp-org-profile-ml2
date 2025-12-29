@@ -1,4 +1,5 @@
-import { IsMongoId, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsMongoId, IsOptional, IsNumber, Min, IsEnum } from 'class-validator';
+import { BenefitStatus } from '../enums/payroll-execution-enum';
 
 export class TerminationBenefitEditDto {
   @IsMongoId()
@@ -11,6 +12,10 @@ export class TerminationBenefitEditDto {
   @IsOptional()
   @IsMongoId()
   terminationId?: string; // relink to a termination request if needed
+
+  @IsOptional()
+  @IsEnum(BenefitStatus)
+  status?: BenefitStatus;
 
   @IsOptional()
   @IsNumber()

@@ -31,6 +31,11 @@ export class OnboardingTaskDto {
   deadline?: Date;
 
   @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  completedAt?: Date;
+
+  @IsOptional()
   @IsMongoId()
   documentId?: Types.ObjectId;
 

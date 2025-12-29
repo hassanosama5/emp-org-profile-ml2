@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEnum, IsDate, IsIn, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsIn, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 import { LeaveStatus } from '../enums/leave-status.enum';
 
 export class FilterTeamLeaveDataDto {
@@ -14,12 +15,12 @@ export class FilterTeamLeaveDataDto {
   leaveTypeId?: string;
 
   @IsOptional()
-  @IsDate()
-  fromDate?: Date;
+  @IsDateString()
+  fromDate?: string;
 
   @IsOptional()
-  @IsDate()
-  toDate?: Date;
+  @IsDateString()
+  toDate?: string;
 
   @IsOptional()
   @IsEnum(LeaveStatus)
@@ -38,10 +39,12 @@ export class FilterTeamLeaveDataDto {
   sortByDepartment?: 'asc' | 'desc';
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   limit?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   offset?: number;
 }

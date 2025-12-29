@@ -35,8 +35,11 @@ export function useNotifications(): UseNotificationsReturn {
       const data = await getNotifications();
       // Handle null/undefined
       setNotifications(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Error fetching notifications:', err);
+    } catch (err: any) {
+      // Don't log timeout errors - notifications are optional and timeouts are expected if backend is slow
+      if (!err.message?.includes('timeout') && err.code !== 'ECONNABORTED') {
+        console.error('Error fetching notifications:', err);
+      }
       // Don't set error for empty results, just use empty array
       setNotifications([]);
     } finally {

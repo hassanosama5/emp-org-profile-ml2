@@ -1,9 +1,14 @@
 // Enums
+// All 7 required statuses per business requirements:
+// Shifts must be assigned per employee for a defined term and hold these statuses
 export enum ShiftAssignmentStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  CANCELLED = 'CANCELLED',
-  EXPIRED = 'EXPIRED',
+  ENTERED = 'ENTERED',       // Initial entry - assignment has been entered but not yet submitted
+  SUBMITTED = 'SUBMITTED',   // Submitted for approval
+  APPROVED = 'APPROVED',     // Approved by manager/HR
+  REJECTED = 'REJECTED',     // Rejected by approver
+  CANCELLED = 'CANCELLED',   // Cancelled assignment
+  POSTPONED = 'POSTPONED',   // Temporarily postponed
+  EXPIRED = 'EXPIRED',       // Assignment term has expired
 }
 
 export enum PunchPolicy {
@@ -44,6 +49,7 @@ export interface AssignShiftToDepartmentDto {
   includePositions?: string[];
   startDate?: Date;
   endDate?: Date;
+  status?: ShiftAssignmentStatus;
 }
 
 export interface AssignShiftToPositionDto {
@@ -51,6 +57,7 @@ export interface AssignShiftToPositionDto {
   shiftId: string;
   startDate?: Date;
   endDate?: Date;
+  status?: ShiftAssignmentStatus;
 }
 
 export interface UpdateShiftAssignmentDto {
@@ -531,3 +538,77 @@ export interface ExportReportResponse {
   generatedAt: Date | string;
 }
  
+
+// ===== ATTENDANCE RECORDS =====
+
+export interface AttendanceRecord {
+  _id?: string;
+  id?: string;
+  employeeId: string;
+  date: Date | string;
+  clockIn?: Date | string;
+  clockOut?: Date | string;
+  totalWorkMinutes?: number;
+  overtimeMinutes?: number;
+  shortTimeMinutes?: number;
+  hasMissedPunch?: boolean;
+  status: 'COMPLETE' | 'INCOMPLETE' | 'CORRECTION_PENDING';
+  exceptionIds?: string[];
+  finalisedForPayroll?: boolean;
+  correctionRequest?: {
+    id: string;
+    status: CorrectionRequestStatus;
+    reason?: string;
+  };
+  punches?: Array<{
+    time: Date | string;
+    type: 'IN' | 'OUT';
+    source?: 'BIOMETRIC' | 'WEB' | 'MOBILE' | 'MANUAL';
+    location?: string;
+    deviceId?: string;
+  }>;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface AttendanceStatus {
+  employeeId: string;
+  date: Date | string;
+  isClockedIn: boolean;
+  currentRecord?: AttendanceRecord;
+  clockInTime?: Date | string;
+  elapsedMinutes?: number;
+  message?: string;
+  // BR-TM-11: Punch policy information
+  punchPolicy?: 'MULTIPLE' | 'FIRST_LAST' | 'ONLY_FIRST';
+  shiftName?: string;
+  canClockInMultiple?: boolean;
+  hasClockInToday?: boolean;
+  canClockIn?: boolean;
+}
+
+export interface ClockInRequest {
+  source?: 'WEB' | 'MOBILE' | 'MANUAL';
+  location?: string;
+  gpsCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  ipAddress?: string;
+}
+
+export interface ClockOutRequest {
+  source?: 'WEB' | 'MOBILE' | 'MANUAL';
+  location?: string;
+  gpsCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  ipAddress?: string;
+}
+
+export interface SubmitCorrectionRequest {
+  employeeId: string;
+  attendanceRecord: string;
+  reason: string;
+}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/use-auth";
+import { useAuthStore } from "../../../lib/stores/auth.store";
 import { RegisterRequest } from "../../../types";
 
 const inputClass =
@@ -11,8 +12,11 @@ const inputClass =
 export default function RegisterPage() {
   const router = useRouter();
   const { register, loading, error } = useAuth();
+  const user = useAuthStore((state) => state.user);
 
   const [form, setForm] = useState<Partial<RegisterRequest>>({});
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [candidateNumber, setCandidateNumber] = useState<string | null>(null);
 
   const update = (
     key: keyof RegisterRequest,
@@ -23,8 +27,25 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await register(form as RegisterRequest);
-    router.push("/auth/dashboard-redirect");
+    try {
+      await register(form as RegisterRequest);
+      // Get the user from auth store to show candidate number
+      // User is now in the auth store after registration
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser?.candidateNumber) {
+        setCandidateNumber(currentUser.candidateNumber);
+        setShowSuccess(true);
+        // Redirect after 5 seconds
+        setTimeout(() => {
+          router.push("/auth/dashboard-redirect");
+        }, 5000);
+        return;
+      }
+      // If no candidate number found, redirect immediately
+      router.push("/auth/dashboard-redirect");
+    } catch (err) {
+      // Error is handled by the auth store
+    }
   };
 
   return (
@@ -44,6 +65,45 @@ export default function RegisterPage() {
           <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-600">
             {error}
           </p>
+        )}
+
+        {showSuccess && candidateNumber && (
+          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-green-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-green-800">
+                  Registration Successful!
+                </h3>
+                <div className="mt-2 text-sm text-green-700">
+                  <p>
+                    Your candidate number is:{" "}
+                    <span className="font-mono font-bold text-green-900">
+                      {candidateNumber}
+                    </span>
+                  </p>
+                  <p className="mt-2">
+                    Please save this number. You'll need it to log in.
+                  </p>
+                  <p className="mt-1 text-xs text-green-600">
+                    Redirecting to your dashboard in 5 seconds...
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">

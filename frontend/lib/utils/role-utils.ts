@@ -38,7 +38,10 @@ export function isHRAdminOrManager(user: User | null): boolean {
   if (!user) return false;
 
   return user.roles.some(
-    (role) => role === SystemRole.HR_ADMIN || role === SystemRole.HR_MANAGER
+    (role) =>
+      role === SystemRole.HR_ADMIN ||
+      role === SystemRole.HR_MANAGER ||
+      role === SystemRole.SYSTEM_ADMIN
   );
 }
 
@@ -127,16 +130,19 @@ export function isAdmin(user: User | null): boolean {
   );
 }
 
+// CHANGED - Case-insensitive role matching for HR staff
 export function isHRStaff(user: User | null): boolean {
   if (!user) return false;
 
-  return user.roles.some((role) =>
-    [
-      SystemRole.HR_MANAGER,
-      SystemRole.HR_EMPLOYEE,
-      SystemRole.RECRUITER,
-      SystemRole.HR_ADMIN,
-    ].includes(role as SystemRole)
+  const hrRoles = [
+    "hr manager",
+    "hr employee", 
+    "recruiter",
+    "hr admin",
+  ];
+
+  return user.roles.some((role) => 
+    hrRoles.includes(String(role).toLowerCase())
   );
 }
 
@@ -260,21 +266,57 @@ export function getPrimaryDashboard(user: User | null): string {
   if (!user) return "/auth/login";
 
   const roles = user.roles || [];
+  
+  // Normalize roles to lowercase for comparison
+  const normalizedRoles = roles.map((r) => String(r).toLowerCase().trim());
+  
+  // Debug logging in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 getPrimaryDashboard:', {
+      roles,
+      normalizedRoles,
+      systemAdminEnum: SystemRole.SYSTEM_ADMIN,
+      systemAdminLower: SystemRole.SYSTEM_ADMIN.toLowerCase(),
+    });
+  }
 
-  // Check roles in priority order
-  if (roles.includes(SystemRole.SYSTEM_ADMIN)) return "/dashboard/admin";
-  if (roles.includes(SystemRole.HR_ADMIN)) return "/dashboard/admin";
-  if (roles.includes(SystemRole.HR_MANAGER)) return "/dashboard/hr";
-  if (roles.includes(SystemRole.PAYROLL_MANAGER)) return "/dashboard/payroll";
-  if (roles.includes(SystemRole.PAYROLL_SPECIALIST))
+  // Check roles in priority order (case-insensitive)
+  // System Admin has highest priority
+  if (normalizedRoles.includes(SystemRole.SYSTEM_ADMIN.toLowerCase())) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ System Admin detected, redirecting to /dashboard/admin');
+    }
+    return "/dashboard/admin";
+  }
+  if (normalizedRoles.includes(SystemRole.HR_ADMIN.toLowerCase())) {
+    return "/dashboard/admin";
+  }
+  if (normalizedRoles.includes(SystemRole.HR_MANAGER.toLowerCase())) {
+    return "/dashboard/hr";
+  }
+  if (normalizedRoles.includes(SystemRole.PAYROLL_MANAGER.toLowerCase())) {
     return "/dashboard/payroll";
-  if (roles.includes(SystemRole.RECRUITER)) return "/dashboard/recruitment";
-  if (roles.includes(SystemRole.DEPARTMENT_HEAD))
+  }
+  if (normalizedRoles.includes(SystemRole.PAYROLL_SPECIALIST.toLowerCase())) {
+    return "/dashboard/payroll";
+  }
+  if (normalizedRoles.includes(SystemRole.RECRUITER.toLowerCase())) {
+    return "/dashboard/recruitment";
+  }
+  if (normalizedRoles.includes(SystemRole.DEPARTMENT_HEAD.toLowerCase())) {
     return "/dashboard/employee-profile";
-  if (roles.includes(SystemRole.DEPARTMENT_EMPLOYEE))
+  }
+  if (normalizedRoles.includes(SystemRole.DEPARTMENT_EMPLOYEE.toLowerCase())) {
     return "/dashboard/employee-profile";
-  if (roles.includes(SystemRole.JOB_CANDIDATE)) return "/candidate-portal";
+  }
+  if (normalizedRoles.includes(SystemRole.JOB_CANDIDATE.toLowerCase())) {
+    return "/candidate-portal";
+  }
 
+  // Fallback to generic dashboard
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⚠️ No matching role found, returning /dashboard');
+  }
   return "/dashboard";
 }
 

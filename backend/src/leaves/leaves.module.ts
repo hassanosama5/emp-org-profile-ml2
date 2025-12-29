@@ -15,12 +15,15 @@ import { EmployeeProfileModule } from '../employee-profile/employee-profile.modu
 import { forwardRef } from '@nestjs/common';
 import { TimeManagementModule } from '../time-management/time-management.module';
 import { EmployeeProfile, EmployeeProfileSchema } from '../employee-profile/models/employee-profile.schema';
+import { EmployeeSystemRole, EmployeeSystemRoleSchema } from '../employee-profile/models/employee-system-role.schema';
+import { NotificationLogSchema } from '../time-management/models/notification-log.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
 // import { PositionAssignment, PositionAssignmentSchema } from '../organization-structure/models/position-assignment.schema';
 // import { Position, PositionSchema } from '../organization-structure/models/position.schema';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(), // Enable scheduled tasks
     MongooseModule.forFeature([
       { name: LeaveType.name, schema: LeaveTypeSchema },
       { name: LeaveRequest.name, schema: LeaveRequestSchema },
@@ -31,6 +34,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: Calendar.name, schema: CalendarSchema },
       { name: Attachment.name, schema: AttachmentSchema },
       { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
+      { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
+      { name: 'NotificationLog', schema: NotificationLogSchema },
       // {name:PositionAssignment.name, schema:PositionAssignmentSchema},
       // {name:Position.name, schema:PositionSchema}
     ]),

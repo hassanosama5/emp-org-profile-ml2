@@ -21,6 +21,13 @@ import {
   StructureChangeRequestSchema,
 } from './models/structure-change-request.schema';
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { EmployeeSystemRole, EmployeeSystemRoleSchema } from '../employee-profile/models/employee-system-role.schema';
+import {
+  EmployeeProfile,
+  EmployeeProfileSchema,
+} from '../employee-profile/models/employee-profile.schema';
+import { ExtendedNotificationSchema } from '../notifications/models/extended-notification.schema';
 
 @Module({
   imports: [
@@ -41,8 +48,12 @@ import { EmployeeProfileModule } from '../employee-profile/employee-profile.modu
         name: StructureChangeRequest.name,
         schema: StructureChangeRequestSchema,
       },
+      { name: EmployeeSystemRole.name, schema: EmployeeSystemRoleSchema },
+      { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
+      { name: 'ExtendedNotification', schema: ExtendedNotificationSchema },
     ]),
     forwardRef(() => EmployeeProfileModule),
+    NotificationsModule,
   ],
   controllers: [OrganizationStructureController],
   providers: [OrganizationStructureService],

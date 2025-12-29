@@ -19,6 +19,7 @@ import {
   EmployeeQualification,
   EmployeeQualificationSchema,
 } from './models/qualification.schema';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import {
       },
       { name: EmployeeQualification.name, schema: EmployeeQualificationSchema },
     ]),
+    NotificationsModule,
   ],
   controllers: [EmployeeProfileController],
   providers: [EmployeeProfileService],

@@ -37,11 +37,6 @@ export class refunds {
     @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'payrollRuns'})
     paidInPayrollRunId?: mongoose.Types.ObjectId; // the run that actually paid the refund
 
-    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Employee.name })
-    createdBy?: mongoose.Types.ObjectId;
-
-    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Employee.name })
-    updatedBy?: mongoose.Types.ObjectId;
 }
 
 export const refundsSchema = SchemaFactory.createForClass(refunds);

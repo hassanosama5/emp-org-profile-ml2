@@ -4,33 +4,64 @@ import { User, LoginRequest, RegisterRequest } from "../../types";
 
 type AuthState = {
   user: User | null;
-  token: string | null;
+  token: string | null; // Kept for backward compatibility, but always null (token in cookie)
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
 
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
-  logout: () => void;
-  initialize: () => void;
+  logout: () => Promise<void>;
+  initialize: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  loading: false,
-  error: null,
+export const useAuthStore = create<AuthState>((set, get) => {
+  // Initialize with empty state - user will be fetched asynchronously
+  return {
+    user: null,
+    token: null, // Token is in HTTP-only cookie, not accessible from JS
+    isAuthenticated: false,
+    loading: false,
+    error: null,
 
-  initialize: () => {
-    const token = authApi.getToken();
-    const user = authApi.getUser();
-
-    if (token && user) {
+  initialize: async () => {
+    // Don't initialize if we already have a user (e.g., from login)
+    const currentState = get();
+    if (currentState.user && currentState.isAuthenticated) {
+      return;
+    }
+    
+    // Set loading to true initially to prevent premature redirects
+    set({ loading: true });
+    
+    try {
+      // Fetch user from API (cookie-based auth)
+      const user = await authApi.getUser();
+      
+      if (user) {
+        set({
+          token: null, // Token is in HTTP-only cookie, not stored
+          user,
+          isAuthenticated: true,
+          loading: false,
+        });
+      } else {
+        // No user found
+        set({
+          isAuthenticated: false,
+          loading: false,
+        });
+      }
+    } catch (error: any) {
+      // Failed to fetch user - not authenticated
+      // 401 errors are expected when user is not logged in - don't log them
+      if (error?.status !== 401 && process.env.NODE_ENV === 'development') {
+        console.error('Auth initialization error:', error);
+      }
       set({
-        token,
-        user,
-        isAuthenticated: true,
+        isAuthenticated: false,
+        loading: false,
       });
     }
   },
@@ -39,9 +70,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null });
     try {
       const res = await authApi.login(data);
+      // Cookie is set by backend, user data is in response
+      // Small delay to ensure cookie is processed by browser
+      await new Promise(resolve => setTimeout(resolve, 100));
       set({
         user: res.user,
-        token: res.access_token,
+        token: null, // Token is in HTTP-only cookie, not stored
         isAuthenticated: true,
         loading: false,
       });
@@ -60,7 +94,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authApi.register(data);
       set({
         user: res.data?.user || null,
-        token: res.data?.access_token || null,
+        token: null, // Token is in HTTP-only cookie, not stored
         isAuthenticated: true,
         loading: false,
       });
@@ -73,12 +107,39 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
-    authApi.logout();
+  logout: async () => {
+    await authApi.logout();
     set({
       user: null,
       token: null,
       isAuthenticated: false,
     });
   },
-}));
+
+  updateUser: (updates) => {
+    set((state) => {
+      if (!state.user) return state;
+
+      // If updating profile picture, add cache-busting timestamp for display
+      // Extract clean URL (remove existing timestamp if any)
+      const cleanProfilePictureUrl = updates.profilePictureUrl
+        ? updates.profilePictureUrl.split('?')[0]
+        : state.user.profilePictureUrl?.split('?')[0];
+
+      const processedUpdates = updates.profilePictureUrl
+        ? {
+            ...updates,
+            profilePictureUrl: `${cleanProfilePictureUrl}?t=${Date.now()}`,
+          }
+        : updates;
+
+      const updatedUser = {
+        ...state.user,
+        ...processedUpdates,
+      };
+
+      // No localStorage - user data is fetched from API
+      return { user: updatedUser };
+    });
+  },
+}});

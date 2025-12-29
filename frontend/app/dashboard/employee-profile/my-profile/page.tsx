@@ -15,27 +15,52 @@ import Link from "next/link";
 import { employeeProfileApi } from "@/lib/api/employee-profile/profile";
 import type { EmployeeProfile } from "@/types";
 
+import EducationSection from "@/components/employee-profile/EducationSection";
+import ProfilePhotoUpload from "@/components/employee-profile/ProfilePhotoUpload";
+import { fetchEmployeeAppraisals } from "@/lib/api/performance/Api/performanceAppraisalsApi";
+import { AppraisalRecord } from "@/components/Performance/performanceRecords";
+
 export default function MyProfilePage() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<EmployeeProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [appraisals, setAppraisals] = useState<AppraisalRecord[]>([]);
+  const [appraisalsLoading, setAppraisalsLoading] = useState(false);
 
   const canEdit = true;
-
-  // app/dashboard/employee-profile/my-profile/page.tsx - UPDATED "use client" section
-  // Update just the useEffect and loadProfile function:
 
   useEffect(() => {
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (profile) {
+      loadAppraisals();
+    }
+  }, [profile]);
+
+  const loadAppraisals = async () => {
+    try {
+      setAppraisalsLoading(true);
+      const profileId = profile?._id || profile?.id || user?.id || user?.userId;
+      if (profileId) {
+        const data = await fetchEmployeeAppraisals(String(profileId));
+        setAppraisals(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load appraisals:", err);
+      // Don't show error to user, just log it
+    } finally {
+      setAppraisalsLoading(false);
+    }
+  };
 
   const loadProfile = async () => {
     try {
       setLoading(true);
       const response = await employeeProfileApi.getMyProfile();
 
-      // The API helper now extracts data properly
       if (response && typeof response === "object") {
         setProfile(response as EmployeeProfile);
       } else {
@@ -81,8 +106,8 @@ export default function MyProfilePage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl font-bold text-white-900">My Profile</h1>
+            <p className="text-white-900 mt-1">
               Employee ID: {profile?.employeeNumber || user?.employeeNumber}
             </p>
           </div>
@@ -100,7 +125,7 @@ export default function MyProfilePage() {
 
         {/* Profile Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Personal Info */}
+          {/* Personal Information */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
@@ -109,7 +134,7 @@ export default function MyProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Full Name</p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-black">
                     {profile?.fullName || user?.fullName || "Not available"}
                   </p>
                 </div>
@@ -117,7 +142,7 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Employee Number
                   </p>
-                  <p className="mt-1 font-mono">
+                  <p className="mt-1 font-mono text-black">
                     {profile?.employeeNumber || user?.employeeNumber || "N/A"}
                   </p>
                 </div>
@@ -125,7 +150,7 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Date of Birth
                   </p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-black">
                     {profile?.dateOfBirth
                       ? new Date(profile.dateOfBirth).toLocaleDateString()
                       : "Not provided"}
@@ -133,13 +158,15 @@ export default function MyProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Gender</p>
-                  <p className="mt-1">{profile?.gender || "Not provided"}</p>
+                  <p className="mt-1 text-black">
+                    {profile?.gender || "Not provided"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">
                     Marital Status
                   </p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-black">
                     {profile?.maritalStatus || "Not provided"}
                   </p>
                 </div>
@@ -147,7 +174,7 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     National ID
                   </p>
-                  <p className="mt-1 font-mono">
+                  <p className="mt-1 font-mono text-black">
                     {profile?.nationalId || "Not provided"}
                   </p>
                 </div>
@@ -155,13 +182,30 @@ export default function MyProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Status Card */}
+          {/* Profile Photo */}
           <Card>
             <CardHeader>
-              <CardTitle>Employment Status</CardTitle>
+              <CardTitle>Profile Photo</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <ProfilePhotoUpload
+                currentPhotoUrl={profile?.profilePictureUrl}
+                onPhotoUpdated={(newUrl) => {
+                  if (profile) {
+                    setProfile({ ...profile, profilePictureUrl: newUrl });
+                  }
+                }}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Employment Status */}
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Employment Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Status</p>
                   <span
@@ -184,7 +228,7 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Date of Hire
                   </p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-black">
                     {profile?.dateOfHire
                       ? new Date(profile.dateOfHire).toLocaleDateString()
                       : "N/A"}
@@ -194,11 +238,15 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Contract Type
                   </p>
-                  <p className="mt-1">{profile?.contractType || "N/A"}</p>
+                  <p className="mt-1 text-black">
+                    {profile?.contractType || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Work Type</p>
-                  <p className="mt-1">{profile?.workType || "N/A"}</p>
+                  <p className="mt-1 text-black">
+                    {profile?.workType || "N/A"}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -215,7 +263,7 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Work Email
                   </p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-black">
                     {profile?.workEmail || user?.workEmail || "N/A"}
                   </p>
                 </div>
@@ -223,7 +271,7 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Personal Email
                   </p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-black">
                     {profile?.personalEmail || user?.personalEmail || "N/A"}
                   </p>
                 </div>
@@ -231,18 +279,22 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Mobile Phone
                   </p>
-                  <p className="mt-1">{profile?.mobilePhone || "N/A"}</p>
+                  <p className="mt-1 text-black">
+                    {profile?.mobilePhone || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">
                     Home Phone
                   </p>
-                  <p className="mt-1">{profile?.homePhone || "N/A"}</p>
+                  <p className="mt-1 text-black">
+                    {profile?.homePhone || "N/A"}
+                  </p>
                 </div>
                 {profile?.address && (
                   <div className="md:col-span-2">
                     <p className="text-sm font-medium text-gray-500">Address</p>
-                    <p className="mt-1">
+                    <p className="mt-1 text-black">
                       {[
                         profile.address.streetAddress,
                         profile.address.city,
@@ -265,14 +317,38 @@ export default function MyProfilePage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-500">Position</p>
-                <p className="mt-1">
-                  {profile?.primaryPosition?.title || "Not assigned"}
+                <p className="mt-1 text-black">
+                  {(() => {
+                    // Handle both cases: populated object or string ID
+                    if (
+                      profile?.primaryPositionId &&
+                      typeof profile.primaryPositionId === "object"
+                    ) {
+                      return (
+                        (profile.primaryPositionId as any).title ||
+                        "Not assigned"
+                      );
+                    }
+                    return profile?.primaryPosition?.title || "Not assigned";
+                  })()}
                 </p>
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-500">Department</p>
-                <p className="mt-1">
-                  {profile?.primaryDepartment?.name || "Not assigned"}
+                <p className="mt-1 text-black">
+                  {(() => {
+                    // Handle both cases: populated object or string ID
+                    if (
+                      profile?.primaryDepartmentId &&
+                      typeof profile.primaryDepartmentId === "object"
+                    ) {
+                      return (
+                        (profile.primaryDepartmentId as any).name ||
+                        "Not assigned"
+                      );
+                    }
+                    return profile?.primaryDepartment?.name || "Not assigned";
+                  })()}
                 </p>
               </div>
               {profile?.supervisor && (
@@ -280,7 +356,140 @@ export default function MyProfilePage() {
                   <p className="text-sm font-medium text-gray-500">
                     Supervisor
                   </p>
-                  <p className="mt-1">{profile.supervisor.fullName}</p>
+                  <p className="mt-1 text-black">
+                    {profile.supervisor.fullName}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Education & Qualifications */}
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Education & Qualifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EducationSection />
+            </CardContent>
+          </Card>
+
+          {/* Appraisal History */}
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Appraisal History</CardTitle>
+                <Link href="/dashboard/performance/my-appraisals">
+                  <Button variant="outline" size="sm">
+                    View All
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {appraisalsLoading ? (
+                <p className="text-sm text-gray-600">Loading appraisal history...</p>
+              ) : appraisals.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-600">
+                    No appraisal history available yet.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Your appraisal history will appear here once appraisals are completed and published.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {appraisals.slice(0, 5).map((appraisal, index) => {
+                    const r: any = appraisal;
+                    const cycle = r.cycleId;
+                    const template = r.templateId;
+                    const publishedDate = r.hrPublishedAt || r.managerSubmittedAt;
+                    
+                    return (
+                      <div
+                        key={r._id || r.id || index}
+                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-gray-900">
+                                {cycle
+                                  ? typeof cycle === "object"
+                                    ? cycle.name || "Appraisal Cycle"
+                                    : String(cycle)
+                                  : "Appraisal Cycle"}
+                              </h4>
+                              {r.status && (
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                    r.status === "HR_PUBLISHED"
+                                      ? "bg-green-100 text-green-800"
+                                      : r.status === "MANAGER_SUBMITTED"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-gray-100 text-gray-800"
+                                  }`}
+                                >
+                                  {r.status === "HR_PUBLISHED"
+                                    ? "Published"
+                                    : r.status === "MANAGER_SUBMITTED"
+                                    ? "Submitted"
+                                    : r.status}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <p className="text-xs text-gray-500">Template</p>
+                                <p className="text-gray-900 font-medium">
+                                  {template
+                                    ? typeof template === "object"
+                                      ? template.name || "Template"
+                                      : String(template)
+                                    : "N/A"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Score</p>
+                                <p className="text-gray-900 font-medium">
+                                  {r.totalScore ?? "-"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Rating</p>
+                                <p className="text-gray-900 font-medium">
+                                  {r.overallRatingLabel ?? "-"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Date</p>
+                                <p className="text-gray-900 font-medium">
+                                  {publishedDate
+                                    ? new Date(publishedDate).toLocaleDateString()
+                                    : "-"}
+                                </p>
+                              </div>
+                            </div>
+                            {r.managerSummary && (
+                              <p className="text-xs text-gray-600 mt-2 line-clamp-2">
+                                {r.managerSummary}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {appraisals.length > 5 && (
+                    <div className="text-center pt-2">
+                      <Link href="/dashboard/performance/my-appraisals">
+                        <Button variant="outline" size="sm">
+                          View All {appraisals.length} Appraisals
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

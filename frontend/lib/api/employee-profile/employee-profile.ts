@@ -5,6 +5,11 @@ import type {
   ProfileChangeRequest,
   TeamMember,
   UpdateProfileDto,
+  EmployeeQualification,
+  CreateQualificationDto,
+  UpdateQualificationDto,
+  GraduationType,
+  SystemRole,
 } from "@/types";
 
 // Helper to extract data from nested responses
@@ -85,22 +90,36 @@ export const employeeProfileApi = {
     api.patch<EmployeeProfile>("/employee-profile/me", data),
 
   // Upload profile picture
-  uploadProfilePicture: (formData: FormData) =>
-    api.post<{ profilePictureUrl: string }>(
-      "/employee-profile/me/photo",
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+  uploadProfilePicture: async (
+    formData: FormData
+  ): Promise<{ profilePictureUrl: string }> => {
+    const response = await api.post("/employee-profile/me/photo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return (
+      extractData<{ profilePictureUrl: string }>(response) || {
+        profilePictureUrl: "",
       }
-    ),
+    );
+  },
 
   // Get employee by ID (for HR/admin views)
   getEmployeeById: async (id: string) => {
     const response = await api.get<EmployeeProfile>(`/employee-profile/${id}`);
     return extractData<EmployeeProfile>(response) || response;
   },
+
+  // Get employee roles
+  // COMMENTED OUT: Duplicate - see getEmployeeRoles at line 518 in ROLE MANAGEMENT METHODS section
+  // getEmployeeRoles: async (employeeId: string) => {
+  //   try {
+  //     const response = await api.get(`/employee-profile/${employeeId}/roles`);
+  //     return extractData<any>(response) || response;
+  //   } catch (error: any) {
+  //     console.warn(`Could not fetch roles for employee ${employeeId}:`, error);
+  //     return null;
+  //   }
+  // },
 
   // Submit a change request
   submitChangeRequest: (data: {
@@ -183,7 +202,11 @@ export const employeeProfileApi = {
         },
       };
     } catch (error: any) {
-      console.error("❌ Error in getAllEmployees:", error.message);
+      // Don't log 403 errors - they're expected when user doesn't have permission
+      // The API client will handle logging for other errors
+      if (error.response?.status !== 403 && error.response?.status !== 401) {
+        console.error("❌ Error in getAllEmployees:", error.message);
+      }
       return {
         data: [],
         meta: {
@@ -266,7 +289,12 @@ export const employeeProfileApi = {
     const response = await api.get<{ message: string; data: string }>(
       `/employee-profile/${id}/pdf`
     );
-    return (response.data as any).data || response.data; // This should be the base64 string
+    // Interceptor returns response.data directly, so response is already the data object
+    // Handle nested data.data structure if backend returns it
+    if (response && typeof response === "object" && "data" in response) {
+      return (response as any).data || response;
+    }
+    return response as string;
   },
 
   // Update contact info
@@ -340,9 +368,10 @@ export const employeeProfileApi = {
       });
       console.log("Direct method response:", response);
 
-      // Simple extraction
-      if (response && response.data && Array.isArray(response.data)) {
-        return response.data;
+      // Interceptor returns response.data directly, so response is already the data
+      // Handle nested data structure if backend wraps it
+      if (response && typeof response === "object" && "data" in response && Array.isArray((response as any).data)) {
+        return (response as any).data;
       }
       if (Array.isArray(response)) {
         return response;
@@ -353,4 +382,188 @@ export const employeeProfileApi = {
       return [];
     }
   },
+
+  // ============================================
+  // CANDIDATES (Talent Pool) 
+  //zawedt dol
+  // ============================================
+  
+  // Get all candidates with optional filters
+  getAllCandidates: async (params?: {
+    status?: string;
+    departmentId?: string;
+    positionId?: string;
+    search?: string;
+  }) => {
+    try {
+      console.log("🔍 getAllCandidates called with params:", params);
+      const response = await api.get("/employee-profile/candidate", { params });
+      console.log("✅ getAllCandidates response:", response);
+      console.log("✅ getAllCandidates response type:", typeof response);
+      console.log("✅ getAllCandidates response keys:", response && typeof response === "object" ? Object.keys(response) : "N/A");
+      
+      // The API interceptor already extracts response.data, so response is the backend's response.data
+      // Backend returns: { message: 'Candidates retrieved successfully', data: candidates[] }
+      // After interceptor: response = { message: '...', data: candidates[] }
+      let data = response;
+      
+      if (response && typeof response === "object") {
+        // If response has a 'data' property, extract it
+        if ("data" in response) {
+          data = response.data;
+          console.log("✅ Extracted data from response.data:", data);
+          console.log("✅ Data is array:", Array.isArray(data));
+        } else if (Array.isArray(response)) {
+          // If response is already an array, use it directly
+          data = response;
+          console.log("✅ Response is already an array");
+        }
+      }
+      
+      const candidates = Array.isArray(data) ? data : [];
+      console.log(`✅ getAllCandidates returning ${candidates.length} candidates`);
+      if (candidates.length > 0) {
+        console.log("✅ First candidate sample:", candidates[0]);
+      }
+      return candidates;
+    } catch (error: any) {
+      // Enhanced error logging
+      console.error("❌ Error in getAllCandidates - Full Error Object:", error);
+      console.error("❌ Error message:", error?.message);
+      console.error("❌ Error status:", error?.status);
+      console.error("❌ Error response status:", error?.response?.status || error?.originalError?.response?.status);
+      console.error("❌ Error response data:", error?.responseData || error?.response?.data || error?.originalError?.response?.data);
+      console.error("❌ Error response headers:", error?.response?.headers || error?.originalError?.response?.headers);
+      console.error("❌ Error config:", error?.config || error?.originalError?.config);
+      console.error("❌ Error stack:", error?.stack);
+      
+      // Check for specific error types
+      const status = error?.status || error?.response?.status || error?.originalError?.response?.status;
+      if (status === 401) {
+        console.error("❌ Authentication failed - token may be invalid or expired");
+        console.error("   Please check if you are logged in and your token is valid");
+      } else if (status === 403) {
+        console.error("❌ Permission denied - user may not have required role");
+        console.error("   Required roles: HR_EMPLOYEE, HR_MANAGER, SYSTEM_ADMIN, or RECRUITER");
+      } else if (status === 404) {
+        console.error("❌ Endpoint not found - check if backend route exists");
+        console.error("   Expected endpoint: GET /api/v1/employee-profile/candidate");
+      } else if (status === 500) {
+        console.error("❌ Server error - check backend logs");
+      } else if (!status && !error?.response && !error?.originalError?.response) {
+        console.error("❌ Network error - backend may be down or unreachable");
+        console.error("   Check if backend is running on:", process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1");
+      }
+      
+      // Re-throw with more context for UI
+      throw error;
+    }
+  },
+
+  // Get candidate by ID
+  getCandidateById: async (id: string) => {
+    const response = await api.get(`/employee-profile/candidate/${id}`);
+    return extractData(response) || response;
+  },
+  // ==================== QUALIFICATION METHODS ====================
+
+  // Get my qualifications
+  getMyQualifications: async (): Promise<EmployeeQualification[]> => {
+    const response = await api.get<EmployeeQualification[]>(
+      "/employee-profile/qualification/my-qualifications"
+    );
+    return extractData<EmployeeQualification[]>(response) || [];
+  },
+
+  // Add qualification for myself
+  addMyQualification: (data: CreateQualificationDto) =>
+    api.post<EmployeeQualification>("/employee-profile/qualification", data),
+
+  // Update my qualification
+  updateMyQualification: (
+    qualificationId: string,
+    data: UpdateQualificationDto
+  ) =>
+    api.patch<EmployeeQualification>(
+      `/employee-profile/qualifications/${qualificationId}`,
+      data
+    ),
+
+  // Delete my qualification
+  deleteMyQualification: (qualificationId: string) =>
+    api.delete(`/employee-profile/qualifications/${qualificationId}`),
+
+  // HR Admin: Get qualifications for employee
+  getEmployeeQualifications: async (
+    employeeId: string
+  ): Promise<EmployeeQualification[]> => {
+    const response = await api.get<EmployeeQualification[]>(
+      `/employee-profile/${employeeId}/qualifications`
+    );
+    return extractData<EmployeeQualification[]>(response) || [];
+  },
+
+  // HR Admin: Add qualification for employee
+  addEmployeeQualification: (
+    employeeId: string,
+    data: CreateQualificationDto
+  ) =>
+    api.post<EmployeeQualification>(
+      `/employee-profile/${employeeId}/qualifications`,
+      data
+    ),
+
+  // ==================== ROLE MANAGEMENT METHODS ====================
+
+  // Get employee roles
+  getEmployeeRoles: async (
+    employeeId: string
+  ): Promise<{
+    roles: SystemRole[];
+    permissions: string[];
+    isActive: boolean;
+  }> => {
+    const response = await api.get(`/employee-profile/${employeeId}/roles`);
+    return (
+      extractData(response) || { roles: [], permissions: [], isActive: true }
+    );
+  },
+
+  // Assign roles to employee (using POST /assign-roles endpoint)
+  assignRoles: (
+    employeeProfileId: string,
+    roles: SystemRole[],
+    permissions?: string[]
+  ) =>
+    api.post(`/employee-profile/assign-roles`, {
+      employeeProfileId,
+      roles,
+      permissions: permissions || [],
+    }),
+
+  // Assign roles to employee (using POST /:employeeId/roles endpoint)
+  assignEmployeeRoles: (
+    employeeId: string,
+    roles: SystemRole[],
+    permissions?: string[]
+  ) =>
+    api.post(`/employee-profile/${employeeId}/roles`, {
+      roles,
+      permissions: permissions || [],
+    }),
+
+  // Update employee roles
+  updateEmployeeRoles: (
+    employeeId: string,
+    roles?: SystemRole[],
+    permissions?: string[]
+  ) =>
+    api.patch(`/employee-profile/${employeeId}/roles`, {
+      roles,
+      permissions,
+    }),
+
+  // Deactivate employee roles
+  deactivateEmployeeRoles: (employeeId: string) =>
+    api.patch(`/employee-profile/${employeeId}/roles/deactivate`),
 };

@@ -63,11 +63,7 @@ export class NotificationsController {
    * Called by Leaves Module - only managers (HR_MANAGER, HR_ADMIN, DEPARTMENT_HEAD) can create this notification
    */
   @Post('leave/created')
-  @Roles(
-    SystemRole.DEPARTMENT_HEAD,
-    SystemRole.HR_MANAGER,
-    SystemRole.HR_ADMIN,
-  )
+  @Roles(SystemRole.DEPARTMENT_HEAD, SystemRole.HR_MANAGER, SystemRole.HR_ADMIN)
   async notifyLeaveRequestCreated(
     @Body()
     body: {
@@ -121,7 +117,8 @@ export class NotificationsController {
   @Post('shift-expiry/notify')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async sendShiftExpiryNotification(
-    @Body() body: {
+    @Body()
+    body: {
       recipientId: string;
       shiftAssignmentId: string;
       employeeId: string;
@@ -147,7 +144,8 @@ export class NotificationsController {
   @Post('shift-expiry/notify-bulk')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async sendBulkShiftExpiryNotifications(
-    @Body() body: {
+    @Body()
+    body: {
       hrAdminIds: string[];
       expiringAssignments: Array<{
         assignmentId: string;
@@ -162,7 +160,7 @@ export class NotificationsController {
   ) {
     return this.notificationsService.sendBulkShiftExpiryNotifications(
       body.hrAdminIds,
-      body.expiringAssignments.map(a => ({
+      body.expiringAssignments.map((a) => ({
         ...a,
         endDate: new Date(a.endDate),
       })),
@@ -175,9 +173,7 @@ export class NotificationsController {
    */
   @Get('shift-expiry/:hrAdminId')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN, SystemRole.HR_MANAGER)
-  async getShiftExpiryNotifications(
-    @Param('hrAdminId') hrAdminId: string,
-  ) {
+  async getShiftExpiryNotifications(@Param('hrAdminId') hrAdminId: string) {
     return this.notificationsService.getShiftExpiryNotifications(hrAdminId);
   }
 
@@ -187,7 +183,8 @@ export class NotificationsController {
   @Post('shift-renewal/confirm')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN, SystemRole.HR_MANAGER)
   async sendShiftRenewalConfirmation(
-    @Body() body: {
+    @Body()
+    body: {
       recipientId: string;
       shiftAssignmentId: string;
       newEndDate: Date;
@@ -208,7 +205,8 @@ export class NotificationsController {
   @Post('shift-archive/notify')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async sendShiftArchiveNotification(
-    @Body() body: {
+    @Body()
+    body: {
       recipientId: string;
       shiftAssignmentId: string;
       employeeId: string;
@@ -228,9 +226,7 @@ export class NotificationsController {
    */
   @Get('shift-notifications/:hrAdminId')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN, SystemRole.HR_MANAGER)
-  async getAllShiftNotifications(
-    @Param('hrAdminId') hrAdminId: string,
-  ) {
+  async getAllShiftNotifications(@Param('hrAdminId') hrAdminId: string) {
     return this.notificationsService.getAllShiftNotifications(hrAdminId);
   }
 
@@ -246,7 +242,8 @@ export class NotificationsController {
     SystemRole.DEPARTMENT_HEAD,
   )
   async sendMissedPunchAlertToEmployee(
-    @Body() body: {
+    @Body()
+    body: {
       employeeId: string;
       attendanceRecordId: string;
       missedPunchType: 'CLOCK_IN' | 'CLOCK_OUT';
@@ -268,13 +265,10 @@ export class NotificationsController {
    * Called by Time Management Module
    */
   @Post('missed-punch/alert/manager')
-  @Roles(
-    SystemRole.HR_ADMIN,
-    SystemRole.SYSTEM_ADMIN,
-    SystemRole.HR_MANAGER,
-  )
+  @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN, SystemRole.HR_MANAGER)
   async sendMissedPunchAlertToManager(
-    @Body() body: {
+    @Body()
+    body: {
       managerId: string;
       employeeId: string;
       employeeName: string;
@@ -302,7 +296,8 @@ export class NotificationsController {
   @Post('missed-punch/alert/bulk')
   @Roles(SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
   async sendBulkMissedPunchAlerts(
-    @Body() body: {
+    @Body()
+    body: {
       alerts: Array<{
         employeeId: string;
         managerId?: string;
@@ -314,7 +309,7 @@ export class NotificationsController {
     },
     @CurrentUser() user: any,
   ) {
-    const alerts = body.alerts.map(a => ({
+    const alerts = body.alerts.map((a) => ({
       ...a,
       date: new Date(a.date),
     }));
@@ -346,7 +341,9 @@ export class NotificationsController {
     ) {
       throw new Error('Access denied');
     }
-    return this.notificationsService.getMissedPunchNotificationsByEmployee(employeeId);
+    return this.notificationsService.getMissedPunchNotificationsByEmployee(
+      employeeId,
+    );
   }
 
   /**
@@ -370,7 +367,9 @@ export class NotificationsController {
     ) {
       throw new Error('Access denied');
     }
-    return this.notificationsService.getMissedPunchNotificationsByManager(managerId);
+    return this.notificationsService.getMissedPunchNotificationsByManager(
+      managerId,
+    );
   }
 
   /**
@@ -416,11 +415,7 @@ export class NotificationsController {
    * Notify about missed punch
    */
   @Post('attendance/missed-punch')
-  @Roles(
-    SystemRole.HR_ADMIN,
-    SystemRole.HR_MANAGER,
-    SystemRole.SYSTEM_ADMIN,
-  )
+  @Roles(SystemRole.HR_ADMIN, SystemRole.HR_MANAGER, SystemRole.SYSTEM_ADMIN)
   async notifyMissedPunch(
     @Body()
     body: {
@@ -577,6 +572,65 @@ export class NotificationsController {
         toDate: '2025-12-25',
         status: 'APPROVED',
       },
+    );
+  }
+
+  // ===== EMPLOYEE PROFILE MODULE NOTIFICATION ENDPOINTS =====
+
+  /**
+   * N-040: Notify HR when profile change request is submitted
+   */
+  @Post('profile/change-request/submitted')
+  @Roles(SystemRole.DEPARTMENT_EMPLOYEE)
+  async notifyProfileChangeRequestSubmitted(
+    @Body()
+    body: {
+      employeeId: string;
+      changeRequestId: string;
+      changeDescription: string;
+    },
+  ) {
+    return this.notificationsService.notifyProfileChangeRequestSubmitted(
+      body.employeeId,
+      body.changeRequestId,
+      body.changeDescription,
+    );
+  }
+
+  /**
+   * N-037: Notify employee when change request is processed
+   */
+  @Post('profile/change-request/processed')
+  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  async notifyProfileChangeRequestProcessed(
+    @Body()
+    body: {
+      employeeId: string;
+      changeRequestId: string;
+      status: 'APPROVED' | 'REJECTED';
+      reason?: string;
+    },
+  ) {
+    return this.notificationsService.notifyProfileChangeRequestProcessed(
+      body.employeeId,
+      body.changeRequestId,
+      body.status,
+      body.reason,
+    );
+  }
+
+  /**
+   * Notify employee when profile is updated by HR
+   */
+  @Post('profile/updated')
+  @Roles(SystemRole.HR_MANAGER, SystemRole.HR_ADMIN, SystemRole.SYSTEM_ADMIN)
+  async notifyProfileUpdated(
+    @Body() body: { employeeId: string; updatedBy: string; changes: string[] },
+  ) {
+    return this.notificationsService.notifyProfileUpdated(
+      body.employeeId,
+      body.updatedBy,
+      body.changes,
     );
   }
 }
